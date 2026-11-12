@@ -1,4 +1,5 @@
 #include "gk/db.hpp"
+#include "gk/text.hpp"
 
 #include <sqlite3.h>
 
@@ -20,11 +21,6 @@ using nlohmann::json;
 
 double now() {
     return std::chrono::duration<double>(std::chrono::system_clock::now().time_since_epoch()).count();
-}
-
-std::string path_utf8(const std::filesystem::path& p) {
-    const auto u8 = p.u8string();
-    return std::string(reinterpret_cast<const char*>(u8.data()), u8.size());
 }
 
 class Stmt {
@@ -105,7 +101,7 @@ private:
 
 sqlite3* open_handle(const std::filesystem::path& file) {
     sqlite3* db = nullptr;
-    const int rc = sqlite3_open_v2(path_utf8(file).c_str(), &db,
+    const int rc = sqlite3_open_v2(text::path_utf8(file).c_str(), &db,
                                    SQLITE_OPEN_READWRITE | SQLITE_OPEN_CREATE | SQLITE_OPEN_FULLMUTEX, nullptr);
     if (rc != SQLITE_OK) {
         std::string msg = db ? sqlite3_errmsg(db) : "falha ao abrir";
@@ -143,12 +139,22 @@ std::unique_ptr<Database> Database::open(const std::filesystem::path& file) {
         sqlite3_close(handle);
         char stamp[32];
         const std::time_t t = std::time(nullptr);
-        std::strftime(stamp, sizeof stamp, "%Y%m%d-%H%M%S", std::localtime(&t));
-        const std::filesystem::path backup = file.string() + ".corrupt-" + stamp;
+        std::tm local{};
+#ifdef _WIN32
+        localtime_s(&local, &t);
+#else
+        localtime_r(&t, &local);
+#endif
+        std::strftime(stamp, sizeof stamp, "%Y%m%d-%H%M%S", &local);
+        std::filesystem::path backup = file;
+        backup += std::string(".corrupt-") + stamp;
         for (const char* suffix : {"", "-wal", "-shm"}) {
-            const std::filesystem::path src = file.string() + suffix;
+            std::filesystem::path src = file;
+            src += suffix;
+            std::filesystem::path dst = backup;
+            dst += suffix;
             if (std::filesystem::exists(src, ec)) {
-                std::filesystem::rename(src, backup.string() + suffix, ec);
+                std::filesystem::rename(src, dst, ec);
                 if (ec) std::filesystem::remove(src, ec);
             }
         }

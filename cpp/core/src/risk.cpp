@@ -68,7 +68,8 @@ bool is_code(const FileResult& r) {
 
 const std::set<std::string_view> kExpectedForComponent = {
     "PE.MinimalImports", "PE.HighEntropyCode", "PE.WriteExecuteSection", "PE.EntryPoint.Unusual",
-    "PE.TlsCallbacks",   "PE.DllProxy",        "HEUR.AntiAnalysis",      "PE.DRM.SteamStub"};
+    "PE.TlsCallbacks",   "PE.DllProxy",        "HEUR.AntiAnalysis",      "PE.DRM.SteamStub",
+    "PE.Signature.Tampered"};
 
 bool expected_trait(const Evidence& e, const std::string& kind) {
     if (e.source == Source::Signature || e.source == Source::Yara || e.source == Source::Reputation ||
@@ -311,6 +312,11 @@ std::vector<FileContext> derive_context(const std::vector<FileResult>& files, co
             }
             const bool proxy = std::any_of(r.evidences.begin(), r.evidences.end(),
                                            [](const Evidence& e) { return e.rule_id == "PE.DllProxy"; });
+            // A signed file whose content no longer matches its signature was modified after the vendor built it.
+            if (std::any_of(r.evidences.begin(), r.evidences.end(),
+                            [](const Evidence& e) { return e.rule_id == "PE.Signature.Tampered"; })) {
+                c.modified = true;
+            }
             if (proxy && c.family_id.empty()) {
                 c.modified = true;
                 c.evidences.push_back(context_evidence(
@@ -395,9 +401,13 @@ void assess(FileResult& r, const FileContext& ctx, const Catalog& catalog) {
         r.classification = (ctx.family_kind == "mod" || ctx.family_kind == "repack") && !ctx.modified
                                ? Classification::Unknown
                                : Classification::Modified;
-        why = r.classification == Classification::Modified
-                  ? "o arquivo pertence a um crack, desbloqueador ou substitui um componente original, sem evidência de ameaça"
-                  : "componente de mod/instalador reconhecido, sem evidência de ameaça";
+        const bool tampered = std::any_of(r.evidences.begin(), r.evidences.end(),
+                                          [](const Evidence& e) { return e.rule_id == "PE.Signature.Tampered"; });
+        why = r.classification != Classification::Modified
+                  ? "componente de mod/instalador reconhecido, sem evidência de ameaça"
+              : tampered && ctx.family_id.empty() && !ctx.crack_like
+                  ? "o arquivo foi alterado depois de assinado pelo fabricante, sem evidência de ameaça"
+                  : "o arquivo pertence a um crack, desbloqueador ou substitui um componente original, sem evidência de ameaça";
     } else if (good_reputation) {
         r.classification = Classification::KnownLegit;
         why = "o hash consta na base local de arquivos conhecidos como legítimos";
@@ -474,6 +484,11 @@ void assess(FileResult& r, const FileContext& ctx, const Catalog& catalog) {
                                 (src != catalog.source_label.end() ? src->second : std::string(value_of(e.source))) +
                                 ", severidade " + std::string(name_of(e.effective())) + ", confiança " +
                                 std::string(name_of(e.confidence)) + ".");
+    }
+    if (r.features.signature_valid == true && r.features.signer && !r.features.signer->empty()) {
+        r.explanation.push_back("Assinado digitalmente por " + *r.features.signer +
+                                " (verificado pelo Windows, sem consulta à rede). Uma assinatura válida não reduz o risco "
+                                "das demais evidências: certificados podem ser roubados.");
     }
     if (!ctx.family_id.empty()) {
         r.explanation.push_back("Componente reconhecido: " + ctx.family_name + "." +

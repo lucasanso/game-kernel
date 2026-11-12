@@ -10,6 +10,7 @@ vetor de ataque nem enfraquecer as defesas do Windows.
 | Área | Controle |
 |---|---|
 | Segurança de memória (C++) | Leitor `ByteView` com limites verificados em toda leitura; aritmética de offsets com verificação de overflow; nenhum `memcpy`/ponteiro cru sobre dados do arquivo fora do leitor; RAII para handles e mapeamentos; build de testes com ASan/UBSan; fuzzing por mutação dos parsers |
+| Assinaturas digitais | Verificação de confiança só com dados locais (`WinVerifyTrust` com recuperação de URL restrita ao cache e sem consulta de revogação); PKCS#7 hostil lido por leitor DER limitado (sem comprimento indefinido, tags estendidas ou elementos além do pai), dentro do processo isolado; nomes de certificados com caracteres de controle/direção neutralizados; uma assinatura válida nunca reduz o risco de outras evidências |
 | Isolamento | Parsers em `gk-scanworker` com Job Object (limite de memória, sem processos filhos, encerrado com o pai) e integridade baixa (não consegue gravar em arquivos do usuário) |
 | Compactados | Limites de profundidade, número de membros, tamanho total, tamanho por membro e razão de compressão; nomes de membros nunca viram caminhos de disco; extração apenas em memória |
 | Execução | Nenhum arquivo analisado é executado, carregado (`LoadLibrary`) ou aberto por associação do shell. Subprocessos: caminho absoluto, sem shell, `cwd` = pasta da ferramenta, binário verificado no manifesto de integridade |

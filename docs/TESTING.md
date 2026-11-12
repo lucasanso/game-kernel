@@ -14,6 +14,16 @@ pytest -q tests/native    # núcleo C++ (requer o build)
   (`hashlib`, `filetypes.py`, `pefile`, `yara-python`) em corpus gerado.
 * Fuzzing por mutação dos parsers (marcador `fuzz`), executado no build ASan.
 * Testes que exigem Windows usam o marcador `windows_only` e rodam no CI Windows.
+* Authenticode (`test_authenticode.py`): amostras assinadas na hora com um certificado autoassinado descartável
+  (`cryptography`) e o `osslsigncode` (sem carimbo de tempo, logo sem rede); oráculo independente com o parser
+  TLV do `asn1crypto` + `hashlib` sobre as faixas da especificação. No Windows: catálogo do sistema
+  (`kernel32.dll`), assinatura real do `python.exe` contra o oráculo e cópia adulterada (`bad_digest`).
+* `test_module_lifecycle.py`: cada componente do `gk_native` roda num interpretador próprio que precisa sair
+  limpo (pega destrutores nativos que rodam depois da finalização do Python).
+
+Variáveis do núcleo: `GK_REQUIRE_NATIVE=1` / `GK_REQUIRE_CLI=1` / `GK_REQUIRE_SIGNING=1` transformam em falha a
+ausência do `gk_native`, do `gk-cli` (Qt) ou do `osslsigncode`; `GK_FUZZ_ITERATIONS` e `GK_SLOWDOWN_FACTOR`
+ajustam o fuzzing e os limites de tempo (build ASan).
 
 ## Motor de testes (Agente B)
 

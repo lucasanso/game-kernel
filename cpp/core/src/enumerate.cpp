@@ -4,15 +4,11 @@
 #include "gk/error.hpp"
 #include "gk/file_view.hpp"
 #include "gk/scan_support.hpp"
+#include "gk/text.hpp"
 
 namespace gk::scan {
 
 namespace {
-
-std::string utf8(const std::filesystem::path& p) {
-    const auto u8 = p.u8string();
-    return std::string(reinterpret_cast<const char*>(u8.data()), u8.size());
-}
 
 std::string normalized(const std::string& p) {
     std::string out = lower_ascii(p);
@@ -35,7 +31,7 @@ void consider(const std::filesystem::path& path, const std::filesystem::director
               EnumResult& out) {
     Candidate c;
     c.path = path;
-    c.path_utf8 = utf8(path);
+    c.path_utf8 = text::path_utf8(path);
     std::error_code ec;
     const auto status = entry ? entry->symlink_status(ec) : std::filesystem::symlink_status(path, ec);
     if (ec || !std::filesystem::is_regular_file(status)) return;
@@ -88,7 +84,7 @@ EnumResult enumerate(const std::vector<std::filesystem::path>& targets, const En
         std::error_code ec;
         const auto st = std::filesystem::symlink_status(target, ec);
         if (ec) {
-            out.errors.push_back(utf8(target) + ": " + ec.message());
+            out.errors.push_back(text::path_utf8(target) + ": " + ec.message());
             continue;
         }
         if (std::filesystem::is_regular_file(st)) {
@@ -98,7 +94,7 @@ EnumResult enumerate(const std::vector<std::filesystem::path>& targets, const En
         if (!std::filesystem::is_directory(st)) continue;
         std::filesystem::recursive_directory_iterator it(target, std::filesystem::directory_options::skip_permission_denied, ec);
         if (ec) {
-            out.errors.push_back(utf8(target) + ": " + ec.message());
+            out.errors.push_back(text::path_utf8(target) + ": " + ec.message());
             continue;
         }
         for (const auto end = std::filesystem::recursive_directory_iterator(); it != end; it.increment(ec)) {
@@ -115,7 +111,7 @@ EnumResult enumerate(const std::vector<std::filesystem::path>& targets, const En
                 continue;
             }
             if (entry.is_directory(sec)) {
-                if (excluded(normalized(utf8(entry.path())) + "/", "", options)) it.disable_recursion_pending();
+                if (excluded(normalized(text::path_utf8(entry.path())) + "/", "", options)) it.disable_recursion_pending();
                 continue;
             }
             consider(entry.path(), &entry, options, out);

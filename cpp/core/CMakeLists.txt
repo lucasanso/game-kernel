@@ -23,9 +23,16 @@ add_library(gk_core STATIC
   src/enumerate.cpp
   src/reputation.cpp
   src/clamav.cpp
+  src/authenticode.cpp
+  src/authenticode_trust.cpp
+  src/signature_rules.cpp
 )
 target_include_directories(gk_core PUBLIC
   ${CMAKE_CURRENT_SOURCE_DIR}/include
   ${CMAKE_CURRENT_BINARY_DIR}/generated)
 target_link_libraries(gk_core PUBLIC gk::json PRIVATE gk::sodium gk::yara gk::archive gk::sqlite)
+if(WIN32)
+  # WinVerifyTrust / catalog lookup (offline flags; see src/authenticode_trust.cpp)
+  target_link_libraries(gk_core PRIVATE wintrust crypt32)
+endif()
 gk_apply_options(gk_core)

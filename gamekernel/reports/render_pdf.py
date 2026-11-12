@@ -21,7 +21,7 @@ from reportlab.pdfbase import pdfmetrics
 from reportlab.pdfbase.ttfonts import TTFont
 from reportlab.platypus import KeepTogether, Paragraph, SimpleDocTemplate, Spacer, Table, TableStyle
 
-from .render_html import _size
+from .render_html import _signature, _size
 
 RISK_COLORS = {
     "CRITICAL": colors.HexColor("#dc2626"), "HIGH": colors.HexColor("#ea580c"), "MEDIUM": colors.HexColor("#d97706"),
@@ -132,8 +132,7 @@ class _Renderer:
         return out
 
     def file_block(self, f: dict, threat_info: bool = True) -> list:
-        sig = (f"válida — {f['signer']}" if f.get("signature_valid") else
-               "presente, inválida" if f.get("signed") else "ausente")
+        sig = _signature(f)
         flow = [self.risk_header(f["risk"], f["risk_label"], f["name"]), self.kv([
             ("Caminho completo", f["path"]), ("Arquivo físico", f["physical_file"] if f.get("container") else None),
             ("Pasta de origem", f.get("directory")), ("Extensão", f.get("extension")),
@@ -224,8 +223,7 @@ def render_pdf(r: dict[str, Any]) -> tuple[bytes, list[str]]:
             R.risk_header(c["risk"], c["crack_status_label"], c["name"]),
             R.kv([("Localização", c["path"]), ("SHA-256", c.get("sha256")),
                   ("Tipo de modificação", "; ".join(c.get("modification_types") or [])),
-                  ("Assinatura digital", (f"válida — {c['signer']}" if c.get("signature_valid") else
-                                          "presente, inválida" if c.get("signed") else "ausente")),
+                  ("Assinatura digital", _signature(c)),
                   ("Riscos potenciais", ", ".join(c.get("potential_risks") or []) or "nenhum identificado"),
                   ("Falso positivo possível", "sim" if c.get("possible_false_positive") else "não indicado"),
                   ("Recomendação", c.get("crack_recommendation"))], mono=("Localização", "SHA-256")),

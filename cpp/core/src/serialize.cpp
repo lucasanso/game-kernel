@@ -353,4 +353,49 @@ FileResult file_result_from_json(const json& j) {
     return r;
 }
 
+namespace {
+nlohmann::json certificate_json(const authenticode::Certificate& c) {
+    return {{"subject_cn", c.subject_cn}, {"subject_o", c.subject_o}, {"issuer_cn", c.issuer_cn},
+            {"issuer_o", c.issuer_o},     {"serial", c.serial},       {"sha256", c.sha256},
+            {"not_before", c.not_before}, {"not_after", c.not_after}, {"self_issued", c.self_issued}};
+}
+}  // namespace
+
+nlohmann::json to_json(const authenticode::Report& report) {
+    nlohmann::json sigs = nlohmann::json::array();
+    for (const auto& s : report.signatures) {
+        nlohmann::json certs = nlohmann::json::array();
+        for (const auto& c : s.certificates) certs.push_back(certificate_json(c));
+        sigs.push_back({{"depth", s.depth},
+                        {"digest_algorithm", s.digest_algorithm},
+                        {"signed_digest", s.signed_digest},
+                        {"image_digest", s.image_digest ? nlohmann::json(*s.image_digest) : nlohmann::json()},
+                        {"digest_matches", s.digest_matches},
+                        {"signer", s.signer ? certificate_json(*s.signer) : nlohmann::json()},
+                        {"certificates", certs},
+                        {"timestamped", s.timestamped}});
+    }
+    return {{"present", report.present},
+            {"table_offset", report.table_offset},
+            {"table_size", report.table_size},
+            {"signatures", sigs},
+            {"anomalies", report.anomalies},
+            {"bytes_after_table", report.bytes_after_table},
+            {"hidden_bytes", report.hidden_bytes},
+            {"tampered", report.tampered()},
+            {"error", report.error ? nlohmann::json(*report.error) : nlohmann::json()}};
+}
+
+nlohmann::json to_json(const authenticode::TrustResult& t) {
+    return {{"state", authenticode::value_of(t.state)},
+            {"status_code", t.status_code},
+            {"from_catalog", t.from_catalog},
+            {"catalog", t.catalog},
+            {"signer", t.signer},
+            {"issuer", t.issuer},
+            {"signer_thumbprint", t.signer_thumbprint},
+            {"timestamp", t.timestamp},
+            {"message", t.message}};
+}
+
 }  // namespace gk

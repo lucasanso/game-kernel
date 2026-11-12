@@ -9,11 +9,13 @@ Complementa `docs/INTEGRATION.md` (Agente B), que define os mecanismos de integr
 |---|---|
 | `gk/byte_view.hpp` | `ByteView`: leitura com limites e aritmética verificada — única forma de ler dados de arquivos |
 | `gk/file_view.hpp` | `ReadOnlyFile`, `MappedFile` (compartilhamento total, só arquivos comuns), `read_range` |
-| `gk/hash.hpp` | SHA-256 (libsodium), MD5, `hash_file` em streaming com cancelamento |
+| `gk/hash.hpp` | SHA-256/SHA-512/SHA-384 (libsodium), MD5 e SHA-1 próprios (SHA-1 só para resumos de assinaturas antigas), `hash_file` em streaming com cancelamento |
 | `gk/filetype.hpp` | Tipo real por conteúdo, PE disfarçado, filtros e prioridade |
 | `gk/pe.hpp` | Parser PE para entrada hostil, anomalias com códigos estáveis, mapeamento RVA↔offset |
 | `gk/yara_engine.hpp` | Regras YARA: compilação isolada por arquivo, `include` bloqueado, varredura thread-safe, validação de pacotes |
 | `gk/archive.hpp` | Compactados em memória (libarchive) com limites anti-bomba e recursão |
+| `gk/authenticode.hpp` | `inspect` (tabela de certificados, PKCS#7 e aninhadas, resumo da imagem, adulteração — portátil) e `verify_trust` (Windows, offline, com catálogos) |
+| `gk/text.hpp` | UTF-16LE, `display_utf8` (texto hostil para exibição), `path_utf8` (nunca use `path::string()`) |
 | `gk/serialize.hpp` | JSON dos resultados — mesmo formato no pybind11 e no IPC |
 | `gk/error.hpp` | `gk::Error` com códigos (`FileAccess`, `ResourceLimit`, `Timeout`, `Cancelled`, `InvalidFormat`, `Internal`) |
 | `gk/cancel.hpp` | `CancelToken` (cancelar/pausar) |
@@ -33,6 +35,7 @@ na aplicação, através da camada de serviços Qt.
 | `YaraRules.compile_source(src)`, `YaraRules.compile_files(paths)` → `(regras, relatório)`; `.scan(data, filename=…, …)`, `.metadata()`, `.save(p)`, `YaraRules.load(p)`, `.rule_count` | YARA |
 | `yara_validate_dir(p)`, `yara_version()` | validação de regras de pacotes |
 | `archive_walk(b, limites)`, `archive_recognised(b)`, `libarchive_version()` | compactados |
+| `authenticode_inspect(b)`, `authenticode_image_digest(b, alg)`, `authenticode_verify_trust(p)`, `authenticode_trust_supported()`, `sha1_bytes(b)`, `sha512_bytes(b, sha384=False)` | assinaturas digitais |
 
 Exceções: `gk::Error` → `gk_native.GkError` com `args = (código, mensagem)`. O GIL é liberado em toda
 operação longa. Localização do módulo nos testes: `GK_NATIVE_DIR` ou `build/<preset>/cpp/bindings`

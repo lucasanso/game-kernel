@@ -18,12 +18,12 @@ jobs:
     steps:
       - uses: actions/checkout@v5
       - name: System dependencies
-        run: sudo apt-get update && sudo apt-get install -y ninja-build libsodium-dev nlohmann-json3-dev libyara-dev libarchive-dev libsqlite3-dev qt6-base-dev clamav mingw-w64 binutils-mingw-w64
+        run: sudo apt-get update && sudo apt-get install -y ninja-build libsodium-dev nlohmann-json3-dev libyara-dev libarchive-dev libsqlite3-dev qt6-base-dev clamav mingw-w64 binutils-mingw-w64 osslsigncode
       - uses: actions/setup-python@v6
         with:
           python-version: "3.13"
       - name: Python test dependencies
-        run: python -m pip install pytest==9.2.0 cryptography==50.0.2 pybind11==2.13.6 pefile==2024.8.26 yara-python==4.5.4
+        run: python -m pip install pytest==9.2.0 cryptography==50.0.2 pybind11==2.13.6 pefile==2024.8.26 yara-python==4.5.4 asn1crypto==1.5.1
       - name: Build (release, warnings as errors)
         run: |
           cmake --preset linux-release -DPython_EXECUTABLE="$(which python)"
@@ -32,6 +32,7 @@ jobs:
         env:
           GK_REQUIRE_NATIVE: "1"
           GK_REQUIRE_CLI: "1"
+          GK_REQUIRE_SIGNING: "1"
           GK_NATIVE_DIR: build/linux-release/cpp/bindings
           QT_QPA_PLATFORM: offscreen
         run: python -m pytest -q tests/foundation tests/native
@@ -43,7 +44,7 @@ jobs:
           # __cxa_throw in child interpreters started by the tests.
           LD_PRELOAD="$(gcc -print-file-name=libasan.so):$(gcc -print-file-name=libubsan.so):$(gcc -print-file-name=libstdc++.so)" \
           ASAN_OPTIONS=detect_leaks=0:abort_on_error=1 UBSAN_OPTIONS=halt_on_error=1:print_stacktrace=1 \
-          GK_SLOWDOWN_FACTOR=20 GK_FUZZ_ITERATIONS=2000 GK_REQUIRE_NATIVE=1 GK_NATIVE_DIR=build/linux-asan/cpp/bindings \
+          GK_SLOWDOWN_FACTOR=20 GK_FUZZ_ITERATIONS=2000 GK_REQUIRE_NATIVE=1 GK_REQUIRE_SIGNING=1 GK_NATIVE_DIR=build/linux-asan/cpp/bindings \
           python -m pytest -q tests/native
 
   windows:
@@ -54,7 +55,7 @@ jobs:
         with:
           python-version: "3.13"
       - name: Python test dependencies
-        run: python -m pip install pytest==9.2.0 cryptography==50.0.2 pybind11==2.13.6 pefile==2024.8.26 yara-python==4.5.4
+        run: python -m pip install pytest==9.2.0 cryptography==50.0.2 pybind11==2.13.6 pefile==2024.8.26 yara-python==4.5.4 asn1crypto==1.5.1
       - name: Configure (MSVC + vcpkg, static triplet)
         shell: pwsh
         run: |

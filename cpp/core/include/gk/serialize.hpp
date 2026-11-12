@@ -4,6 +4,7 @@
 
 #include <nlohmann/json.hpp>
 
+#include "gk/authenticode.hpp"
 #include "gk/filetype.hpp"
 #include "gk/model.hpp"
 #include "gk/pe.hpp"
@@ -16,6 +17,8 @@ nlohmann::json to_json(const Location& location);      // omits empty fields, li
 nlohmann::json to_json(const Evidence& evidence);
 nlohmann::json to_json(const FileFeatures& features);
 nlohmann::json to_json(const FileResult& result);
+nlohmann::json to_json(const authenticode::Report& report);
+nlohmann::json to_json(const authenticode::TrustResult& trust);
 
 // Inverse of to_json (documents written by C++ or by gamekernel/core/models.py). Unknown fields are ignored;
 // missing optional fields take their defaults. Throws gk::Error(InvalidFormat) on structurally invalid input.

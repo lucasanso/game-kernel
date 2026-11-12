@@ -6,6 +6,7 @@
 #include "gk/error.hpp"
 #include "gk/file_view.hpp"
 #include "gk/scan_support.hpp"
+#include "gk/text.hpp"
 
 namespace gk::scan {
 
@@ -22,7 +23,7 @@ IocDb IocDb::load(const std::vector<std::filesystem::path>& dirs, std::vector<st
         if (!std::filesystem::is_directory(dir, ec)) continue;
         std::vector<std::filesystem::path> files;
         for (const auto& e : std::filesystem::directory_iterator(dir, ec)) {
-            if (e.is_regular_file(ec) && lower_ascii(e.path().extension().string()) == ".json") files.push_back(e.path());
+            if (e.is_regular_file(ec) && lower_ascii(text::path_utf8(e.path().extension())) == ".json") files.push_back(e.path());
         }
         std::sort(files.begin(), files.end());
         for (const auto& f : files) {
@@ -40,7 +41,7 @@ IocDb IocDb::load(const std::vector<std::filesystem::path>& dirs, std::vector<st
                                                 e.value("severity", "HIGH"), e.value("source", ""), e.value("note", "")};
                 }
             } catch (const std::exception& ex) {
-                if (errors != nullptr) errors->push_back(f.filename().string() + ": " + ex.what());
+                if (errors != nullptr) errors->push_back(text::path_utf8(f.filename()) + ": " + ex.what());
             }
         }
     }

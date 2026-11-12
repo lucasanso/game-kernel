@@ -9,6 +9,7 @@
 #include <vector>
 
 #include "gk/archive.hpp"
+#include "gk/authenticode.hpp"
 #include "gk/byte_view.hpp"
 #include "gk/cancel.hpp"
 #include "gk/model.hpp"
@@ -34,6 +35,7 @@ struct Options {
     std::uint64_t max_analysis_bytes = 512ull << 20;   // larger objects: header-level analysis only
     std::size_t max_script_bytes = 8u << 20;
     int yara_timeout_seconds = 60;
+    bool verify_trust = true;                  // analyze_file on Windows: WinVerifyTrust (offline) + catalogs
 };
 
 struct Subject {
@@ -48,6 +50,7 @@ struct Subject {
 struct Output {
     FileResult result;
     std::vector<FileResult> members;           // archive members (any depth), each analysed
+    authenticode::Report signature;            // Authenticode structure of `result` (empty when not a signed PE)
 };
 
 Output analyze(ByteView data, const Subject& subject, const RuleSet& rules, const Options& options,
@@ -68,6 +71,10 @@ struct IndicatorHit {
 // Structural evidence of a parsed PE and the features later used by folder context.
 void pe_evidence(const pe::PeInfo& info, ByteView data, const Subject& subject, std::vector<Evidence>& out,
                  FileFeatures& features);
+// Authenticode: structure/integrity of embedded signatures (portable) and the Windows trust verdict.
+void signature_evidence(const authenticode::Report& report, std::vector<Evidence>& out, FileFeatures& features);
+void trust_evidence(const authenticode::TrustResult& trust, const authenticode::Report& structure,
+                    std::vector<Evidence>& out, FileFeatures& features);
 // Name-based deception (system process names, typosquats, double extensions, RLO) for any file.
 void name_evidence(const Subject& subject, bool executable_content, std::vector<Evidence>& out);
 // Capability correlation of indicator hits with imports (pe may be null for scripts/data).

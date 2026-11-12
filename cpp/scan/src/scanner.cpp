@@ -13,6 +13,7 @@
 
 #include <chrono>
 
+#include "gk/authenticode.hpp"
 #include "gk/error.hpp"
 #include "gk/hash.hpp"
 #include "gk/ipc/helper_client.hpp"
@@ -125,6 +126,8 @@ std::string Scanner::fingerprint() const {
     Sha256 h;
     auto add = [&](const std::string& s) { h.update(ByteView(s)); h.update(ByteView(std::string_view("\x1f", 1))); };
     add(kVersion);
+    // Analysis revisions that change results without a version bump (Authenticode evidence; trust only on Windows).
+    add(gk::authenticode::trust_supported() ? "authenticode-1+trust" : "authenticode-1");
     add(request_.deep ? "deep" : "quick");
     add(QJsonDocument(config_.archiveLimits).toJson(QJsonDocument::Compact).toStdString());
     QStringList files;
@@ -576,7 +579,14 @@ void Scanner::finalize() {
 
     limitations_.push_back("Análise estática: os arquivos não são executados; comportamentos que só aparecem em "
                            "execução exigem a análise na sandbox isolada.");
-    limitations_.push_back("Assinaturas digitais (Authenticode) ainda não são verificadas nesta versão do núcleo.");
+    if (gk::authenticode::trust_supported()) {
+        limitations_.push_back("Assinaturas digitais verificadas sem acesso à rede: revogações de certificados só são "
+                               "detectadas se a informação já estiver no computador; dentro de compactados, só a "
+                               "integridade da assinatura é conferida.");
+    } else {
+        limitations_.push_back("A cadeia de confiança das assinaturas digitais só é verificada no Windows; nesta "
+                               "plataforma apenas a integridade (resumo assinado × conteúdo) é conferida.");
+    }
     if (!request_.deep) {
         limitations_.push_back("Modo rápido: arquivos de dados verificados só pelo cabeçalho e conteúdo de compactados não expandido.");
     }

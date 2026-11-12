@@ -11,6 +11,7 @@
 
 #include "gk/analysis.hpp"
 #include "gk/archive.hpp"
+#include "gk/authenticode.hpp"
 #include "gk/db.hpp"
 #include "gk/error.hpp"
 #include "gk/filetype.hpp"
@@ -296,6 +297,58 @@ PYBIND11_MODULE(gk_native, m) {
         return report_to_dict(report);
     });
     m.def("yara_version", &gk::yara::version);
+    m.def(
+        "authenticode_inspect",
+        [](const py::bytes& data) {
+            std::string storage;
+            const gk::ByteView v = view_of(data, storage);
+            nlohmann::json j;
+            {
+                py::gil_scoped_release release;
+                j = gk::to_json(gk::authenticode::inspect(v));
+            }
+            return json_to_py(j);
+        },
+        py::arg("data"));
+    m.def(
+        "authenticode_image_digest",
+        [](const py::bytes& data, const std::string& algorithm) -> py::object {
+            std::string storage;
+            const gk::ByteView v = view_of(data, storage);
+            const auto d = gk::authenticode::image_digest(v, algorithm);
+            return d ? py::cast(*d) : py::none();
+        },
+        py::arg("data"), py::arg("algorithm"));
+    m.def("authenticode_trust_supported", &gk::authenticode::trust_supported);
+    m.def(
+        "authenticode_verify_trust",
+        [](const std::filesystem::path& path) {
+            nlohmann::json j;
+            {
+                py::gil_scoped_release release;
+                j = gk::to_json(gk::authenticode::verify_trust(path));
+            }
+            return json_to_py(j);
+        },
+        py::arg("path"));
+    m.def("sha1_bytes", [](const py::bytes& data) {
+        std::string storage;
+        gk::Sha1 h;
+        h.update(view_of(data, storage));
+        const auto d = h.finish();
+        return gk::to_hex(d);
+    });
+    m.def(
+        "sha512_bytes",
+        [](const py::bytes& data, bool sha384) {
+            std::string storage;
+            gk::Sha512 h(sha384);
+            h.update(view_of(data, storage));
+            const auto d = h.finish();
+            return gk::to_hex(d);
+        },
+        py::arg("data"), py::arg("sha384") = false);
+
 
     m.def(
         "archive_walk",

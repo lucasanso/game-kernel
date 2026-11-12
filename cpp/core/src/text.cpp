@@ -88,4 +88,52 @@ std::string escape_bytes(std::string_view raw) {
     return out;
 }
 
+std::string display_utf8(std::string_view raw, std::size_t max_bytes) {
+    if (raw.size() > max_bytes) raw = raw.substr(0, max_bytes);
+    std::string out;
+    out.reserve(raw.size());
+    std::size_t i = 0;
+    auto byte = [&](std::size_t k) { return static_cast<std::uint8_t>(raw[k]); };
+    while (i < raw.size()) {
+        const std::uint8_t b = byte(i);
+        std::uint32_t cp = 0;
+        std::size_t n = 0;
+        if (b < 0x80) {
+            cp = b;
+            n = 1;
+        } else if ((b & 0xE0) == 0xC0) {
+            cp = b & 0x1FU;
+            n = 2;
+        } else if ((b & 0xF0) == 0xE0) {
+            cp = b & 0x0FU;
+            n = 3;
+        } else if ((b & 0xF8) == 0xF0) {
+            cp = b & 0x07U;
+            n = 4;
+        }
+        bool ok = n > 0 && i + n <= raw.size();
+        for (std::size_t k = 1; ok && k < n; ++k) {
+            if ((byte(i + k) & 0xC0) != 0x80) ok = false;
+            cp = (cp << 6) | (byte(i + k) & 0x3FU);
+        }
+        static constexpr std::uint32_t kMin[] = {0, 0, 0x80, 0x800, 0x10000};
+        ok = ok && cp >= kMin[n] && cp <= 0x10FFFF && !(cp >= 0xD800 && cp <= 0xDFFF);
+        if (!ok) {
+            append_utf8(out, 0xFFFD);
+            ++i;
+            continue;
+        }
+        const bool control = cp < 0x20 || (cp >= 0x7F && cp < 0xA0);
+        const bool bidi = (cp >= 0x202A && cp <= 0x202E) || (cp >= 0x2066 && cp <= 0x2069);
+        append_utf8(out, control || bidi ? 0xFFFD : cp);
+        i += n;
+    }
+    return out;
+}
+
+std::string path_utf8(const std::filesystem::path& p) {
+    const auto u8 = p.u8string();
+    return std::string(reinterpret_cast<const char*>(u8.data()), u8.size());
+}
+
 }  // namespace gk::text
