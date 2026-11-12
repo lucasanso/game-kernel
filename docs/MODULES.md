@@ -12,7 +12,7 @@ Legenda de estado: ✅ integrado e testado · 🔄 em migração · 🐍 mantido
 | Parser PE (cabeçalhos, seções, entropia, imports/delay-imports, exports/forwarders, recursos, version info, manifest, TLS, debug/PDB, Rich, overlay, mapeamento RVA↔offset) | `pe.hpp/.cpp`, `text.hpp/.cpp`, `serialize.hpp/.cpp` | ✅ M2 (equivalência com pefile em PEs reais x86/x64; fuzzing sob ASan/UBSan) | `pefile` |
 | Authenticode | `win/authenticode.cpp` | ⏳ M4 | `signify` |
 | YARA (compilação isolada por arquivo, `include` bloqueado, externals, limites, cancelamento, scanner por chamada — thread-safe) | `yara_engine.hpp/.cpp` | ✅ M3 (equivalência com yara-python: regras, namespaces, tags, metadados, offsets e trechos) | `engines/yara_engine.py` (oráculo) |
-| Compactados | `archive.hpp/.cpp` | ⏳ M5 | py7zr, rarfile, pycdlib |
+| Compactados (libarchive em memória; ZIP/7z/RAR/RAR5/ISO/CAB/TAR/CPIO/LHA + gz/bz2/xz/zstd/lz4; SFX; limites anti-bomba com orçamento compartilhado entre níveis; nomes perigosos, links, criptografia) | `archive.hpp/.cpp` | ✅ M5 (equivalência com zipfile/tarfile; fuzzing sob ASan) | py7zr, rarfile, pycdlib |
 | Scripts / LNK / ClamAV / reputação | `scripts.cpp`, `lnk.cpp`, `clamav.cpp`, `reputation.cpp` | ⏳ M6 | — |
 | Risco + contexto de jogo/cracks | `risk.cpp`, `game_context.cpp` | ⏳ M7 | — |
 | Orquestrador, worker, IPC, banco, CLI | `scanner.cpp`, `ipc.cpp`, `db.cpp`, `cpp/worker`, `cpp/cli` | ⏳ M8 | `core/scan_api.py` |

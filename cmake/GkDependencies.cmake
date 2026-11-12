@@ -32,3 +32,7 @@ else()
                         INTERFACE_INCLUDE_DIRECTORIES "${GK_YARA_INCLUDE_DIR}")
   add_library(gk::yara ALIAS gk_yara_imported)
 endif()
+
+# ---- libarchive -------------------------------------------------------------------------------
+find_package(LibArchive 3.6 REQUIRED)
+add_library(gk::archive ALIAS LibArchive::LibArchive)

@@ -5,6 +5,16 @@
   "dependencies": [
     "libsodium",
     "nlohmann-json",
-    "yara"
+    "yara",
+    {
+      "name": "libarchive",
+      "default-features": false,
+      "features": [
+        "bzip2",
+        "lz4",
+        "lzma",
+        "zstd"
+      ]
+    }
   ]
 }

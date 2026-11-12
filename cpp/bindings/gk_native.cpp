@@ -7,6 +7,7 @@
 
 #include <string>
 
+#include "gk/archive.hpp"
 #include "gk/error.hpp"
 #include "gk/filetype.hpp"
 #include "gk/file_view.hpp"
@@ -279,5 +280,87 @@ PYBIND11_MODULE(gk_native, m) {
         return report_to_dict(report);
     });
     m.def("yara_version", &gk::yara::version);
+
+    m.def(
+        "archive_walk",
+        [](const py::bytes& data, const py::dict& limits) {
+            std::string storage;
+            const gk::ByteView v = view_of(data, storage);
+            gk::archive::Limits lim;
+            if (limits.contains("max_total_bytes")) lim.max_total_bytes = limits["max_total_bytes"].cast<std::uint64_t>();
+            if (limits.contains("max_member_bytes")) lim.max_member_bytes = limits["max_member_bytes"].cast<std::uint64_t>();
+            if (limits.contains("max_members")) lim.max_members = limits["max_members"].cast<std::uint64_t>();
+            if (limits.contains("max_ratio")) lim.max_ratio = limits["max_ratio"].cast<double>();
+            if (limits.contains("ratio_min_bytes")) lim.ratio_min_bytes = limits["ratio_min_bytes"].cast<std::uint64_t>();
+            if (limits.contains("max_depth")) lim.max_depth = limits["max_depth"].cast<unsigned>();
+            struct Row {
+                gk::archive::Member member;
+                std::string sha256;
+                gk::TypeInfo type;
+                bool has_data = false;
+            };
+            std::vector<Row> rows;
+            gk::archive::Visitor visitor;
+            visitor.on_entry = [&](const gk::archive::Member& member) {
+                rows.push_back(Row{member, {}, {}, false});
+                return gk::archive::Want::Read;
+            };
+            visitor.on_data = [&](const gk::archive::Member& member, gk::ByteView d) {
+                Row& row = rows.back();
+                row.member = member;
+                row.sha256 = gk::sha256_hex(d);
+                const std::string name = member.name.substr(member.name.find_last_of('/') == std::string::npos ? 0 : member.name.find_last_of('/') + 1);
+                const auto dot = name.find_last_of('.');
+                row.type = gk::identify(d.prefix(gk::kHeaderSize), dot == std::string::npos ? "" : name.substr(dot),
+                                        d.clamp(gk::kIsoProbeOffset, gk::kIsoProbeSize));
+                row.has_data = true;
+            };
+            visitor.is_archive = [&](const gk::archive::Member&, gk::ByteView) {
+                const std::string& kind = rows.back().type.kind;
+                return kind == "zip" || kind == "jar" || kind == "7z" || kind == "rar" || kind == "gzip" ||
+                       kind == "bzip2" || kind == "xz" || kind == "tar" || kind == "cab" || kind == "iso" || kind == "zstd";
+            };
+            gk::archive::Report report;
+            {
+                py::gil_scoped_release release;
+                report = gk::archive::walk(v, lim, visitor);
+            }
+            py::list members;
+            for (const Row& row : rows) {
+                const auto& mm = row.member;
+                py::dict d;
+                d["path"] = mm.path;
+                d["name"] = mm.name;
+                d["depth"] = mm.depth;
+                d["declared_size"] = mm.size_known ? py::object(py::int_(mm.declared_size)) : py::object(py::none());
+                d["bytes_read"] = mm.bytes_read;
+                d["is_directory"] = mm.is_directory;
+                d["is_symlink"] = mm.is_symlink;
+                d["link_target"] = mm.link_target;
+                d["encrypted"] = mm.encrypted;
+                d["complete"] = mm.complete;
+                d["anomalies"] = mm.anomalies;
+                d["sha256"] = row.has_data ? py::object(py::str(row.sha256)) : py::object(py::none());
+                d["kind"] = row.has_data ? py::object(py::str(row.type.kind)) : py::object(py::none());
+                members.append(d);
+            }
+            py::dict out;
+            out["format"] = report.format;
+            out["nested_formats"] = report.nested_formats;
+            out["members_seen"] = report.members_seen;
+            out["total_bytes"] = report.total_bytes;
+            out["complete"] = report.complete;
+            out["encrypted_entries"] = report.encrypted_entries;
+            out["anomalies"] = report.anomalies;
+            out["errors"] = report.errors;
+            out["members"] = members;
+            return out;
+        },
+        py::arg("data"), py::arg("limits") = py::dict());
+    m.def("archive_recognised", [](const py::bytes& data) {
+        std::string storage;
+        return gk::archive::recognised(view_of(data, storage));
+    });
+    m.def("libarchive_version", &gk::archive::libarchive_version);
     m.def("extension_of", [](const std::filesystem::path& path) { return gk::extension_of(path); });
 }
