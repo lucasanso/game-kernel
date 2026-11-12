@@ -16,12 +16,12 @@
 * Auditoria e plano: `docs/MIGRATION_PLAN.md`; contratos: `docs/INTEGRATION.md`; módulos: `docs/MODULES.md`.
 
 ## M1 — base do núcleo C++ ✅
-* `cpp/core`: `ByteView`, `ReadOnlyFile`/`MappedFile`, SHA-256/MD5, identificação de tipo; `cpp/bindings/gk_native`.
+* `native/core`: `ByteView`, `ReadOnlyFile`/`MappedFile`, SHA-256/MD5, identificação de tipo; `native/bindings/gk_native`.
 * Testes: 99 passando (Linux release com -Werror); 75 testes nativos sob ASan/UBSan sem erros;
   arquivos C++ compilam contra os cabeçalhos do Windows (mingw-w64).
 
 ## M2 — parser PE em C++ ✅
-* `cpp/core/src/pe.cpp` (+ `text.cpp`, `serialize.cpp`); bindings `parse_pe`, `parse_pe_file`, `pe_rva_to_offset`,
+* `native/core/src/pe.cpp` (+ `text.cpp`, `serialize.cpp`); bindings `parse_pe`, `parse_pe_file`, `pe_rva_to_offset`,
   `pe_offset_to_rva`, `shannon_entropy`.
 * Testes: equivalência com pefile no corpus real; mapeamento de endereços; fuzzing; estruturas malformadas
   (laço de recursos, contagens gigantes de exports, seção W+X, entry point fora das seções, truncamento).
@@ -30,7 +30,7 @@
 * CI: build Windows (MSVC + vcpkg) e testes nativos passaram no primeiro run; falha única corrigida no `db.py`.
 
 ## M3 — motor YARA em C++ ✅
-* `cpp/core/src/yara_engine.cpp`; bindings `YaraRules`, `yara_validate_dir`, `yara_version`.
+* `native/core/src/yara_engine.cpp`; bindings `YaraRules`, `yara_validate_dir`, `yara_version`.
 * Regras de detecção iniciais e gerador de indicadores; `docs/DETECTION_RULES.md`.
 * Testes: 133 passando no total (Linux release); suíte nativa sob ASan/UBSan com 2000 iterações de fuzzing PE.
 

@@ -10,7 +10,7 @@ python3 -m venv .venv && .venv/bin/pip install -r requirements-dev.txt
 cmake --preset linux-debug -DPython_EXECUTABLE=$PWD/.venv/bin/python
 cmake --build --preset linux-debug
 ```
-O módulo `gk_native` é gerado em `build/linux-debug/cpp/bindings/` e os testes o encontram via
+O módulo `gk_native` é gerado em `build/linux-debug/native/bindings/` e os testes o encontram via
 `GK_NATIVE_DIR` (definido automaticamente pelo `tests/conftest.py` quando o build padrão existe).
 
 Build com sanitizers (ASan + UBSan) para testes de segurança de memória:

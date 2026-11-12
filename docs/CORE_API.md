@@ -1,0 +1,59 @@
+# API do núcleo C++ (`gk_core`) e módulo `gk_native` — Agente A
+
+Complementa `docs/INTEGRATION.md` (Agente B), que define os mecanismos de integração entre linguagens
+(gk-ipc v1 e pybind11). Este documento descreve **o que o núcleo expõe**.
+
+## 1. Biblioteca `gk_core` (C++20, sem Qt)
+
+| Cabeçalho | Função |
+|---|---|
+| `gk/byte_view.hpp` | `ByteView`: leitura com limites e aritmética verificada — única forma de ler dados de arquivos |
+| `gk/file_view.hpp` | `ReadOnlyFile`, `MappedFile` (compartilhamento total, só arquivos comuns), `read_range` |
+| `gk/hash.hpp` | SHA-256 (libsodium), MD5, `hash_file` em streaming com cancelamento |
+| `gk/filetype.hpp` | Tipo real por conteúdo, PE disfarçado, filtros e prioridade |
+| `gk/pe.hpp` | Parser PE para entrada hostil, anomalias com códigos estáveis, mapeamento RVA↔offset |
+| `gk/yara_engine.hpp` | Regras YARA: compilação isolada por arquivo, `include` bloqueado, varredura thread-safe, validação de pacotes |
+| `gk/archive.hpp` | Compactados em memória (libarchive) com limites anti-bomba e recursão |
+| `gk/serialize.hpp` | JSON dos resultados — mesmo formato no pybind11 e no IPC |
+| `gk/error.hpp` | `gk::Error` com códigos (`FileAccess`, `ResourceLimit`, `Timeout`, `Cancelled`, `InvalidFormat`, `Internal`) |
+| `gk/cancel.hpp` | `CancelToken` (cancelar/pausar) |
+
+O núcleo não depende de Qt: é testável por pybind11, usado pelo `gk-scanworker` (processo isolado) e,
+na aplicação, através da camada de serviços Qt.
+
+## 2. Módulo `gk_native` (pybind11) — API v1
+
+| Função | Retorno |
+|---|---|
+| `API_VERSION`, `CORE_VERSION` | versão da API Python e do núcleo |
+| `sha256_bytes(b)`, `md5_bytes(b)`, `sha256_file(p)`, `hash_file(p, with_md5=True)` | hashes |
+| `identify(header, ext, iso_probe=b"")`, `identify_file(p)`, `group_enabled(info, filtros)`, `priority(info, nome)`, `extension_of(p)` | tipo real |
+| `parse_pe(b)`, `parse_pe_file(p)` | documento JSON do PE (`gk/serialize.hpp`) |
+| `pe_rva_to_offset(b, rvas)`, `pe_offset_to_rva(b, offsets)`, `shannon_entropy(b)` | mapeamento e entropia |
+| `YaraRules.compile_source(src)`, `YaraRules.compile_files(paths)` → `(regras, relatório)`; `.scan(data, filename=…, …)`, `.metadata()`, `.save(p)`, `YaraRules.load(p)`, `.rule_count` | YARA |
+| `yara_validate_dir(p)`, `yara_version()` | validação de regras de pacotes |
+| `archive_walk(b, limites)`, `archive_recognised(b)`, `libarchive_version()` | compactados |
+
+Exceções: `gk::Error` → `gk_native.GkError` com `args = (código, mensagem)`. O GIL é liberado em toda
+operação longa. Localização do módulo nos testes: `GK_NATIVE_DIR` ou `build/<preset>/native/bindings`
+(`tests/conftest.py`); `GK_REQUIRE_NATIVE=1` transforma ausência em falha (CI).
+
+## 3. Contratos de dados
+
+* `contracts/schema.sql` — esquema SQLite único (teste garante igualdade com `gamekernel/database/db.py`).
+* Documentos JSON do núcleo: nomes de campos estáveis, enums como texto, campos novos sempre opcionais.
+
+## 4. Processo de análise isolado (M8)
+
+`gk-scanworker` executará os parsers (PE, YARA, compactados) fora do processo do aplicativo, sob Job Object
+com limite de memória e integridade baixa, falando **gk-ipc v1** (`docs/INTEGRATION.md`) — o mesmo
+enquadramento e envelope do processo auxiliar Python, sem um segundo protocolo.
+
+## 5. Testes do núcleo
+
+* `tests/native/test_hash.py`, `test_filetype.py` — equivalência com `hashlib` e `filetypes.py`.
+* `tests/native/test_pe.py` — corpus de PEs reais gerado com mingw-w64 (`tests/corpus_pe/`), equivalência com
+  pefile, mapeamento de endereços, estruturas malformadas, fuzzing por mutação.
+* `tests/native/test_yara.py` — equivalência com yara-python, isolamento, `include`, concorrência.
+* `tests/native/test_archive.py` — equivalência com zipfile/tarfile, bombas, limites, nomes perigosos, fuzzing.
+* Sanitizers: preset `linux-asan`; `GK_SLOWDOWN_FACTOR` ajusta os limites de tempo; `GK_FUZZ_ITERATIONS`.

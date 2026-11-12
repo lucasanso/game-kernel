@@ -1,4 +1,9 @@
 -r requirements.txt
+# Test engine and reference implementations ("oracles") for the C++ equivalence tests.
 pytest==9.2.0
 pytest-qt==4.5.0
+pybind11==2.13.6
+pefile==2024.8.26
+yara-python==4.5.4
+pycdlib==1.22.0
 pyinstaller==6.22.3

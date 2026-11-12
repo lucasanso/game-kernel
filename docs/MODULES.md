@@ -2,7 +2,7 @@
 
 Legenda de estado: ✅ integrado e testado · 🔄 em migração · 🐍 mantido em Python · 🗑️ será removido após equivalência · ⏳ planejado
 
-## Núcleo C++ (`cpp/core`, Agente A)
+## Núcleo C++ (`native/core`, Agente A)
 
 | Módulo | Arquivos | Estado | Substitui |
 |---|---|---|---|
@@ -15,12 +15,12 @@ Legenda de estado: ✅ integrado e testado · 🔄 em migração · 🐍 mantido
 | Compactados (libarchive em memória; ZIP/7z/RAR/RAR5/ISO/CAB/TAR/CPIO/LHA + gz/bz2/xz/zstd/lz4; SFX; limites anti-bomba com orçamento compartilhado entre níveis; nomes perigosos, links, criptografia) | `archive.hpp/.cpp` | ✅ M5 (equivalência com zipfile/tarfile; fuzzing sob ASan) | py7zr, rarfile, pycdlib |
 | Scripts / LNK / ClamAV / reputação | `scripts.cpp`, `lnk.cpp`, `clamav.cpp`, `reputation.cpp` | ⏳ M6 | — |
 | Risco + contexto de jogo/cracks | `risk.cpp`, `game_context.cpp` | ⏳ M7 | — |
-| Orquestrador, worker, IPC, banco, CLI | `scanner.cpp`, `ipc.cpp`, `db.cpp`, `cpp/worker`, `cpp/cli` | ⏳ M8 | `core/scan_api.py` |
+| Orquestrador, worker, IPC, banco, CLI | `scanner.cpp`, `ipc.cpp`, `db.cpp`, `native/worker`, `native/cli` | ⏳ M8 | `core/scan_api.py` |
 | Quarentena | `quarantine.cpp` | ⏳ M9 | — |
-| Pacotes offline / integridade | `update.cpp`, `integrity.cpp` | ⏳ M10 | `core/integrity.py` (verificação) |
+| Integridade da instalação | `integrity.cpp` | ⏳ M10 | `core/integrity.py` (verificação) |
 | Tempo real | `win/realtime.cpp` | ⏳ M11 | — |
 | Performance Monitor / System Optimizer | `win/perf.cpp`, `win/optimizer.cpp` | ⏳ M12 | — |
-| Serviços Qt | `cpp/bridge/*` | ⏳ M13 | — |
+| Serviços Qt | `native/bridge/*` | ⏳ M13 | — |
 
 ## Python
 
@@ -38,3 +38,14 @@ Legenda de estado: ✅ integrado e testado · 🔄 em migração · 🐍 mantido
 | `gamekernel/engines/yara_engine.py` | 🗑️ | Oráculo para o M3 (motor YARA C++) |
 | `gamekernel/core/tools.py` | removido | Nunca integrado; substituído por `gk::process` (M8) |
 | `gamekernel/core/scan_api.py` | 🗑️ | Substituído pela API C++/IPC (M8) |
+
+## Componentes do Agente B (integrados nesta branch por merge)
+
+| Componente | Local | Linguagem |
+|---|---|---|
+| gk-ipc v1 (protocolo, auxiliar, clientes) | `gamekernel/ipc/`, `gk_helper.py`, `native/ipc/` | Python + C++/Qt |
+| Atualizações offline (preparação; verificação e instalação atômica) | `gamekernel/updates/`, `native/updates/` | Python + C++/Qt |
+| Relatórios forenses (JSON, HTML, PDF) | `gamekernel/core/report_*.py`, `sysinfo.py` | Python (auxiliar) |
+| Sandbox (Windows Sandbox) | `gamekernel/engines/sandbox_manager.py`, `sandbox/monitor.ps1` | Python + PowerShell (na VM) |
+| Threat Intelligence | `gamekernel/ti/` | Python |
+| Detalhes e estado: `docs/PROGRESS_B.md` | | |
