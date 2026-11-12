@@ -110,4 +110,93 @@ json to_json(const pe::PeInfo& p) {
     return j;
 }
 
+json to_json(const Location& l) {
+    json j;
+    j["kind"] = l.kind;
+    if (!l.description.empty()) j["description"] = l.description;
+    if (l.section && !l.section->empty()) j["section"] = *l.section;
+    if (l.offset) j["offset"] = *l.offset;
+    if (l.rva) j["rva"] = *l.rva;
+    if (l.length) j["length"] = *l.length;
+    if (l.line) j["line"] = *l.line;
+    if (l.excerpt && !l.excerpt->empty()) j["excerpt"] = *l.excerpt;
+    return j;
+}
+
+json to_json(const Evidence& e) {
+    json locations = json::array();
+    for (const auto& l : e.locations) locations.push_back(to_json(l));
+    return json{{"rule_id", e.rule_id},
+                {"title", e.title},
+                {"source", value_of(e.source)},
+                {"category", e.category},
+                {"severity", name_of(e.severity)},
+                {"confidence", name_of(e.confidence)},
+                {"description", e.description},
+                {"engine", e.engine},
+                {"locations", locations},
+                {"details", e.details},
+                {"fp_note", e.fp_note},
+                {"tags", e.tags},
+                {"adjusted_severity", e.adjusted_severity ? json(name_of(*e.adjusted_severity)) : json(nullptr)},
+                {"adjustment_reason", e.adjustment_reason}};
+}
+
+namespace {
+template <typename T>
+json opt(const std::optional<T>& v) {
+    return v ? json(*v) : json(nullptr);
+}
+}  // namespace
+
+json to_json(const FileFeatures& f) {
+    return json{{"file_type", f.file_type},
+                {"is_pe", f.is_pe},
+                {"is_dll", f.is_dll},
+                {"is_driver", f.is_driver},
+                {"is_dotnet", f.is_dotnet},
+                {"machine", opt(f.machine)},
+                {"signed", f.signed_},
+                {"signature_valid", opt(f.signature_valid)},
+                {"signer", opt(f.signer)},
+                {"version_info", f.version_info},
+                {"exports", f.exports},
+                {"export_forwarders", f.export_forwarders},
+                {"imports_dlls", f.imports_dlls},
+                {"packers", f.packers},
+                {"installer", opt(f.installer)},
+                {"marker_strings", f.marker_strings},
+                {"text_head", opt(f.text_head)}};
+}
+
+json to_json(const FileResult& r) {
+    json evidences = json::array();
+    for (const auto& e : r.evidences) evidences.push_back(to_json(e));
+    return json{{"path", r.path},
+                {"name", r.name},
+                {"directory", r.directory},
+                {"extension", r.extension},
+                {"size", r.size},
+                {"sha256", opt(r.sha256)},
+                {"md5", opt(r.md5)},
+                {"file_type", r.file_type},
+                {"container", opt(r.container)},
+                {"member_path", opt(r.member_path)},
+                {"depth", r.depth},
+                {"status", value_of(r.status)},
+                {"status_reasons", r.status_reasons},
+                {"evidences", evidences},
+                {"features", to_json(r.features)},
+                {"engines", r.engines},
+                {"risk", name_of(r.risk)},
+                {"classification", value_of(r.classification)},
+                {"crack_status", value_of(r.crack_status)},
+                {"primary_category", opt(r.primary_category)},
+                {"explanation", r.explanation},
+                {"recommendations", r.recommendations},
+                {"possible_false_positive", r.possible_false_positive},
+                {"analyzed_at", r.analyzed_at},
+                {"from_cache", r.from_cache}};
+}
+
 }  // namespace gk

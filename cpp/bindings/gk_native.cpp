@@ -7,6 +7,7 @@
 
 #include <string>
 
+#include "gk/analysis.hpp"
 #include "gk/archive.hpp"
 #include "gk/error.hpp"
 #include "gk/filetype.hpp"
@@ -362,5 +363,91 @@ PYBIND11_MODULE(gk_native, m) {
         return gk::archive::recognised(view_of(data, storage));
     });
     m.def("libarchive_version", &gk::archive::libarchive_version);
+
+    // ---- analysis (M6) -------------------------------------------------------------------------
+    py::class_<gk::analysis::RuleSet, std::shared_ptr<gk::analysis::RuleSet>>(m, "AnalysisRules")
+        .def_static("load",
+                    [](const std::vector<std::filesystem::path>& detection_dirs, const std::filesystem::path& indicators) {
+                        std::shared_ptr<gk::analysis::RuleSet> rules;
+                        {
+                            py::gil_scoped_release release;
+                            rules = std::make_shared<gk::analysis::RuleSet>(
+                                gk::analysis::RuleSet::load(detection_dirs, indicators));
+                        }
+                        return rules;
+                    })
+        .def_property_readonly("detection_report",
+                               [](const gk::analysis::RuleSet& r) { return report_to_dict(r.detection_report); })
+        .def_property_readonly("indicator_report",
+                               [](const gk::analysis::RuleSet& r) { return report_to_dict(r.indicator_report); });
+
+    auto output_to_py = [](const gk::analysis::Output& o) {
+        nlohmann::json j;
+        j["result"] = gk::to_json(o.result);
+        j["members"] = nlohmann::json::array();
+        for (const auto& member : o.members) j["members"].push_back(gk::to_json(member));
+        return json_to_py(j);
+    };
+    auto options_from = [](bool deep, const py::dict& limits) {
+        gk::analysis::Options o;
+        o.deep = deep;
+        if (limits.contains("max_total_bytes")) o.archive_limits.max_total_bytes = limits["max_total_bytes"].cast<std::uint64_t>();
+        if (limits.contains("max_member_bytes")) o.archive_limits.max_member_bytes = limits["max_member_bytes"].cast<std::uint64_t>();
+        if (limits.contains("max_depth")) o.archive_limits.max_depth = limits["max_depth"].cast<unsigned>();
+        if (limits.contains("max_analysis_bytes")) o.max_analysis_bytes = limits["max_analysis_bytes"].cast<std::uint64_t>();
+        return o;
+    };
+    m.def(
+        "analyze_bytes",
+        [output_to_py, options_from](const py::bytes& data, const std::string& name, const std::string& path,
+                                     const gk::analysis::RuleSet& rules, bool deep, const py::dict& limits) {
+            std::string storage;
+            const gk::ByteView v = view_of(data, storage);
+            gk::analysis::Subject subject;
+            subject.name = name;
+            subject.path = path.empty() ? name : path;
+            const auto slash = subject.path.find_last_of("/\\");
+            subject.directory = slash == std::string::npos ? std::string() : subject.path.substr(0, slash);
+            const gk::analysis::Options options = options_from(deep, limits);
+            gk::analysis::Output out;
+            {
+                py::gil_scoped_release release;
+                out = gk::analysis::analyze(v, subject, rules, options);
+            }
+            return output_to_py(out);
+        },
+        py::arg("data"), py::arg("name"), py::arg("path") = "", py::arg("rules"), py::arg("deep") = true,
+        py::arg("limits") = py::dict());
+    m.def(
+        "analyze_file",
+        [output_to_py, options_from](const std::filesystem::path& path, const gk::analysis::RuleSet& rules, bool deep,
+                                     const py::dict& limits) {
+            const gk::analysis::Options options = options_from(deep, limits);
+            gk::analysis::Output out;
+            {
+                py::gil_scoped_release release;
+                out = gk::analysis::analyze_file(path, rules, options);
+            }
+            return output_to_py(out);
+        },
+        py::arg("path"), py::arg("rules"), py::arg("deep") = true, py::arg("limits") = py::dict());
+    m.def("network_literals", [](const py::bytes& data) {
+        std::string storage;
+        std::vector<std::string> out;
+        for (const auto& l : gk::analysis::network_literals(view_of(data, storage))) out.push_back(*l.excerpt);
+        return out;
+    });
+    m.def("parse_lnk", [](const py::bytes& data) {
+        std::string storage;
+        const auto info = gk::analysis::parse_lnk(view_of(data, storage));
+        py::dict d;
+        d["valid"] = info.valid;
+        d["target"] = info.target;
+        d["arguments"] = info.arguments;
+        d["working_dir"] = info.working_dir;
+        d["icon_location"] = info.icon_location;
+        d["name"] = info.name;
+        return d;
+    });
     m.def("extension_of", [](const std::filesystem::path& path) { return gk::extension_of(path); });
 }

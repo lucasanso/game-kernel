@@ -3,6 +3,13 @@
 ## Agente A — Core e Segurança
 
 ### [não lançado]
+- M6: camada de evidências em C++ (`gk::analysis`): regras estruturais de PE (empacotadores, protetores comerciais,
+  entry point, importações mínimas, executáveis embutidos, overlay, TLS, PDB suspeito, drivers abusados, proxies
+  de DLL), nomes enganosos (processos do sistema, typosquatting, extensão dupla, RLO), correlação de capacidades
+  (stealers, keylogger, clipper, ransomware, minerador, persistência, desativação de proteções, downloader,
+  injeção, backdoor, rede), scripts com número de linha e decodificação de `-EncodedCommand`/Base64, atalhos
+  LNK/URL, literais IP:porta, análise individual de membros de compactados. Modelo C++ com JSON idêntico ao
+  `gamekernel/core/models.py`. Corpus benigno não passa de LOW.
 - WORK_SPLIT rev. 4: árvore C++ única em `cpp/`; o A adota `cpp/ipc` (cliente gk-ipc) e `cpp/updates` (verificação
   e instalação de pacotes), escritos pelo B, como propôs o B — sem módulos duplicados.
 - M5: compactados em memória (libarchive) com formatos e filtros em lista branca (sem `mtree`, sem programas

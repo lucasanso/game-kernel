@@ -9,6 +9,11 @@ add_library(gk_core STATIC
   src/serialize.cpp
   src/yara_engine.cpp
   src/archive.cpp
+  src/model.cpp
+  src/pe_rules.cpp
+  src/capabilities.cpp
+  src/text_analysis.cpp
+  src/analysis.cpp
 )
 target_include_directories(gk_core PUBLIC
   ${CMAKE_CURRENT_SOURCE_DIR}/include
