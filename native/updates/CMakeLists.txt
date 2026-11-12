@@ -62,6 +62,8 @@ endif()
 
 if(MSVC)
   target_compile_options(gk_updates PRIVATE /W4 /permissive- /utf-8)
+  # Windows 10 API level (PROC_THREAD_ATTRIBUTE_JOB_LIST, Job Object UI limits).
+  target_compile_definitions(gk_updates PRIVATE _WIN32_WINNT=0x0A00 WINVER=0x0A00 NOMINMAX)
 else()
   target_compile_options(gk_updates PRIVATE -Wall -Wextra -Wpedantic -Wconversion -Wno-sign-conversion)
 endif()

@@ -9,6 +9,7 @@ integration problem can never be hidden by a skip.
 from __future__ import annotations
 
 import os
+import shlex
 import shutil
 import subprocess
 import sys
@@ -44,8 +45,11 @@ def build_project(name: str, source: Path, target: str, extra_args: list[str] | 
         # Distinct exit codes: a sanitizer report must never look like a legitimate rejection (exit 1).
         os.environ.setdefault("ASAN_OPTIONS", "exitcode=99:detect_leaks=1")
         os.environ.setdefault("UBSAN_OPTIONS", "halt_on_error=1:exitcode=98:print_stacktrace=1")
+    # Extra configure arguments, e.g. the vcpkg toolchain and the Qt prefix on Windows CI.
+    extra_args += shlex.split(os.environ.get("GK_CMAKE_ARGS", ""), posix=sys.platform != "win32")
     build_dir = BUILD_ROOT / name
-    generator = ["-G", "Ninja"] if shutil.which("ninja") else []
+    # Ninja needs a compiler environment; on Windows the default Visual Studio generator finds MSVC itself.
+    generator = ["-G", "Ninja"] if shutil.which("ninja") and sys.platform != "win32" else []
     if not (build_dir / "CMakeCache.txt").exists():
         proc = subprocess.run(
             [cmake, "-S", str(source), "-B", str(build_dir), f"-DCMAKE_BUILD_TYPE={config}", *generator,

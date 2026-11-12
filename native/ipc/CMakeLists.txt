@@ -25,6 +25,8 @@ target_link_libraries(gk_ipc PUBLIC Qt6::Core)
 target_compile_features(gk_ipc PUBLIC cxx_std_20)
 if(MSVC)
   target_compile_options(gk_ipc PRIVATE /W4 /permissive- /utf-8)
+  # Windows 10 API level (PROC_THREAD_ATTRIBUTE_JOB_LIST, Job Object UI limits).
+  target_compile_definitions(gk_ipc PRIVATE _WIN32_WINNT=0x0A00 WINVER=0x0A00 NOMINMAX)
   target_compile_definitions(gk_ipc PRIVATE UNICODE _UNICODE WIN32_LEAN_AND_MEAN)
 else()
   target_compile_options(gk_ipc PRIVATE -Wall -Wextra -Wpedantic -Wconversion -Wno-sign-conversion)

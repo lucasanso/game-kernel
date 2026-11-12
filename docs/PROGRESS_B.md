@@ -205,7 +205,7 @@ nem caminhos vindos de metadados, e a verificação é feita num único fluxo, s
   C++** → segundo pacote com relatório de diferenças; recusa de componentes inválidos; `ti_build_ioc.py`.
 * `GK_NATIVE_SANITIZE=1`: a mesma suíte (92 testes) com `gk-update` e o cliente IPC instrumentados com ASan/UBSan, sem erros.
 
-**Resultado**: `pytest -q` → **193 passed**.
+**Resultado**: `pytest -q` → **189 passed** (+1 pulado: auxiliar congelado, executado na CI).
 
 **Pendente nesta área**
 * Importação **direta** de CVD oficial avulso (sem `.gkpkg`): exige a verificação RSA da Cisco Talos via `sigtool`,
