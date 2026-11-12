@@ -3,6 +3,14 @@
 ## Agente A — Core e Segurança
 
 ### [não lançado]
+- M7: motor de risco e módulo de cracks em C++ (`gk::risk`): reconhecimento de componentes por pasta a partir de
+  `signatures/data/game_components.json` (21 famílias: emuladores Steam/Epic/EA/Ubisoft, desbloqueadores de DLC,
+  Online-Fix, Steamless, ReShade, ENB, ASI Loader, Special K, DXVK, BepInEx, MelonLoader, Script Hook V, script
+  extenders, repacks FitGirl), nomes e pastas de crack, DLL substituída com original `_o`, proxy não reconhecido;
+  atenuação apenas de traços esperados (nunca de assinatura, YARA, reputação ou comportamento); classificação,
+  estado de crack, categoria principal, falso positivo possível, explicação passo a passo e recomendações do
+  `contracts/threat_catalog.json` (gerado de `threat_catalog.py`). Correção: iteração sobre JSON temporário
+  (referência pendente em C++20) detectada pelo compilador.
 - M6: camada de evidências em C++ (`gk::analysis`): regras estruturais de PE (empacotadores, protetores comerciais,
   entry point, importações mínimas, executáveis embutidos, overlay, TLS, PDB suspeito, drivers abusados, proxies
   de DLL), nomes enganosos (processos do sistema, typosquatting, extensão dupla, RLO), correlação de capacidades

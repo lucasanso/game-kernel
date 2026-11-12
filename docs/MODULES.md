@@ -15,7 +15,7 @@ Legenda de estado: ✅ integrado e testado · 🔄 em migração · 🐍 mantido
 | Compactados (libarchive em memória; ZIP/7z/RAR/RAR5/ISO/CAB/TAR/CPIO/LHA + gz/bz2/xz/zstd/lz4; SFX; limites anti-bomba com orçamento compartilhado entre níveis; nomes perigosos, links, criptografia) | `archive.hpp/.cpp` | ✅ M5 (equivalência com zipfile/tarfile; fuzzing sob ASan) | py7zr, rarfile, pycdlib |
 | Camada de evidências: regras estruturais PE, nomes enganosos, correlação de capacidades (indicadores × imports), scripts (linhas, `-EncodedCommand`, Base64, ofuscação), atalhos LNK/URL, IP:porta, membros de compactados | `analysis.hpp`, `model.hpp`, `pe_rules.cpp`, `capabilities.cpp`, `text_analysis.cpp`, `analysis.cpp` | ✅ M6 (contrato JSON idêntico ao `models.py`; corpus benigno ≤ LOW; ASan) | — |
 | ClamAV / reputação local | `clamav.cpp`, `reputation.cpp` | ⏳ M6b | — |
-| Risco + contexto de jogo/cracks | `risk.cpp`, `game_context.cpp` | ⏳ M7 | — |
+| Contexto de pasta (cracks, desbloqueadores, mods, repacks — banco `signatures/data/game_components.json`) e motor de risco (mitigação só de traços esperados, classificação, estado de crack, explicação, recomendações do `contracts/threat_catalog.json`) | `risk.hpp`, `risk.cpp` | ✅ M7 | — |
 | Orquestrador, worker, IPC, banco, CLI | `scanner.cpp`, `ipc.cpp`, `db.cpp`, `cpp/worker`, `cpp/cli` | ⏳ M8 | `core/scan_api.py` |
 | Quarentena | `quarantine.cpp` | ⏳ M9 | — |
 | Integridade da instalação | `integrity.cpp` | ⏳ M10 | `core/integrity.py` (verificação) |

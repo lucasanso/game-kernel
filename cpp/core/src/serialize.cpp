@@ -1,5 +1,7 @@
 #include "gk/serialize.hpp"
 
+#include "gk/error.hpp"
+
 namespace gk {
 
 using nlohmann::json;
@@ -197,6 +199,158 @@ json to_json(const FileResult& r) {
                 {"possible_false_positive", r.possible_false_positive},
                 {"analyzed_at", r.analyzed_at},
                 {"from_cache", r.from_cache}};
+}
+
+namespace {
+
+template <typename T>
+T get_or(const json& j, const char* key, T fallback) {
+    auto it = j.find(key);
+    if (it == j.end() || it->is_null()) return fallback;
+    return it->get<T>();
+}
+
+template <typename T>
+std::optional<T> get_opt(const json& j, const char* key) {
+    auto it = j.find(key);
+    if (it == j.end() || it->is_null()) return std::nullopt;
+    return it->get<T>();
+}
+
+std::vector<std::string> strings(const json& j, const char* key) {
+    std::vector<std::string> out;
+    auto it = j.find(key);
+    if (it != j.end() && it->is_array()) {
+        for (const auto& v : *it) {
+            if (v.is_string()) out.push_back(v.get<std::string>());
+        }
+    }
+    return out;
+}
+
+Source parse_source(const std::string& v) {
+    for (Source s : {Source::Signature, Source::Yara, Source::Static, Source::Behavioral, Source::Reputation,
+                     Source::Heuristic, Source::Context}) {
+        if (value_of(s) == v) return s;
+    }
+    throw Error(ErrorCode::InvalidFormat, "fonte de evidência desconhecida: " + v);
+}
+
+template <typename E>
+E parse_enum(const std::string& v, std::initializer_list<E> all, const char* what) {
+    for (E e : all) {
+        if (value_of(e) == v) return e;
+    }
+    throw Error(ErrorCode::InvalidFormat, std::string(what) + " desconhecido: " + v);
+}
+
+}  // namespace
+
+Location location_from_json(const json& j) {
+    Location l;
+    l.kind = get_or<std::string>(j, "kind", "string");
+    l.description = get_or<std::string>(j, "description", "");
+    l.section = get_opt<std::string>(j, "section");
+    l.offset = get_opt<std::uint64_t>(j, "offset");
+    l.rva = get_opt<std::uint32_t>(j, "rva");
+    l.length = get_opt<std::uint32_t>(j, "length");
+    l.line = get_opt<std::uint32_t>(j, "line");
+    l.excerpt = get_opt<std::string>(j, "excerpt");
+    return l;
+}
+
+Evidence evidence_from_json(const json& j) {
+    if (!j.is_object() || !j.contains("rule_id")) throw Error(ErrorCode::InvalidFormat, "evidência sem rule_id");
+    Evidence e;
+    e.rule_id = j.at("rule_id").get<std::string>();
+    e.title = get_or<std::string>(j, "title", e.rule_id);
+    e.source = parse_source(get_or<std::string>(j, "source", "heuristic"));
+    e.category = get_or<std::string>(j, "category", std::string(category::kInformational));
+    e.severity = parse_risk(get_or<std::string>(j, "severity", "INFO"));
+    e.confidence = parse_confidence(get_or<std::string>(j, "confidence", "LOW"));
+    e.description = get_or<std::string>(j, "description", "");
+    e.engine = get_or<std::string>(j, "engine", "");
+    if (auto it = j.find("locations"); it != j.end() && it->is_array()) {
+        for (const auto& l : *it) e.locations.push_back(location_from_json(l));
+    }
+    if (auto it = j.find("details"); it != j.end() && it->is_object()) {
+        for (const auto& [k, v] : it->items()) e.details[k] = v.is_string() ? v.get<std::string>() : v.dump();
+    }
+    e.fp_note = get_or<std::string>(j, "fp_note", "");
+    e.tags = strings(j, "tags");
+    if (auto adj = get_opt<std::string>(j, "adjusted_severity")) e.adjusted_severity = parse_risk(*adj);
+    e.adjustment_reason = get_or<std::string>(j, "adjustment_reason", "");
+    return e;
+}
+
+FileFeatures features_from_json(const json& j) {
+    FileFeatures f;
+    if (!j.is_object()) return f;
+    f.file_type = get_or<std::string>(j, "file_type", "unknown");
+    f.is_pe = get_or(j, "is_pe", false);
+    f.is_dll = get_or(j, "is_dll", false);
+    f.is_driver = get_or(j, "is_driver", false);
+    f.is_dotnet = get_or(j, "is_dotnet", false);
+    f.machine = get_opt<std::string>(j, "machine");
+    f.signed_ = get_or(j, "signed", false);
+    f.signature_valid = get_opt<bool>(j, "signature_valid");
+    f.signer = get_opt<std::string>(j, "signer");
+    if (auto it = j.find("version_info"); it != j.end() && it->is_object()) {
+        for (const auto& [k, v] : it->items()) {
+            if (v.is_string()) f.version_info[k] = v.get<std::string>();
+        }
+    }
+    f.exports = strings(j, "exports");
+    f.export_forwarders = strings(j, "export_forwarders");
+    f.imports_dlls = strings(j, "imports_dlls");
+    f.packers = strings(j, "packers");
+    f.installer = get_opt<std::string>(j, "installer");
+    f.marker_strings = strings(j, "marker_strings");
+    f.text_head = get_opt<std::string>(j, "text_head");
+    return f;
+}
+
+FileResult file_result_from_json(const json& j) {
+    if (!j.is_object() || !j.contains("path")) throw Error(ErrorCode::InvalidFormat, "resultado sem path");
+    FileResult r;
+    r.path = j.at("path").get<std::string>();
+    r.name = get_or<std::string>(j, "name", "");
+    r.directory = get_or<std::string>(j, "directory", "");
+    r.extension = get_or<std::string>(j, "extension", "");
+    r.size = get_or<std::uint64_t>(j, "size", 0);
+    r.sha256 = get_opt<std::string>(j, "sha256");
+    r.md5 = get_opt<std::string>(j, "md5");
+    r.file_type = get_or<std::string>(j, "file_type", "unknown");
+    r.container = get_opt<std::string>(j, "container");
+    r.member_path = get_opt<std::string>(j, "member_path");
+    r.depth = get_or(j, "depth", 0);
+    r.status = parse_enum(get_or<std::string>(j, "status", "complete"),
+                          {AnalysisStatus::Complete, AnalysisStatus::Partial, AnalysisStatus::Skipped, AnalysisStatus::Error},
+                          "status");
+    r.status_reasons = strings(j, "status_reasons");
+    if (auto it = j.find("evidences"); it != j.end() && it->is_array()) {
+        for (const auto& e : *it) r.evidences.push_back(evidence_from_json(e));
+    }
+    if (auto it = j.find("features"); it != j.end()) r.features = features_from_json(*it);
+    r.engines = strings(j, "engines");
+    r.risk = parse_risk(get_or<std::string>(j, "risk", "NONE"), Risk::None);
+    r.classification = parse_enum(get_or<std::string>(j, "classification", "unknown"),
+                                  {Classification::KnownLegit, Classification::Unknown, Classification::Modified,
+                                   Classification::Pua, Classification::Suspicious, Classification::Malware,
+                                   Classification::Inconclusive},
+                                  "classificação");
+    r.crack_status = parse_enum(get_or<std::string>(j, "crack_status", "none"),
+                                {CrackStatus::None, CrackStatus::RecognizedClean, CrackStatus::Unknown,
+                                 CrackStatus::Suspicious, CrackStatus::Malware, CrackStatus::Insufficient,
+                                 CrackStatus::ModifiedNoThreat},
+                                "estado de crack");
+    r.primary_category = get_opt<std::string>(j, "primary_category");
+    r.explanation = strings(j, "explanation");
+    r.recommendations = strings(j, "recommendations");
+    r.possible_false_positive = get_or(j, "possible_false_positive", false);
+    r.analyzed_at = get_or(j, "analyzed_at", 0.0);
+    r.from_cache = get_or(j, "from_cache", false);
+    return r;
 }
 
 }  // namespace gk

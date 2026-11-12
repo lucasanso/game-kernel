@@ -14,6 +14,7 @@ add_library(gk_core STATIC
   src/capabilities.cpp
   src/text_analysis.cpp
   src/analysis.cpp
+  src/risk.cpp
 )
 target_include_directories(gk_core PUBLIC
   ${CMAKE_CURRENT_SOURCE_DIR}/include

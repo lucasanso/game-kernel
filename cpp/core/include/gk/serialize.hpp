@@ -17,4 +17,11 @@ nlohmann::json to_json(const Evidence& evidence);
 nlohmann::json to_json(const FileFeatures& features);
 nlohmann::json to_json(const FileResult& result);
 
+// Inverse of to_json (documents written by C++ or by gamekernel/core/models.py). Unknown fields are ignored;
+// missing optional fields take their defaults. Throws gk::Error(InvalidFormat) on structurally invalid input.
+Location location_from_json(const nlohmann::json& j);
+Evidence evidence_from_json(const nlohmann::json& j);
+FileFeatures features_from_json(const nlohmann::json& j);
+FileResult file_result_from_json(const nlohmann::json& j);
+
 }  // namespace gk

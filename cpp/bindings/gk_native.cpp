@@ -13,6 +13,7 @@
 #include "gk/filetype.hpp"
 #include "gk/file_view.hpp"
 #include "gk/hash.hpp"
+#include "gk/risk.hpp"
 #include "gk/pe.hpp"
 #include "gk/serialize.hpp"
 #include "gk/version.hpp"
@@ -431,6 +432,26 @@ PYBIND11_MODULE(gk_native, m) {
             return output_to_py(out);
         },
         py::arg("path"), py::arg("rules"), py::arg("deep") = true, py::arg("limits") = py::dict());
+    m.def(
+        "risk_assess",
+        [](const py::list& results, const std::filesystem::path& components, const std::filesystem::path& catalog) {
+            static py::object dumps = py::module_::import("json").attr("dumps");
+            std::vector<gk::FileResult> files;
+            for (const auto& item : results) {
+                files.push_back(gk::file_result_from_json(nlohmann::json::parse(dumps(item).cast<std::string>())));
+            }
+            {
+                py::gil_scoped_release release;
+                const auto db = gk::risk::ComponentDb::load(components);
+                const auto cat = gk::risk::Catalog::load(catalog);
+                gk::risk::assess_all(files, db, cat);
+            }
+            nlohmann::json out = nlohmann::json::array();
+            for (const auto& f : files) out.push_back(gk::to_json(f));
+            return json_to_py(out);
+        },
+        py::arg("results"), py::arg("components"), py::arg("catalog"));
+    m.def("glob_match", &gk::risk::glob_match);
     m.def("network_literals", [](const py::bytes& data) {
         std::string storage;
         std::vector<std::string> out;
