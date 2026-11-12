@@ -15,9 +15,12 @@ rev. 2 e árvore C++ única em `cpp/`). Esta branch contém a branch do A até `
 * Suítes do B: `tests/helper` + `tests/integration` + `tests/ui` → **207 passed, 1 skipped**; com ASan/UBSan
   (`GK_NATIVE_SANITIZE=1`) → **206 passed** + interface **1 passed** (com `detect_leaks=0`, por causa das alocações
   globais do Qt).
-* CI do produto (`.github/workflows/ci.yml`) no último *push* antes desta mesclagem (`cef5e12`, execução 43320717704):
-  **Linux verde e Windows verde** (MSVC, `windeployqt` e plugin `offscreen` para a interface, `gk-helper.exe`
-  congelado, artefato `gamekernel-windows-componentes`).
+* CI do produto (`.github/workflows/ci.yml`) depois da mesclagem da rev. 4 (`9e42cd9`, execução 43325532416):
+  **Linux verde e Windows verde**. No Windows: 235 passed, inclusive a interface `cpp/app` compilada com MSVC,
+  `windeployqt` e plugin `offscreen`, e o ícone e o `VERSIONINFO` lidos do `GameKernel.exe`; o `gk-helper.exe`
+  congelado (a partir de `gamekernel/helper/entry.py`) passou no teste de fumaça, e o artefato
+  `gamekernel-windows-componentes` foi publicado. Os testes do A aparecem como pulados nessa CI porque ela não
+  compila o `gk_native` (pendência 6).
 
 | Etapa | Entrega | Estado |
 |---|---|---|
