@@ -74,7 +74,7 @@ Definidos em [`docs/INTEGRATION.md`](INTEGRATION.md):
 | B4 | Atualização offline: formato `.gkpkg`, preparação e assinatura em Python, **verificação e instalação atômica em C++** (libsodium), testes de equivalência e adulteração | ✅ |
 | B5 | Threat Intelligence: normalização e deduplicação de IOC, conflitos, preparação e *lint* de regras YARA, relatório de atualização | ✅ |
 | B6 | Bindings pybind11 do núcleo C++ e testes de equivalência Python × C++ (depende das *headers* do A) | aguardando A |
-| B7 | Sandbox (orquestração no auxiliar + `monitor.ps1`) | ⏳ |
+| B7 | Sandbox (orquestração no auxiliar + `monitor.ps1`) | ✅ (testes sem VM; `monitor.ps1` só verificado estaticamente) |
 | B8 | CI (Linux + Windows/MSVC), PyInstaller do auxiliar, CMake/`windeployqt`, Inno Setup, versão portátil | ⏳ |
 | B9 | Interface Qt 6 C++, se confirmada como responsabilidade do B | pendência P2 |
 
