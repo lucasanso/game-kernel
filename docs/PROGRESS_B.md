@@ -111,3 +111,10 @@ GUID (independente do idioma), iscas de credenciais com SACL, documentos-isca, c
    validação de pacotes (já usada pelo M3), pybind11 no `requirements-dev.txt` (o build do `gk_native` exige),
    aqtinstall (só na CI do B).
 6. **`signatures/keys/`**: a chave pública de *release* é copiada no *build*; a privada nunca é versionada.
+7. **Falha no Windows em arquivo da fundação (dono: A)**: `tests/foundation/test_db.py::test_corrupt_database_is_recovered`
+   falha no Windows (já falhava na branch do A, no `core-ci`). Causa: em `gamekernel/database/db.py`, `_connect()` abre
+   a conexão e executa `PRAGMA journal_mode=WAL`, que lança `DatabaseError` num arquivo corrompido **sem fechar a
+   conexão**. O *handle* continua aberto, e `_recover()` não consegue renomear nem apagar o arquivo
+   (`WinError 32`; no Linux, renomear um arquivo aberto é permitido). Correção sugerida: em `_connect`, fechar
+   `conn` num `except BaseException` antes de relançar. Enquanto isso, o job Windows da minha CI também fica
+   vermelho por causa desse teste. Não o pulei (regra: nunca desativar testes para ficar verde).
