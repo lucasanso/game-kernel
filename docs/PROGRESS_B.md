@@ -1,140 +1,79 @@
 # Progresso — Agente B (Agente 2: Python, integração e ferramentas)
 
-Branch: `claude/stoic-mayer-r46kuo`. Base: `claude/magical-bell-fi6jw1` (fundação `fd1aa22` + arquitetura
-híbrida do Agente A `3de964f`, mesclada nesta branch). Divisão vigente: **`docs/WORK_SPLIT.md` rev. 2**.
+Branch: `claude/stoic-mayer-r46kuo`. Divisão vigente: **`docs/WORK_SPLIT.md` rev. 3** (reconciliação feita pelo
+Agente A depois de integrar as duas branches). Esta branch já contém a branch do A até `2b36822`.
 
-## Estado atual (2026-11-12)
+## Estado atual
 
-`pytest -q` na árvore mesclada, com o `gk_native` do A compilado: **304 passed, 1 skipped** (auxiliar
-congelado, executado na CI). Sem o `gk_native`: 229 passed, 76 skipped (testes do A).
-Com `GK_NATIVE_SANITIZE=1` (ASan + UBSan nos binários C++ do B): `tests/helper` + `tests/integration` → 205 passed.
+* Árvore conciliada (núcleo do A com PE, YARA e compactados + componentes do B), `gk_native` compilado:
+  `pytest -q` → **332 passed, 6 skipped**. Os pulados são 5 testes do corpus PE do A (sem mingw-w64 neste
+  ambiente) e o teste do auxiliar congelado, que roda na CI.
+* Suítes do B com ASan/UBSan (`GK_NATIVE_SANITIZE=1`): **189 passed**.
+* CI do produto (`.github/workflows/ci.yml`), última execução antes desta conciliação (`a7e2a66`): **Linux verde**;
+  **Windows com todos os testes do B verdes** (226 passed). A única falha era o teste da fundação
+  `test_corrupt_database_is_recovered`, que o A já corrigiu (`db.py`). O `gk-helper.exe` congelado gerou JSON,
+  HTML e PDF, e o artefato `gamekernel-windows-componentes` foi publicado.
 
 | Etapa | Entrega | Estado |
 |---|---|---|
-| B1 | Auditoria, classificação de módulos, plano | ✅ |
-| B2 | Integração C++ ↔ Python por processo auxiliar (servidor Python, cliente Python, cliente C++/Qt de referência) | ✅ (envelope do A §3 adotado) |
-| B3 | Relatórios forenses (JSON, HTML, PDF) como serviço do auxiliar | ✅ |
-| B4 | Atualização offline: formato `.gkpkg`, preparação e assinatura (Python), verificador e instalador C++ de referência | ✅ |
-| B5 | Inteligência de ameaças: IOC, regras YARA, relatório de atualização | ✅ |
-| B6 | Testes de equivalência sobre o `gk_native` do A | depende das próximas APIs do A (M2+) |
-| B7 | Sandbox (Windows Sandbox sem rede) como serviço do auxiliar | ✅ (sem VM no Linux; `monitor.ps1` verificado só estaticamente) |
-| B8 | CI Linux + Windows/MSVC, auxiliar congelado | ✅ (Linux verde; Windows: tudo do B verde, ver abaixo) |
-| B9 | Interface Qt 6 C++ (`cpp/app/**`) | ⏳ próxima; depende do `cpp/bridge` (A, M13) para os serviços do núcleo |
-| B10 | Instalador Inno Setup, versão portátil, docs de usuário (README, INSTALL, USAGE, PRIVACY, LIMITATIONS) | ⏳ depende do executável da UI |
+| B1 | Auditoria, classificação e plano | ✅ |
+| B2 | gk-ipc v1: auxiliar Python, cliente Python, cliente C++/Qt (`native/ipc`) | ✅ (protocolo único, também para o `gk-scanworker` do A) |
+| B3 | Relatórios forenses (JSON, HTML, PDF) no auxiliar | ✅ |
+| B4 | Atualização offline: `.gkpkg`, preparação Python, verificação e instalação C++ (`native/updates`) | ✅ (implementação única; o "M10" do A foi cancelado) |
+| B5 | Threat Intelligence (IOC, YARA, relatório de atualização) | ✅ |
+| B6 | Usar `gk_native` (A) no motor de testes | em andamento conforme o A amplia a API |
+| B7 | Sandbox (Windows Sandbox sem rede) no auxiliar | ✅ (sem VM no Linux; `monitor.ps1` com sintaxe verificada na CI Windows) |
+| B8 | CI Linux + Windows/MSVC, auxiliar congelado | ✅ |
+| B9 | Interface Qt 6 C++ (`native/app`, pendência P2) | ⏳ próxima; consome `native/bridge` (A) |
+| B10 | Instalador (Inno Setup), versão portátil, docs de usuário (INSTALL, USAGE) | ⏳ depende do executável da interface |
 
-## Estado da CI (`.github/workflows/ci.yml`, execução 43276423149, commit `a7e2a66`)
-
-| Job | Resultado |
-|---|---|
-| Linux (Ubuntu 24.04) | ✅ suíte completa + reexecução com ASan/UBSan |
-| Windows (MSVC 2022, Qt 6.8.3, vcpkg) | **226 passed**, 1 failed: `tests/foundation/test_db.py::test_corrupt_database_is_recovered` (Agente A, pendência 7). Todos os testes do B passam, inclusive o cliente C++ com Job Object contra o auxiliar real, `gk-update` com libyara do vcpkg, equivalência Python × C++ e a sintaxe do `monitor.ps1` (PowerShell 5.1 e 7) |
-| Windows: auxiliar congelado | ✅ `gk-helper.exe` (PyInstaller) gerado; teste de fumaça gera JSON, HTML e PDF; artefato `gamekernel-windows-componentes` publicado |
-
-Problemas que só apareceram no Windows e foram corrigidos: vcpkg em modo manifesto por causa do `vcpkg.json`
-da raiz (o passo agora roda fora do repositório); libyara estática sem dependências no *link* (alvo
-`unofficial::libyara::libyara`); DLL do Qt errada pelo `PATH` (`0xC0000139`; `windeployqt` ao lado dos executáveis
-de teste); saída UTF-8 decodificada como cp1252 nos testes e risco de `UnicodeEncodeError` nas ferramentas
-(decodificação explícita em UTF-8 e stdout UTF-8).
-
-## Auditoria e decisões de linguagem (B1)
-
-Ver também `docs/MIGRATION_PLAN.md` (Agente A), que cobre os módulos do núcleo. Do lado do B:
+## Decisões de linguagem (B1)
 
 | Componente | Linguagem | Justificativa |
 |---|---|---|
-| Relatórios | **Python** (no processo auxiliar) | reportlab é maduro para PDF; a lógica muda com frequência; fora do caminho crítico; isolamento por processo |
-| Sandbox | **Python** (no auxiliar) + PowerShell na VM | orquestração longa e bloqueante, *parsing* de dados escritos dentro da VM; isolado do app |
+| Relatórios | **Python** no processo auxiliar | reportlab é maduro para PDF; a lógica muda com frequência; fora do caminho crítico; isolado por processo |
+| Sandbox | **Python** no auxiliar + PowerShell na VM | orquestração longa e bloqueante, leitura de dados escritos dentro da VM; isolada do app |
 | Preparação de pacotes, IOC, YARA | **Python** | automação de publicador, fora do app (diretriz §3) |
-| Verificação e instalação de pacotes | **C++** | diretriz: controles de segurança no núcleo C++. Implementação de referência do B em `native/updates`; o dono no núcleo é o A (M10) |
-| Cliente do auxiliar | **C++/Qt** | o app é C++. Cliente de referência do B em `native/ipc`; o de produção é do A (`cpp/bridge`, M13) |
+| Verificação e instalação de pacotes | **C++** (`native/updates`) | diretriz: controles de segurança no núcleo C++ |
+| Cliente do auxiliar / protocolo entre processos | **C++/Qt** (`native/ipc`) | o app é C++; o mesmo protocolo serve o `gk-scanworker` do A |
 | Python embutido no processo do app | **rejeitado** | uma falha do Python derrubaria a interface |
 
-## B2 — Processo auxiliar (`gamekernel/helper/`)
+## Entregas (resumo; detalhes em `docs/INTEGRATION.md`, `docs/OFFLINE_UPDATES.md`, `contracts/update_package.md`)
 
-* `protocol.py`: quadros (uint32 LE + JSON UTF-8, ≤ 64 MiB, validado antes de alocar), **envelope do
-  `INTEGRATION.md` §3** (`v`, códigos inteiros), extensões opcionais (`cancel`, `timeout_ms`, `event.id`,
-  `error.data.reason/retryable/field`) documentadas em `contracts/helper_methods.md`.
-* `server.py`: *thread* de leitura (cancelamento imediato) e de trabalho (sequencial), prazos cooperativos,
-  logs como eventos `log`, proteção de stdio (fds duplicados, fd 1 → stderr). Exceção → `1099`, e o auxiliar continua.
-* `client.py` (Python) e `native/ipc` (C++/Qt): ambiente sanitizado, prazo → cancelamento → morte após carência,
-  reinício limitado (3 falhas seguidas), Job Object (`KILL_ON_JOB_CLOSE`, limite de memória, restrições de UI)
-  atribuído na criação via `PROC_THREAD_ATTRIBUTE_JOB_LIST`; `RLIMIT_AS` e `PDEATHSIG` no Linux.
-* `entry.py`: ponto de entrada (`gk-helper.exe`), `netguard.install()` antes de qualquer *import*.
+* **gk-ipc v1** (`gamekernel/ipc/`, `gk_helper.py`, `native/ipc/`): quadros uint32 + JSON (≤ 8 MiB), códigos de erro
+  estáveis, cancelamento, prazos, proteção de stdio, ponte de logs, reinício limitado, Job Object no Windows
+  (`KILL_ON_JOB_CLOSE`, limite de memória, restrições de UI; atribuído na criação) e `RLIMIT_AS`/`PDEATHSIG` no Linux.
+* **Relatórios** (`gamekernel/core/report_*.py`, `sysinfo.py`): 15 seções, relatório por crack, redação de dados
+  pessoais, HTML sem JavaScript (CSP `default-src 'none'`), banco somente leitura.
+* **Atualização offline**: `.gkpkg` sem ZIP (verificação em passagem única, sem TOCTOU), Ed25519 (libsodium), YARA
+  compilado antes de ativar, CVD conferido, instalador atômico com rollback e recuperação após queda de energia,
+  CLI `gk-update`; equivalência Python × C++ inclusive com 60 mutações aleatórias.
+* **TI** (`gamekernel/ti/`): IOC (normalização, deduplicação, conflitos), *lint* e compilação de YARA, bloqueio antes de
+  assinar (inclusive com os validadores C++) e relatório de atualização; ferramentas em `tools/`.
+* **Sandbox** (`gamekernel/engines/sandbox_manager.py`, `sandbox/monitor.ps1`).
+* **CI** (`.github/workflows/ci.yml`) e PyInstaller do auxiliar (`installer/gk_helper.spec`).
 
-Problemas encontrados e corrigidos: `system.shutdown` não destravava a leitura bloqueante; prazo vencido
-aparecia como "cancelado"; no C++, chamada nova ia para o processo travado ainda morrendo (`retire()`) e uma
-falha emitida de forma síncrona dentro de `call()` travava o `callBlocking` (`failAllLater`).
+## Conciliação com a rev. 3 (esta etapa)
 
-## B3 — Relatórios (`gamekernel/reports/`)
+* Mesclei a branch do A (`2b36822`, com o núcleo em `native/core`). A rev. 3 **mantém o meu layout original e o
+  protocolo gk-ipc v1**. Por isso desfiz o realinhamento provisório que eu tinha feito para a rev. 2 (mudança de
+  pastas e do envelope IPC) e reapliquei, nos caminhos da rev. 3, tudo que fiz depois do B7:
+  correções do Windows (libyara do vcpkg com dependências, `windeployqt`, UTF-8, vcpkg em modo clássico, cache),
+  teste C++ de limite de memória também no Windows, verificação da sintaxe do `monitor.ps1`, `README.md`,
+  `docs/PRIVACY.md`, `docs/LIMITATIONS.md`, `contracts/update_package.md` e as seções do B em `BUILD.md`/`TESTING.md`.
+* `docs/INTEGRATION.md` agora documenta os métodos `sandbox.*` e registra que o gk-ipc v1 é o único protocolo
+  entre processos.
 
-`engine.py` (modelo `gamekernel-report` v1, 15 seções + relatório individual de cracks, `Redactor`, banco com
-`PRAGMA query_only`, gravação atômica com SHA-256), `render_html.py` (sem JavaScript, CSP `default-src 'none'`,
-tudo escapado), `render_pdf.py` (reportlab, fonte Unicode), `sysinfo.py` (sem usuário, MAC, IP ou número de
-série; nome do computador só com opção). Inspeção visual do HTML (Chromium) e do PDF (pdftoppm).
+## Pendências
 
-## B4/B5 — Atualização offline e inteligência de ameaças
-
-* Contrato: `contracts/update_package.md` (formato, ordem de verificação, códigos de erro, semântica de
-  instalação, `gamekernel-signatures`, `gamekernel-ioc`, chaves).
-* Python: `gamekernel/updates/package.py` (construtor e verificador de referência), `gamekernel/updates/prepare.py`
-  (bloqueio antes de assinar, inclusive com os validadores C++, e relatório de atualização),
-  `gamekernel/intel/ioc.py`, `gamekernel/rules/prepare.py`; ferramentas `tools/gk_keygen.py`,
-  `tools/make_update_package.py`, `tools/ti_build_ioc.py`.
-* C++ de referência: `native/updates` (libsodium, libyara, Qt Core): verificação em passagem única sem TOCTOU,
-  compilação real de YARA (`include` recusado), checagem do CVD (cabeçalho e MD5), IOC, instalador atômico
-  (trava, *downgrade*, manutenção de componentes, troca `active`/`previous`, rollback, recuperação após queda).
-* Correções encontradas pelos testes de equivalência: `$` em regex aceitava `\n` final (agora `fullmatch`/`\z`
-  nos dois lados); regra de inteiro JSON alinhada ao Qt; nomes de dispositivo do Windows recusados;
-  códigos de saída do ASan distintos da rejeição.
-
-## B7 — Sandbox (`gamekernel/sandbox/`)
-
-`manager.py`: recusa sem isolamento real; `.wsb` sem rede, GPU, áudio, vídeo, impressora ou área de
-transferência, com entrada somente leitura; a amostra fica no host apenas como `sample.bin`; prazo e
-cancelamento descartam a VM; o relatório da VM é lido de forma defensiva; o mapeamento gera evidências
-comportamentais com notas de falso positivo e limitações honestas. `monitor.ps1`: só ASCII, auditoria por
-GUID (independente do idioma), iscas de credenciais com SACL, documentos-isca, comparação antes/depois,
-árvore de processos (4688), leituras de iscas (4663), DNS/WFP e Sysmon opcional. **Não executado aqui
-(Linux, sem PowerShell)**: o CI Windows pode validar a sintaxe; a execução real exige o Windows Sandbox.
-
-## Alinhamento à `WORK_SPLIT.md` rev. 2 (feito nesta etapa)
-
-* Branch do A mesclada; conflitos `docs/INTEGRATION.md` e `docs/TESTING.md` resolvidos com a versão do A
-  (dono). Meu `docs/CHANGELOG.md` foi incorporado à seção "Agente B" do `CHANGELOG.md` da raiz.
-* Código movido para os caminhos do B: `gamekernel/helper`, `gamekernel/reports`, `gamekernel/sandbox`,
-  `gamekernel/intel`, `gamekernel/rules`; testes para `tests/helper`, `tests/integration`, `tests/corpus`.
-  Nada foi deixado em `tests/native/**` (do A).
-* O envelope IPC passou a seguir o §3 do A (antes eu usava um envelope próprio).
-* Seções do B preenchidas em `docs/TESTING.md`, `docs/BUILD.md` e `CHANGELOG.md`; novos `contracts/update_package.md`
-  e `contracts/helper_methods.md`.
-
-## Pendências que dependem do usuário ou do Agente A
-
-1. **Sobreposição com o A**: `native/ipc` (cliente do auxiliar) e `native/updates` (verificação e instalação
-   de pacotes) foram feitos e testados **antes** de eu ver a revisão 2, que atribui esses papéis ao A (M13 e M10).
-   Não os apaguei (regra: não remover funcionalidade testada). Proposta: o A adota esse código em
-   `cpp/bridge`/`cpp/core` e depois eu removo `native/`; ou o A escreve o seu e eles ficam só como
-   referência de teste. **Decisão do usuário/A**, para evitar módulos duplicados.
-2. **Nome do produto**: a diretriz fala em "OFFLINE GAME GUARD"; o projeto e a diretriz (no título) usam "Game
-   Kernel". Mantive "Game Kernel".
-3. **Contrato IPC**: proposta de incluir `-32602` (parâmetros inválidos) no §3; as extensões opcionais estão em
-   `contracts/helper_methods.md` e precisam da revisão do A.
-4. **`contracts/helper_methods.md`**: o §3 da rev. 2 cita `contracts/ipc.md` (A) para os métodos. Criei um
-   arquivo separado para não editar o do A; o A pode incorporá-lo ou referenciá-lo.
-5. **Dependências** a registrar pelo A em `vcpkg.json`/`requirements*.txt` (arquivos dele): libyara para a
-   validação de pacotes (já usada pelo M3), pybind11 no `requirements-dev.txt` (o build do `gk_native` exige),
-   aqtinstall (só na CI do B).
-6. **`signatures/keys/`**: a chave pública de *release* é copiada no *build*; a privada nunca é versionada.
-7. **Falha no Windows em arquivo da fundação (dono: A)**: `tests/foundation/test_db.py::test_corrupt_database_is_recovered`
-   falha no Windows (já falhava na branch do A, no `core-ci`). Causa: em `gamekernel/database/db.py`, `_connect()` abre
-   a conexão e executa `PRAGMA journal_mode=WAL`, que lança `DatabaseError` num arquivo corrompido **sem fechar a
-   conexão**. O *handle* continua aberto, e `_recover()` não consegue renomear nem apagar o arquivo
-   (`WinError 32`; no Linux, renomear um arquivo aberto é permitido). Correção sugerida: em `_connect`, fechar
-   `conn` num `except BaseException` antes de relançar. Enquanto isso, o job Windows da minha CI também fica
-   vermelho por causa desse teste. Não o pulei (regra: nunca desativar testes para ficar verde).
-8. **libyara no Windows importa `Ws2_32`** (achado da CI): o *port* `yara` do vcpkg é só estático e linka
-   `OpenSSL::Crypto`, `Crypt32` e `Ws2_32`. Este último entra pelas funções de ordem de bytes (`htonl`/`ntohl`),
-   não por *sockets*. Isso afeta a auditoria de *imports* do A ("nenhuma biblioteca de rede") quando o motor YARA
-   (M3) linkar a libyara. Sugestão: a auditoria proíbe as funções de rede (`socket`, `connect`, `WSAStartup`,
-   `getaddrinfo`, `send`/`recv`…) em vez da DLL inteira. O `gk-update` (B) usa o mesmo alvo
-   `unofficial::libyara::libyara`.
+1. **P1 — Nome do produto** (usuário): "Game Kernel" ou "OFFLINE GAME GUARD". Mantido *Game Kernel*.
+2. **P2 — Interface Qt 6 C++** (usuário): proposta dos dois agentes, com o B como dono, consumindo `native/bridge`.
+3. **Validador YARA duplicado** (rev. 3 §4): `gk::updates::validateYaraDir` deve delegar ao `gk::yara::validate_rules_dir`
+   do núcleo quando `native/updates` passar a ligar `gk_core`. Execução: B.
+4. **Para o A — nome do pacote CMake da libyara no vcpkg**: o *port* `yara` exporta `unofficial-libyara` com o alvo
+   `unofficial::libyara::libyara` (não `unofficial-yara`/`unofficial::yara::libyara`). Esse alvo já traz
+   OpenSSL::Crypto, Crypt32 e **Ws2_32**. Hoje o `cmake/GkDependencies.cmake` cai no `find_library` e não liga o Ws2_32.
+5. **Para o A — auditoria de imports de rede**: a libyara importa `Ws2_32` (funções de ordem de bytes, `htonl`/`ntohl`).
+   Sugestão: a auditoria proíbe as funções de rede (`socket`, `connect`, `WSAStartup`, `getaddrinfo`, `send`/`recv`…),
+   não a DLL inteira.
+6. **`signatures/keys/`** (B pela rev. 3): a chave pública de *release* é copiada no *build*; a privada nunca é versionada.

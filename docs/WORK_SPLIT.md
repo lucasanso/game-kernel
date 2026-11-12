@@ -1,83 +1,83 @@
-# Game Kernel — Divisão do trabalho entre os dois agentes (revisão 2)
+# Game Kernel — Divisão do trabalho entre os dois agentes (revisão 3)
 
-> Revisão 2 (2026-11-12), após a diretriz de arquitetura híbrida C++/Python.
-> A revisão 1 continua no histórico do Git. Princípio mantido: **cada arquivo tem um único dono**,
-> para que as branches dos dois agentes sejam mescladas sem conflitos.
+> Revisão 3 (2026-11-12): **reconciliação** depois que as duas branches foram integradas.
+> O Agente B trabalhou a partir da revisão 1 e implementou partes que a revisão 2 atribuía ao A;
+> esta revisão registra a divisão **real** e elimina duplicações. Revisões anteriores: histórico do Git.
+>
+> Branches: Agente A `claude/magical-bell-fi6jw1` · Agente B `claude/stoic-mayer-r46kuo`.
+> A branch do A já contém um merge da branch do B (sem conflitos de código).
 
 ## 1. Papéis
 
-* **Agente A — "Agente 1: Core e Segurança"** (C++): núcleo, análise de arquivos, quarentena,
-  integração com Windows, segurança de memória, desempenho, e a camada de serviços que a UI consome.
-* **Agente B — "Agente 2: Python, integração e ferramentas"**: interface (mantida com B, como na revisão 1,
-  agora em Qt 6 C++), helper Python, automação, atualizações offline (preparação), inteligência de
-  ameaças, motor de testes, relatórios, empacotamento.
+* **Agente A — Agente 1 (Core e Segurança, C++)**: núcleo de análise, motores, quarentena, tempo real,
+  Performance Monitor, System Optimizer, isolamento dos parsers, segurança de memória, conteúdo de detecção.
+* **Agente B — Agente 2 (Python, integração e ferramentas)**: gk-ipc, processo auxiliar Python, atualizações
+  offline (preparação em Python + verificação/instalação em C++), Threat Intelligence, relatórios, sandbox,
+  motor de testes, CI do produto, empacotamento — e a **interface Qt 6 C++** (pendência P2, ver §5).
 
-A UI permanece com B (divisão já estabelecida, preservada como pede a diretriz). B consome **somente** os
-serviços de `cpp/bridge` (sinais/slots Qt); não acessa internals do núcleo.
+## 2. Árvore nativa única: `native/`
 
-## 2. Propriedade de arquivos
+Toda a parte C++ fica em `native/` (proposta P4 do Agente B, adotada). Cada subprojeto compila sozinho e
+entra no build raiz (`CMakeLists.txt` da raiz do repositório) por `add_subdirectory()`.
 
-### Agente A
+| Diretório | Dono | Conteúdo |
+|---|---|---|
+| `native/core/` | A | `gk_core` (sem Qt): hash, tipo real, PE, YARA, compactados, e os próximos motores |
+| `native/bindings/` | A | `gk_native` (pybind11) — espelho da API do núcleo; muda junto com ela. **Substitui a etapa B6** |
+| `native/worker/`, `native/cli/` | A | `gk-scanworker` (processo isolado), `gk-cli` |
+| `native/quarantine/`, `native/realtime/`, `native/perf/`, `native/sysopt/` | A | Quarentena, tempo real, Performance Monitor, System Optimizer |
+| `native/bridge/` | A | Serviços Qt (QObject/sinais) que a interface consome |
+| `native/ipc/` | B | gk-ipc v1 (`HelperClient` C++/Qt) |
+| `native/updates/` | B | Verificação Ed25519 e instalação atômica de `.gkpkg` |
+| `native/app/` | B (P2) | Interface Qt 6 C++ |
+| `CMakeLists.txt`, `CMakePresets.json`, `vcpkg.json`, `cmake/` (raiz) | A | Build raiz; B pede inclusões/dependências dos seus subprojetos |
 
-| Área | Caminhos |
+## 3. Python, testes, documentos
+
+| Caminho | Dono |
 |---|---|
-| Núcleo C++ | `cpp/core/**` (análise, PE, hashing, tipo real, Authenticode, YARA, compactados, scripts/LNK, ClamAV, reputação, contexto de jogo/cracks, risco, orquestrador, banco SQLite C++, configurações, quarentena, verificação/instalação de pacotes, integridade, tempo real, Performance Monitor, System Optimizer, processos/IPC) |
-| Processos C++ | `cpp/worker/**`, `cpp/cli/**` |
-| Camada de serviços Qt | `cpp/bridge/**` |
-| Bindings | `cpp/bindings/**` (módulo `gk_native`) |
-| Build | `CMakeLists.txt`, `CMakePresets.json`, `vcpkg.json`, `cmake/**`, `.github/workflows/core-ci.yml` |
-| Contratos | `contracts/**` |
-| Conteúdo de detecção | `signatures/yara/**`, `signatures/ioc/**`, `signatures/clamav/**`, `signatures/internal/**`, `signatures/data/**` (famílias de cracks/mods), `gamekernel/engines/indicators.py` (tabela de indicadores) |
-| Python legado do núcleo (a remover após equivalência) | `gamekernel/core/filetypes.py`, `gamekernel/core/hashing.py`, `gamekernel/core/scan_api.py` |
-| Testes | `tests/foundation/**`, `tests/native/**` (unitários e de equivalência do núcleo via `gk_native`), `tests/corpus_pe/**` (fontes C para PEs reais via mingw-w64) |
-| Docs | `docs/ARCHITECTURE.md`, `docs/MODULES.md`, `docs/INTEGRATION.md`, `docs/MIGRATION_PLAN.md`, `docs/SECURITY.md`, `docs/THREAT_COVERAGE.md`, `docs/DETECTION_RULES.md`, `docs/PROGRESS_A.md`; seção "Núcleo" de `docs/BUILD.md` e de `docs/TESTING.md`; seção "Agente A" de `CHANGELOG.md` |
+| `gamekernel/ipc/**`, `gamekernel/updates/**`, `gamekernel/ti/**`, `gamekernel/core/report_*.py`, `gamekernel/core/sysinfo.py`, `gamekernel/engines/sandbox*`, `gk_helper.py` | B |
+| `gamekernel/engines/indicators.py` (tabela de indicadores), `gamekernel/core/filetypes.py` e `hashing.py` (oráculos de equivalência), `gamekernel/core/scan_api.py` (a substituir) | A |
+| Fundação Python (`models.py`, `config.py`, `app_paths.py`, `netguard.py`, `crypto_utils.py`, `db.py`, `threat_catalog.py`) | A mantém; mudanças combinadas e registradas no §6 |
+| `signatures/yara/**`, `signatures/internal/**`, `signatures/data/**`, `signatures/ioc/**` (conteúdo) | A |
+| `signatures/keys/**` (chave pública de release — P6) | B |
+| `tools/core_*` | A |
+| `tools/**` (demais) | B |
+| `tests/foundation/**`, `tests/native/test_{hash,filetype,pe,yara,archive,contracts}.py`, `tests/corpus_pe/**`, `tests/conftest.py` | A |
+| `tests/native/native_build.py`, `tests/native/test_native_ipc.py`, `tests/{ipc,reports,sandbox,ti,updates,ui,integration,regression,perf,fp}/**` | B |
+| `.github/workflows/core-ci.yml` | A |
+| `.github/workflows/ci.yml`, `installer/**`, `assets/**` | B |
+| `requirements.txt` (runtime do auxiliar Python) | B |
+| `requirements-dev.txt`, `pyproject.toml` | A (B pede inclusões) |
+| Docs: `ARCHITECTURE.md`, `MODULES.md`, `MIGRATION_PLAN.md`, `SECURITY.md`, `CORE_API.md`, `DETECTION_RULES.md`, `THREAT_COVERAGE.md`, `WORK_SPLIT.md`, `PROGRESS_A.md` | A |
+| Docs: `INTEGRATION.md`, `BUILD.md`, `TESTING.md`, `OFFLINE_UPDATES.md`, `PROGRESS_B.md`, `README.md`, `INSTALL.md`, `USAGE.md`, `PRIVACY.md`, `LIMITATIONS.md` | B |
+| `docs/CHANGELOG.md` | compartilhado: cada entrada marcada **(A)** ou **(B)** |
 
-### Agente B
+## 4. Duplicações eliminadas
 
-| Área | Caminhos |
+| Tema | Decisão |
 |---|---|
-| Interface Qt 6 (C++) | `cpp/app/**` (janela, menu lateral, páginas, tema/QSS, ícones, bandeja, notificações) |
-| Helper Python | `gamekernel/helper/**` (servidor JSON-RPC: relatórios, sandbox, inteligência de ameaças, preparação de pacotes) |
-| Python de apoio | `gamekernel/` exceto os arquivos do Agente A listados acima (modelos, config, paths, netguard, db, crypto_utils, threat_catalog — mantidos para ferramentas, helper e testes) |
-| Relatórios | `gamekernel/reports/**` |
-| Sandbox | `gamekernel/sandbox/**` (inclui `monitor.ps1`) |
-| Regras/IOC — ferramentas | `gamekernel/rules/**`, `gamekernel/intel/**`, `tools/**` (exceto geradores que o A criar em `tools/core_*`) |
-| Testes (motor de testes) | `tests/integration/**`, `tests/regression/**`, `tests/perf/**`, `tests/fp/**`, `tests/helper/**`, `tests/ui/**`, `tests/corpus/**` |
-| Empacotamento | `installer/**`, `.github/workflows/` (exceto `core-ci.yml`), `assets/**` |
-| Docs | `README.md`, `docs/INSTALL.md`, `docs/USAGE.md`, `docs/OFFLINE_UPDATES.md`, `docs/PRIVACY.md`, `docs/LIMITATIONS.md`, `docs/PROGRESS_B.md`; seção "Empacotamento" de `docs/BUILD.md`; seção "Motor de testes" de `docs/TESTING.md`; seção "Agente B" de `CHANGELOG.md` |
+| Verificação/instalação de pacotes offline | Implementação única: `native/updates` (B). O passo "M10 — atualização" do A foi cancelado. |
+| Cliente do processo auxiliar | Implementação única: `native/ipc` (B). |
+| Protocolo entre processos | gk-ipc v1 (B) também para o `gk-scanworker` do A — não haverá segundo protocolo. |
+| Bindings pybind11 do núcleo | Implementação única: `gk_native` (A). A etapa B6 passa a ser "usar `gk_native` no motor de testes". |
+| Validação de bancos ClamAV em pacotes | Implementação única: `gk::updates::validateClamavDir` (B). O A não fará outra. |
+| Validação de regras YARA em pacotes | **Ainda duplicada**: `gk::updates::validateYaraDir` (B, Qt) e `gk::yara::validate_rules_dir` (A, `gk_core`). Proposta: o validador do B delega ao `gk_core`, para que as regras sejam validadas exatamente como o motor as compila (mesmas externas, política de `include`, metadados obrigatórios). Execução: B, quando `native/updates` passar a ligar `gk_core`. |
+| Documentos `INTEGRATION.md` e `TESTING.md` | Versões do B mantidas; conteúdo do núcleo foi para `docs/CORE_API.md`. |
+| Changelog | Um só (`docs/CHANGELOG.md`), com marcação por agente. |
 
-## 3. Interfaces entre A e B
+## 5. Decisões pendentes do usuário
 
-| A entrega | B usa em |
-|---|---|
-| `gk_native` (pybind11, `docs/INTEGRATION.md` §2) | motor de testes, ferramentas |
-| `cpp/bridge`: `ScanService`, `ResultsModel`, `QuarantineService`, `UpdateService`, `RealtimeService`, `PerformanceService`, `OptimizerService`, `IntegrityService`, `HelperClient` | páginas da UI |
-| `contracts/schema.sql`, `contracts/*.schema.json`, `contracts/threat_catalog.json` | helper, relatórios, testes |
-| `gk-cli` (varreduras sem UI, saída JSON) | testes de integração, automação |
-| Verificação/instalação de pacotes em C++ (`UpdateService`) | Offline Update Center; ferramentas de preparação geram o formato que o núcleo verifica |
+* **P1 — Nome do produto**: "Game Kernel" (título da diretriz e repositório) ou "OFFLINE GAME GUARD" (texto da
+  diretriz)? Os dois agentes mantêm *Game Kernel* até a confirmação; o nome exibido fica numa constante.
+* **P2 — Dono da interface Qt 6 C++**: proposta dos dois agentes: **B** (preserva a divisão original), consumindo
+  `native/bridge` do A.
 
-| B entrega | A usa em |
-|---|---|
-| Helper Python (`gk-helper`) com métodos documentados em `contracts/ipc.md` | `HelperClient` no bridge (A implementa o cliente; B implementa o servidor) |
-| Formato do pacote `.gkpkg` e ferramentas de geração | verificação/instalação no núcleo (o formato é fixado em `contracts/update_package.md`, escrito por B e revisado por A) |
-| Corpus de testes e suíte de integração | validação contínua do núcleo |
-
-## 4. Fluxo Git
-
-Branch base: `claude/magical-bell-fi6jw1`. Cada agente trabalha na sua branch, altera só seus arquivos,
-roda `pytest -q` (e o build CMake, quando houver C++) antes de cada push. O usuário mescla em `main`.
-
-## 5. Regras comuns
-
-* Nada de funções vazias, `TODO`, simulações ou botões sem função no produto.
-* Textos para o usuário em pt-BR; identificadores e comentários em inglês.
-* Nenhuma rede. Nenhum arquivo analisado é executado fora da sandbox isolada.
-* Amostras perigosas (EICAR etc.) são geradas em tempo de teste, nunca commitadas.
-* Mudanças de contrato: combinadas via usuário e registradas no §7.
-
-## 7. Registro de mudanças de contrato
+## 6. Registro de mudanças de contrato
 
 | Data | Agente | Mudança |
 |---|---|---|
+| 2026-11-12 | A | Revisão 3: reconciliação pós-merge (§2–§4); `cpp/` → `native/core` e `native/bindings`. |
+| 2026-11-12 | A | `gamekernel/database/db.py`: correção de vazamento de handle na recuperação (Windows). Sem mudança de API. |
+| 2026-11-12 | A | Revisão 2: arquitetura híbrida. |
 | 2026-11-12 | A | Revisão 1: contratos Python iniciais. |
-| 2026-11-12 | A | Revisão 2: arquitetura híbrida; quarentena passa para A (C++); UI permanece com B em Qt 6 C++ consumindo `cpp/bridge`; `scan_api.py` será substituído pela API C++/IPC. |

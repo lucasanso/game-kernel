@@ -19,7 +19,7 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
-from gamekernel.intel import ioc  # noqa: E402
+from gamekernel.ti import ioc  # noqa: E402
 
 
 def parse_source(spec: str) -> tuple[Path, str | None, str]:

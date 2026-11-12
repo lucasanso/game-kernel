@@ -8,7 +8,8 @@ result against context (signature, crack/mod recognition).
 Design rules for patterns:
 * prefer path fragments / command lines over single words (fewer false positives);
 * never shorter than 5 characters (avoids slow YARA atoms);
-* a regex is prefixed with ``re:``.
+* a regex is prefixed with ``re:`` and must contain a fixed substring (YARA atom); patterns without one
+  (e.g. IP:port literals, token shapes) are detected by dedicated C++ scanners instead.
 """
 
 from __future__ import annotations
@@ -56,8 +57,6 @@ INDICATORS: tuple[Indicator, ...] = (
        ".serveftp.com", ".ngrok.io", ".ngrok-free.app", "portmap.io", ".freedns.afraid.org", ".dynu.net",
        ".myftp.biz", ".servebeer.com", ".linkpc.net")),
     I("onion", "onion", "Endereço da rede Tor (.onion)", (r"re:[a-z2-7]{16,56}\.onion",)),
-    I("ip_port", "ip_port", "Endereço IP com porta escrito no código",
-      (r"re:[^0-9.](1?[0-9]{1,2}|2[0-4][0-9]|25[0-5])(\.(1?[0-9]{1,2}|2[0-4][0-9]|25[0-5])){3}:[0-9]{2,5}[^0-9]",)),
     I("ip_lookup", "ip_lookup", "Serviço de descoberta de IP/geolocalização (reconhecimento da vítima)",
       ("ip-api.com", "ipinfo.io", "api.ipify.org", "checkip.amazonaws.com", "icanhazip.com", "ipwho.is",
        "geoplugin.net", "myexternalip.com", "ipapi.co")),
@@ -78,7 +77,7 @@ INDICATORS: tuple[Indicator, ...] = (
     I("dpapi", "dpapi", "Uso de DPAPI para decifrar segredos do usuário", ("CryptUnprotectData", "ProtectedData.Unprotect")),
     I("discord_token", "discord_token", "Coleta de tokens do Discord",
       ("discord\\Local Storage\\leveldb", "discordcanary\\Local Storage", "discordptb\\Local Storage",
-       "dQw4w9WgXcQ:", r"re:[\w-]{24}\.[\w-]{6}\.[\w-]{27}")),
+       "dQw4w9WgXcQ:")),
     I("steam_session", "game_sessions", "Arquivos de sessão/configuração da Steam (roubo de conta)",
       ("loginusers.vdf", "\\config\\config.vdf", "ssfn", "Steam\\config\\loginusers")),
     I("game_launcher_tokens", "game_sessions", "Credenciais de launchers de jogos",

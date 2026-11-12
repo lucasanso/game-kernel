@@ -42,7 +42,7 @@ jobs:
       - name: Testes com AddressSanitizer + UBSan
         env:
           GK_NATIVE_SANITIZE: "1"
-        run: python -m pytest -q tests/integration tests/helper
+        run: python -m pytest -q tests/native/test_native_ipc.py tests/ipc tests/reports tests/sandbox tests/updates tests/ti
 
   windows:
     name: Windows — MSVC, testes e auxiliar congelado
@@ -67,7 +67,7 @@ jobs:
           foreach ($exe in @('powershell.exe', 'pwsh.exe')) {
             & $exe -NoProfile -Command {
               $errors = $null; $tokens = $null
-              [System.Management.Automation.Language.Parser]::ParseFile("$PWD\gamekernel\sandbox\monitor.ps1", [ref]$tokens, [ref]$errors) | Out-Null
+              [System.Management.Automation.Language.Parser]::ParseFile("$PWD\gamekernel\engines\sandbox\monitor.ps1", [ref]$tokens, [ref]$errors) | Out-Null
               if ($errors) { $errors | ForEach-Object { Write-Error $_.ToString() }; exit 1 }
               Write-Output "monitor.ps1: sem erros de sintaxe ($($PSVersionTable.PSVersion))"
             }
@@ -116,7 +116,7 @@ jobs:
         shell: pwsh
         run: |
           $env:GK_FROZEN_HELPER = "$PWD\dist\gk-helper\gk-helper.exe"
-          python -m pytest -q tests/helper/test_frozen_helper.py
+          python -m pytest -q tests/ipc/test_frozen_helper.py
       - name: Artefatos
         if: success() || failure()
         uses: actions/upload-artifact@v4

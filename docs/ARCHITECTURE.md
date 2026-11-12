@@ -75,23 +75,23 @@ Python ficam invisíveis.
 
 Gerenciamento: **vcpkg (manifesto `vcpkg.json`) no Windows**, pacotes do sistema no Linux de desenvolvimento.
 
-## 5. Layout do repositório (alvo)
+## 5. Layout do repositório
 
 ```
-CMakeLists.txt, vcpkg.json, CMakePresets.json
-cpp/core/      gk_core — biblioteca C++ sem Qt (include/gk/*.hpp, src/*.cpp, src/win/*.cpp)
-cpp/worker/    gk-scanworker — processo isolado de análise
-cpp/cli/       gk-cli — varreduras sem interface (automação e testes)
-cpp/bridge/    gk_bridge — serviços Qt (QObject) sobre o núcleo
-cpp/app/       GameKernel.exe — interface Qt (Agente B)
-cpp/bindings/  gk_native — módulo pybind11
-contracts/     schema.sql, *.schema.json, threat_catalog.json, protocolo IPC
-gamekernel/    pacote Python (helper, ferramentas, modelo de dados no lado Python)
-signatures/    regras YARA, IOCs, assinaturas locais, chaves públicas confiáveis
-tools/         automação (pacotes, chaves, manifestos, regras)
-tests/         suíte pytest (equivalência, integração, regressão, desempenho, FP)
-installer/     empacotamento Windows (Agente B)
-docs/          documentação
+CMakeLists.txt, CMakePresets.json, vcpkg.json, cmake/   build raiz (inclui todos os subprojetos nativos)
+native/core/       gk_core — núcleo C++ sem Qt (A)
+native/bindings/   gk_native — módulo pybind11 (A)
+native/ipc/        gk_ipc — cliente gk-ipc v1 em C++/Qt (B)
+native/updates/    gk_updates + gk-update — verificação e instalação de pacotes (B)
+native/worker, native/cli, native/quarantine, native/realtime, native/perf, native/sysopt, native/bridge   (A, próximos passos)
+native/app/        interface Qt 6 C++ (B, pendência P2)
+contracts/         schema.sql e contratos de dados
+gamekernel/        Python: fundação, auxiliar gk-ipc, relatórios, sandbox, TI, preparação de pacotes
+signatures/        regras YARA, indicadores gerados, IOCs, chaves públicas
+tools/             automação (core_* do A; demais do B)
+tests/             suíte pytest de ambos os agentes
+installer/         empacotamento Windows (B)
+docs/              documentação
 ```
 
 ## 6. Dados e diretórios (inalterado)

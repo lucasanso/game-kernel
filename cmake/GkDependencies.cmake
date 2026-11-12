@@ -12,3 +12,33 @@ elseif(PKG_CONFIG_FOUND)
 else()
   message(FATAL_ERROR "libsodium não encontrada (vcpkg: libsodium; apt: libsodium-dev)")
 endif()
+
+# ---- nlohmann/json (header-only) ------------------------------------------------------------
+find_package(nlohmann_json 3.11 CONFIG REQUIRED)
+add_library(gk::json ALIAS nlohmann_json::nlohmann_json)
+
+# ---- libyara ----------------------------------------------------------------------------------
+find_package(unofficial-yara CONFIG QUIET)
+if(TARGET unofficial::yara::libyara)
+  add_library(gk::yara ALIAS unofficial::yara::libyara)
+elseif(PKG_CONFIG_FOUND AND NOT WIN32)
+  pkg_check_modules(GK_YARA REQUIRED IMPORTED_TARGET yara)
+  add_library(gk::yara ALIAS PkgConfig::GK_YARA)
+else()
+  find_path(GK_YARA_INCLUDE_DIR yara.h REQUIRED)
+  find_library(GK_YARA_LIBRARY NAMES libyara yara REQUIRED)
+  add_library(gk_yara_imported UNKNOWN IMPORTED)
+  set_target_properties(gk_yara_imported PROPERTIES IMPORTED_LOCATION "${GK_YARA_LIBRARY}"
+                        INTERFACE_INCLUDE_DIRECTORIES "${GK_YARA_INCLUDE_DIR}")
+  if(WIN32)
+    # vcpkg builds libyara statically against OpenSSL (hash and Authenticode modules) and ships no CMake
+    # config, so the transitive dependency must be declared here.
+    find_package(OpenSSL REQUIRED COMPONENTS Crypto)
+    set_property(TARGET gk_yara_imported APPEND PROPERTY INTERFACE_LINK_LIBRARIES OpenSSL::Crypto crypt32)
+  endif()
+  add_library(gk::yara ALIAS gk_yara_imported)
+endif()
+
+# ---- libarchive -------------------------------------------------------------------------------
+find_package(LibArchive 3.6 REQUIRED)
+add_library(gk::archive ALIAS LibArchive::LibArchive)

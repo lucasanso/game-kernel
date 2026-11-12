@@ -1,6 +1,6 @@
 // Tests of the C++ gk-ipc client. The process tests start the *real* Python helpers
-// (tests/helper/fault_helper.py and gamekernel/helper/entry.py) — they are driven by pytest
-// (tests/integration/test_cpp_helper_client.py), which sets GK_PYTHON and GK_REPO.
+// (tests/ipc/fault_helper.py and gk_helper.py) — they are driven by pytest
+// (tests/native/test_native_ipc.py), which sets GK_PYTHON and GK_REPO.
 #include "gk/ipc/helper_client.hpp"
 #include "gk/ipc/protocol.hpp"
 
@@ -25,7 +25,7 @@ QByteArray rawFrame(const QByteArray& payload) {
 }
 
 QJsonObject response(qint64 id) {
-    return QJsonObject{{"v", 1}, {"id", double(id)}, {"result", 1}};
+    return QJsonObject{{"proto", 1}, {"type", "response"}, {"id", double(id)}, {"ok", true}, {"result", 1}};
 }
 
 }  // namespace
@@ -39,7 +39,7 @@ class TestIpc : public QObject {
 
     HelperConfig faultConfig() const {
         HelperConfig c = HelperConfig::forDevelopment(python_, repo_, dataDir_.path());
-        c.arguments = {QStringLiteral("-I"), QDir(repo_).filePath(QStringLiteral("tests/helper/fault_helper.py"))};
+        c.arguments = {QStringLiteral("-I"), QDir(repo_).filePath(QStringLiteral("tests/ipc/fault_helper.py"))};
         c.cancelGraceMs = 800;
         return c;
     }
@@ -72,18 +72,12 @@ private slots:
         QTest::newRow("invalid utf8") << rawFrame(QByteArray("\xff\xfe{}", 4));
         QTest::newRow("invalid json") << rawFrame("{nope");
         QTest::newRow("not an object") << rawFrame("[1,2]");
-        QTest::newRow("NaN") << rawFrame(R"({"v":1,"id":1,"result":NaN})");
-        QTest::newRow("wrong version") << rawFrame(R"({"v":2,"id":1,"result":1})");
-        QTest::newRow("no version") << rawFrame(R"({"id":1,"result":1})");
-        QTest::newRow("unknown type") << rawFrame(R"({"v":1,"type":"bogus"})");
-        QTest::newRow("fractional id") << rawFrame(R"({"v":1,"id":1.5,"result":1})");
-        QTest::newRow("id too large") << rawFrame(R"({"v":1,"type":"cancel","id":9007199254740992})");
-        QTest::newRow("error without code") << rawFrame(R"({"v":1,"id":1,"error":{"message":"x"}})");
-        QTest::newRow("string error code") << rawFrame(R"({"v":1,"id":1,"error":{"code":"x","message":"m"}})");
-        QTest::newRow("result and error") << rawFrame(R"({"v":1,"id":1,"result":1,"error":{"code":1,"message":"m"}})");
-        QTest::newRow("neither") << rawFrame(R"({"v":1,"id":1})");
-        QTest::newRow("bad log level") << rawFrame(R"({"v":1,"type":"event","name":"log","data":{"level":"X","message":"m"}})");
-        QTest::newRow("hello without protocol") << rawFrame(R"({"v":1,"type":"hello","component":"gk-helper"})");
+        QTest::newRow("NaN") << rawFrame(R"({"proto":1,"type":"log","level":"INFO","message":NaN})");
+        QTest::newRow("wrong version") << rawFrame(R"({"proto":2,"type":"log","level":"INFO","message":"x"})");
+        QTest::newRow("unknown type") << rawFrame(R"({"proto":1,"type":"bogus"})");
+        QTest::newRow("fractional id") << rawFrame(R"({"proto":1,"type":"response","id":1.5,"ok":true,"result":1})");
+        QTest::newRow("id too large") << rawFrame(R"({"proto":1,"type":"cancel","id":9007199254740992})");
+        QTest::newRow("error without code") << rawFrame(R"({"proto":1,"type":"response","id":1,"ok":false,"error":{}})");
     }
     void decoderRejectsMalformedFrames() {
         QFETCH(QByteArray, bytes);
@@ -104,8 +98,7 @@ private slots:
     }
 
     void encodeRespectsLimit() {
-        QJsonObject big{{"v", 1}, {"type", "event"}, {"name", "log"},
-                        {"data", QJsonObject{{"level", "INFO"}, {"message", QString(200, 'x')}}}};
+        QJsonObject big{{"proto", 1}, {"type", "log"}, {"level", "INFO"}, {"message", QString(200, 'x')}};
         QVERIFY(!encodeFrame(big, 100).has_value());
         QVERIFY(encodeFrame(big).has_value());
     }
@@ -116,26 +109,10 @@ private slots:
         QVERIFY(!validateMessage(makeCancel(5)).has_value());
     }
 
-    void retryableReasonsAndContractCodes() {
+    void retryableCodes() {
         QVERIFY(isRetryable("timeout"));
         QVERIFY(isRetryable("helper_crashed"));
         QVERIFY(!isRetryable("invalid_params"));
-        QCOMPARE(codeForReason("invalid_params"), -32600);
-        QCOMPARE(codeForReason("unknown_method"), -32601);
-        QCOMPARE(codeForReason("not_found"), 1001);
-        QCOMPARE(codeForReason("timeout"), 1003);
-        QCOMPARE(codeForReason("cancelled"), 1004);
-        QCOMPARE(codeForReason("internal_error"), 1099);
-        // A server that only sends the integer code still yields a meaningful reason.
-        const CallError e = CallError::fromJson(QJsonObject{{"code", 1004}, {"message", "x"}});
-        QCOMPARE(e.reason, QStringLiteral("cancelled"));
-        QVERIFY(!e.retryable);
-    }
-
-    void eventWithoutIdIsAttributedToTheOnlyCall() {
-        QVERIFY(!validateMessage(QJsonObject{{"v", 1}, {"type", "event"}, {"name", "progress"}}).has_value());
-        QCOMPARE(kindOf(QJsonObject{{"v", 1}, {"id", 1}, {"method", "a.b"}}), QStringLiteral("request"));
-        QCOMPARE(kindOf(QJsonObject{{"v", 1}, {"id", 1}, {"result", 1}}), QStringLiteral("response"));
     }
 
     // ---------------------------------------------------------------- real helper processes
@@ -145,8 +122,7 @@ private slots:
         auto r = c.callBlocking("system.ping", {{"echo", QStringLiteral("olá")}});
         QVERIFY2(r.ok, qPrintable(r.error.message));
         QCOMPARE(r.value.toObject().value("echo").toString(), QStringLiteral("olá"));
-        QCOMPARE(c.hello().value("component").toString(), QStringLiteral("gk-helper"));
-        QCOMPARE(c.hello().value("protocol").toInt(), 1);
+        QCOMPARE(c.hello().value("helper").toString(), QStringLiteral("gk-helper"));
         QVERIFY(c.hello().value("netguard").toBool());
         QCOMPARE(c.state(), HelperClient::State::Ready);
     }
@@ -156,13 +132,13 @@ private slots:
         HelperClient c(faultConfig());
         auto r = c.callBlocking("test.raise");
         QVERIFY(!r.ok);
-        QCOMPARE(r.error.reason, QStringLiteral("internal_error"));
+        QCOMPARE(r.error.code, QStringLiteral("internal_error"));
         QVERIFY(r.error.message.contains("falha proposital"));
         r = c.callBlocking("test.service_error");
-        QCOMPARE(r.error.reason, QStringLiteral("invalid_params"));
-        QCOMPARE(r.error.data.value("field").toString(), QStringLiteral("x"));
+        QCOMPARE(r.error.code, QStringLiteral("invalid_params"));
+        QCOMPARE(r.error.details.value("field").toString(), QStringLiteral("x"));
         r = c.callBlocking("nope.method");
-        QCOMPARE(r.error.reason, QStringLiteral("unknown_method"));
+        QCOMPARE(r.error.code, QStringLiteral("unknown_method"));
         const qint64 pid = c.processId();
         QVERIFY(c.callBlocking("system.ping").ok);
         QCOMPARE(c.processId(), pid);   // same process: no restart was needed
@@ -203,7 +179,7 @@ private slots:
         const qint64 pid = c.processId();
         auto r = c.callBlocking("test.sleep", {{"seconds", 30}}, 400);
         QVERIFY(!r.ok);
-        QCOMPARE(r.error.reason, QStringLiteral("timeout"));
+        QCOMPARE(r.error.code, QStringLiteral("timeout"));
         QVERIFY(c.callBlocking("system.ping").ok);
         QCOMPARE(c.processId(), pid);
     }
@@ -216,7 +192,7 @@ private slots:
         QElapsedTimer t;
         t.start();
         auto r = c.callBlocking("test.hang", {}, 300);
-        QCOMPARE(r.error.reason, QStringLiteral("timeout"));
+        QCOMPARE(r.error.code, QStringLiteral("timeout"));
         QVERIFY(t.elapsed() < 10000);
         auto again = c.callBlocking("system.ping");
         QVERIFY2(again.ok, qPrintable(again.error.message));
@@ -228,7 +204,7 @@ private slots:
         HelperClient c(faultConfig());
         QSignalSpy finished(&c, &HelperClient::helperFinished);
         auto r = c.callBlocking("test.crash");
-        QCOMPARE(r.error.reason, QStringLiteral("helper_crashed"));
+        QCOMPARE(r.error.code, QStringLiteral("helper_crashed"));
         QVERIFY(r.error.retryable);
         QVERIFY(r.error.message.contains("3"));
         QTRY_VERIFY(finished.count() >= 1);
@@ -241,10 +217,10 @@ private slots:
         HelperConfig cfg = faultConfig();
         cfg.maxRestarts = 2;
         HelperClient c(cfg);
-        QCOMPARE(c.callBlocking("test.crash").error.reason, QStringLiteral("helper_crashed"));
-        QCOMPARE(c.callBlocking("test.crash").error.reason, QStringLiteral("helper_crashed"));
+        QCOMPARE(c.callBlocking("test.crash").error.code, QStringLiteral("helper_crashed"));
+        QCOMPARE(c.callBlocking("test.crash").error.code, QStringLiteral("helper_crashed"));
         QCOMPARE(c.state(), HelperClient::State::Unavailable);
-        QCOMPARE(c.callBlocking("system.ping").error.reason, QStringLiteral("helper_unavailable"));
+        QCOMPARE(c.callBlocking("system.ping").error.code, QStringLiteral("helper_unavailable"));
         c.resetFailures();
         QVERIFY(c.callBlocking("system.ping").ok);
     }
@@ -260,7 +236,7 @@ private slots:
         QVERIFY(c.callBlocking("test.alloc", {{"mb", 16}}).ok);
         auto r = c.callBlocking("test.alloc", {{"mb", 1024}});
         QVERIFY(!r.ok);   // MemoryError inside the helper (or helper killed) — never the host
-        QVERIFY(r.error.reason == "internal_error" || r.error.reason == "helper_crashed");
+        QVERIFY(r.error.code == "internal_error" || r.error.code == "helper_crashed");
         QVERIFY(c.callBlocking("system.ping").ok);
 #else
         QSKIP("limite de memória implementado para Linux (RLIMIT_AS) e Windows (Job Object)");
@@ -280,7 +256,7 @@ private slots:
         cfg.maxRestarts = 1;
         HelperClient c(cfg);
         auto r = c.callBlocking("system.ping", {}, 2000);
-        QCOMPARE(r.error.reason, QStringLiteral("helper_unavailable"));
+        QCOMPARE(r.error.code, QStringLiteral("helper_unavailable"));
         QCOMPARE(c.state(), HelperClient::State::Unavailable);
     }
 
@@ -288,7 +264,7 @@ private slots:
         HelperConfig cfg;
         cfg.program = "gk-helper";
         HelperClient c(cfg);
-        QCOMPARE(c.callBlocking("system.ping").error.reason, QStringLiteral("helper_unavailable"));
+        QCOMPARE(c.callBlocking("system.ping").error.code, QStringLiteral("helper_unavailable"));
     }
 
     void sanitizedEnvironmentDropsPythonVariables() {
@@ -312,7 +288,7 @@ private slots:
     }
 
     // Cross-language end-to-end: the C++ client asks the real Python helper for a forensic report
-    // of a scan prepared by pytest (tests/integration/test_cpp_helper_client.py) and checks the files it wrote.
+    // of a scan prepared by pytest (tests/native/test_native_ipc.py) and checks the files it wrote.
     void reportServiceEndToEnd() {
         const QString db = qEnvironmentVariable("GK_REPORT_DB");
         const QString out = qEnvironmentVariable("GK_REPORT_OUT");
@@ -327,7 +303,7 @@ private slots:
                                 {{"scan_id", scanId}, {"formats", QJsonArray{"json", "html", "pdf"}},
                                  {"db_path", db}, {"output_dir", out}},
                                 120000);
-        QVERIFY2(r.ok, qPrintable(r.error.reason + ": " + r.error.message));
+        QVERIFY2(r.ok, qPrintable(r.error.code + ": " + r.error.message));
         QCOMPARE(stages, (QStringList{"load", "json", "html", "pdf"}));
         const QJsonArray files = r.value.toObject().value("files").toArray();
         QCOMPARE(files.size(), 3);
@@ -343,8 +319,8 @@ private slots:
         QCOMPARE(r.value.toObject().value("max_risk").toObject().value("level").toString(), QStringLiteral("CRITICAL"));
         // Invalid parameters are reported as a structured error, not a crash.
         auto bad = c.callBlocking("reports.generate", {{"scan_id", "x"}});
-        QCOMPARE(bad.error.reason, QStringLiteral("invalid_params"));
-        QCOMPARE(bad.error.data.value("field").toString(), QStringLiteral("scan_id"));
+        QCOMPARE(bad.error.code, QStringLiteral("invalid_params"));
+        QCOMPARE(bad.error.details.value("field").toString(), QStringLiteral("scan_id"));
     }
 
     void realHelperEntryPoint() {
@@ -354,7 +330,6 @@ private slots:
         QVERIFY2(r.ok, qPrintable(r.error.message + " | " + c.stderrTail().join("\n")));
         const QJsonObject info = r.value.toObject();
         QCOMPARE(info.value("protocol").toInt(), kProtocolVersion);
-        QCOMPARE(info.value("component").toString(), QStringLiteral("gk-helper"));
         QVERIFY(info.value("netguard").toBool());
         QVERIFY(info.value("methods").toObject().contains("system.ping"));
     }

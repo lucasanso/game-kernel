@@ -1,16 +1,16 @@
 # Contrato — pacote de atualização offline `.gkpkg` v1
 
-Escrito pelo Agente B (formato e ferramentas de geração), revisado pelo Agente A (verificação e instalação
-no núcleo C++, M10). Ver `docs/WORK_SPLIT.md` §3. Mudanças incompatíveis exigem `format_version` novo e
+Escrito e mantido pelo Agente B (formato, ferramentas de geração, verificação e instalação em `native/updates`).
+Ver `docs/WORK_SPLIT.md` rev. 3 §4. Mudanças incompatíveis exigem `format_version` novo e
 registro em `docs/WORK_SPLIT.md` §7.
 
 Implementações que seguem este contrato e são testadas entre si (mesma decisão e mesmo código de erro):
 
 * Python, publicador e referência: `gamekernel/updates/package.py`;
-* C++, verificador e instalador de referência: `native/updates/` (`gk::updates`, CLI `gk-update`), oferecido ao
-  Agente A para o M10;
-* testes: `tests/integration/test_update_equivalence.py` (válidos, 14 adulterações, 27 manifestos assinados porém
-  inválidos, 60 mutações aleatórias) e `tests/integration/test_update_installer.py`.
+* C++, verificador e instalador do aplicativo: `native/updates/` (`gk::updates`, CLI `gk-update`), implementação
+  única segundo `docs/WORK_SPLIT.md` rev. 3;
+* testes: `tests/updates/test_equivalence.py` (válidos, 14 adulterações, 27 manifestos assinados porém
+  inválidos, 60 mutações aleatórias) e `tests/updates/test_installer.py`.
 
 ## 1. Contêiner
 
@@ -112,7 +112,7 @@ Componentes mantidos conservam a entrada do conjunto anterior. `history` guarda 
   `category` casa com `[a-z_]{1,40}` (gerado pelas ferramentas a partir de `ThreatCategory`);
   `name`/`source`/`note` são texto de até 512 unidades UTF-16.
 * O mesmo hash com vereditos diferentes **no componente inteiro** (todos os arquivos) é erro.
-* Arquivo ≤ 256 MiB. Implementações: `gamekernel/intel/ioc.py` e `gk::updates::validateIocDir` (equivalência testada).
+* Arquivo ≤ 256 MiB. Implementações: `gamekernel/ti/ioc.py` e `gk::updates::validateIocDir` (equivalência testada).
 
 ## 5. Chaves
 

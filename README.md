@@ -12,21 +12,24 @@ repacks, mods e launchers, explica **o que** foi encontrado, **onde** (arquivo e
 
 | Camada | Tecnologia | Dono |
 |---|---|---|
-| Interface desktop (`cpp/app`) | Qt 6, C++ | Agente B (em construção) |
-| Serviços para a interface (`cpp/bridge`) | Qt 6, C++ | Agente A |
-| Núcleo de análise, quarentena, tempo real, monitor de desempenho (`cpp/core`) | C++20, libyara, libsodium, WinAPI | Agente A |
+| Interface desktop (`native/app`) | Qt 6, C++ | Agente B (em construção) |
+| Serviços para a interface (`native/bridge`) | Qt 6, C++ | Agente A |
+| Núcleo de análise, quarentena, tempo real, monitor de desempenho (`native/core`) | C++20, libyara, libarchive, libsodium, WinAPI | Agente A |
+| Cliente do processo auxiliar e atualização offline (`native/ipc`, `native/updates`) | Qt 6 Core, C++, libsodium | Agente B |
 | Processo auxiliar `gk-helper` (relatórios, sandbox) | Python 3, isolado em processo próprio | Agente B |
 | Preparação de atualizações, inteligência de ameaças, testes | Python 3 | Agente B |
 
-Detalhes: `docs/ARCHITECTURE.md`, `docs/INTEGRATION.md`, `docs/MODULES.md`, `docs/MIGRATION_PLAN.md`,
-`contracts/`. O usuário final não precisa de Python nem de C++: tudo é distribuído junto.
+Detalhes: `docs/ARCHITECTURE.md`, `docs/INTEGRATION.md`, `docs/CORE_API.md`, `docs/MODULES.md`,
+`docs/MIGRATION_PLAN.md`, `docs/WORK_SPLIT.md`, `contracts/`. O usuário final não precisa de Python nem de C++: tudo é distribuído junto.
 
 ## O que já funciona (testado)
 
-* **Núcleo (A)**: SHA-256/MD5 e identificação do tipo real de arquivo em C++, com equivalência testada contra a referência Python.
+* **Núcleo (A)**: SHA-256/MD5, tipo real de arquivo, parser PE para entrada hostil, motor YARA (libyara) e
+  compactados em memória com limites anti-bomba (libarchive), em C++, com equivalência testada contra
+  referências Python (hashlib, pefile, yara-python) e *fuzzing* sob ASan/UBSan. Detalhes em `docs/PROGRESS_A.md`.
 * **Integração (B)**: processo auxiliar Python supervisionado. Uma falha, travamento ou estouro de memória do Python
-  não derruba o aplicativo (prazo, cancelamento, reinício, Job Object). Há um cliente C++/Qt de referência testado
-  contra o auxiliar real.
+  não derruba o aplicativo (prazo, cancelamento, reinício, Job Object). O cliente C++/Qt (`native/ipc`) é testado
+  contra o auxiliar real no Linux e no Windows (MSVC).
 * **Relatórios forenses (B)**: JSON, HTML autocontido (sem JavaScript) e PDF, com as 15 seções exigidas e um relatório
   individual por crack; nome de usuário e nome do computador omitidos por padrão.
 * **Atualização offline (B)**: pacotes `.gkpkg` assinados com Ed25519, verificação em C++ (libsodium) e instalação

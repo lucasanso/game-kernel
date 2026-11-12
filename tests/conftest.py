@@ -14,8 +14,9 @@ if str(ROOT) not in sys.path:
 
 # Locate the gk_native module (C++ core bindings). Order: $GK_NATIVE_DIR, then the default presets.
 _NATIVE_CANDIDATES = [os.environ.get("GK_NATIVE_DIR", "")] + [
-    str(ROOT / "build" / preset / "cpp" / "bindings")
-    for preset in ("linux-release", "linux-debug", "linux-asan", "windows-release/cpp/bindings/Release")
+    str(ROOT / "build" / preset)
+    for preset in ("linux-release/native/bindings", "linux-debug/native/bindings", "linux-asan/native/bindings",
+                   "windows-release/native/bindings/Release")
 ]
 for _candidate in _NATIVE_CANDIDATES:
     if _candidate and Path(_candidate).is_dir() and any(Path(_candidate).glob("gk_native*")):

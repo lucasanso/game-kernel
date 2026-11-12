@@ -136,9 +136,9 @@ administrativo encadeado por hash (`audit_log`) é gravado pelo aplicativo a par
 |---|---|---|
 | Contrato do formato | — | `contracts/update_package.md` |
 | Formato, construção e assinatura, verificador de referência | Python | `gamekernel/updates/package.py` |
-| Preparação (YARA, IOC, ClamAV) e relatório de atualização | Python | `gamekernel/updates/prepare.py`, `gamekernel/intel/ioc.py`, `gamekernel/rules/prepare.py` |
+| Preparação (YARA, IOC, ClamAV) e relatório de atualização | Python | `gamekernel/ti/prepare.py`, `gamekernel/ti/ioc.py`, `gamekernel/ti/yara_prep.py` |
 | Ferramentas do publicador | Python | `tools/gk_keygen.py`, `tools/make_update_package.py`, `tools/ti_build_ioc.py` |
-| **Verificação criptográfica e instalação no aplicativo** | **C++** | núcleo do Agente A (M10, `UpdateService`). Implementação de referência do B, pronta e testada: `native/updates/` (`gk::updates::verifyPackage`, `Installer`, validadores; libsodium, libyara, Qt Core) |
+| **Verificação criptográfica e instalação no aplicativo** | **C++ (libsodium, libyara, Qt Core)** | `native/updates/` (`gk::updates::verifyPackage`, `Installer`, validadores) — implementação única (WORK_SPLIT rev. 3) |
 | CLI de administração e testes | C++ | `native/updates/tools/gk_update_cli.cpp` (`gk-update`) |
 
 Recuperação após queda de energia: se a energia cair entre as trocas de pasta, a próxima instalação ou

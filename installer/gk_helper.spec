@@ -12,9 +12,9 @@ from pathlib import Path
 ROOT = Path(SPECPATH).resolve().parent
 
 hidden = [
-    "gamekernel.helper.services.reports",
-    "gamekernel.reports.render_html",
-    "gamekernel.reports.render_pdf",
+    "gamekernel.ipc.services.reports",
+    "gamekernel.core.report_html",
+    "gamekernel.core.report_pdf",
     "reportlab.graphics.barcode.common",   # loaded dynamically by reportlab
 ]
 
@@ -25,7 +25,7 @@ excluded = [
 ]
 
 a = Analysis(
-    [str(ROOT / "gamekernel" / "helper" / "entry.py")],
+    [str(ROOT / "gk_helper.py")],
     pathex=[str(ROOT)],
     binaries=[],
     datas=[],
