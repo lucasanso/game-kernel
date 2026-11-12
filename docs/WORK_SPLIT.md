@@ -1,220 +1,83 @@
-# Game Kernel — Divisão do trabalho entre dois agentes
+# Game Kernel — Divisão do trabalho entre os dois agentes (revisão 2)
 
-Dois agentes desenvolvem o Game Kernel em paralelo no repositório `lucasanso/game-kernel`:
+> Revisão 2 (2026-11-12), após a diretriz de arquitetura híbrida C++/Python.
+> A revisão 1 continua no histórico do Git. Princípio mantido: **cada arquivo tem um único dono**,
+> para que as branches dos dois agentes sejam mescladas sem conflitos.
 
-* **Agente A** (sessão original): **motor de detecção e dados**
-* **Agente B** (outra conta): **aplicativo desktop, proteção e distribuição**
+## 1. Papéis
 
-A divisão foi feita por **propriedade de arquivos**: cada arquivo tem um único dono. Assim, as
-duas branches podem ser mescladas sem conflitos. Os pontos de contato entre as partes são
-**contratos** já implementados e testados na fundação (seção 3).
+* **Agente A — "Agente 1: Core e Segurança"** (C++): núcleo, análise de arquivos, quarentena,
+  integração com Windows, segurança de memória, desempenho, e a camada de serviços que a UI consome.
+* **Agente B — "Agente 2: Python, integração e ferramentas"**: interface (mantida com B, como na revisão 1,
+  agora em Qt 6 C++), helper Python, automação, atualizações offline (preparação), inteligência de
+  ameaças, motor de testes, relatórios, empacotamento.
 
-> Requisitos completos do produto: o prompt original do projeto (seções 1–21, "software
-> desktop nativo" e "módulo especial de cracks"). Este documento só define **quem faz o quê**
-> e **como as partes se encaixam**.
+A UI permanece com B (divisão já estabelecida, preservada como pede a diretriz). B consome **somente** os
+serviços de `cpp/bridge` (sinais/slots Qt); não acessa internals do núcleo.
 
----
+## 2. Propriedade de arquivos
 
-## 1. Fundação já entregue (commit base para os dois agentes)
+### Agente A
 
-Implementado e coberto por testes (`tests/foundation/`, 23 testes passando):
-
-| Arquivo | Conteúdo |
+| Área | Caminhos |
 |---|---|
-| `gamekernel/__init__.py` | Versão, nome do app |
-| `gamekernel/app_paths.py` | Diretórios (instalado, portátil, dev), layout de assinaturas |
-| `gamekernel/config.py` | Configurações persistentes com padrões e validação |
-| `gamekernel/netguard.py` | Bloqueio de rede via *audit hook* + autoteste |
-| `gamekernel/logging_setup.py` | Logs locais rotativos |
-| `gamekernel/crypto_utils.py` | Ed25519: gerar/assinar/verificar, chaves confiáveis |
-| `gamekernel/core/models.py` | `Evidence`, `Location`, `FileResult`, `FileFeatures`, enums de risco/classificação/crack |
-| `gamekernel/core/threat_catalog.py` | O que cada ameaça faz, dados em risco, limitações, recomendações |
-| `gamekernel/core/scan_api.py` | **Contrato do scanner**: `ScanOptions`, `ScanProgress`, `ScanSummary`, `EngineStatus`, `SignatureOverview`, `ScannerProtocol` |
-| `gamekernel/core/filetypes.py` | Identificação por magic bytes, PE disfarçado |
-| `gamekernel/core/hashing.py` | SHA-256/MD5 em streaming |
-| `gamekernel/database/db.py` | SQLite WAL: varreduras, resultados, caches, reputação, quarentena, log de auditoria encadeado, estado de assinaturas, eventos de tempo real, recuperação de banco corrompido |
-| `tests/conftest.py` | Fixtures `isolated_data_dir`, `settings`, `db` |
-| `requirements*.txt`, `pyproject.toml`, `docs/ARCHITECTURE.md` | Dependências fixadas, config do pytest, arquitetura |
+| Núcleo C++ | `cpp/core/**` (análise, PE, hashing, tipo real, Authenticode, YARA, compactados, scripts/LNK, ClamAV, reputação, contexto de jogo/cracks, risco, orquestrador, banco SQLite C++, configurações, quarentena, verificação/instalação de pacotes, integridade, tempo real, Performance Monitor, System Optimizer, processos/IPC) |
+| Processos C++ | `cpp/worker/**`, `cpp/cli/**` |
+| Camada de serviços Qt | `cpp/bridge/**` |
+| Bindings | `cpp/bindings/**` (módulo `gk_native`) |
+| Build | `CMakeLists.txt`, `CMakePresets.json`, `vcpkg.json`, `cmake/**`, `.github/workflows/core-ci.yml` |
+| Contratos | `contracts/**` |
+| Conteúdo de detecção | `signatures/yara/**`, `signatures/ioc/**`, `signatures/clamav/**`, `signatures/internal/**`, `signatures/data/**` (famílias de cracks/mods), `gamekernel/engines/indicators.py` (tabela de indicadores) |
+| Python legado do núcleo (a remover após equivalência) | `gamekernel/core/filetypes.py`, `gamekernel/core/hashing.py`, `gamekernel/core/scan_api.py` |
+| Testes | `tests/foundation/**`, `tests/native/**` (unitários e de equivalência do núcleo via `gk_native`), `tests/corpus_pe/**` (fontes C para PEs reais via mingw-w64) |
+| Docs | `docs/ARCHITECTURE.md`, `docs/MODULES.md`, `docs/INTEGRATION.md`, `docs/MIGRATION_PLAN.md`, `docs/SECURITY.md`, `docs/THREAT_COVERAGE.md`, `docs/DETECTION_RULES.md`, `docs/PROGRESS_A.md`; seção "Núcleo" de `docs/BUILD.md` e de `docs/TESTING.md`; seção "Agente A" de `CHANGELOG.md` |
 
-**Arquivos da fundação são congelados.** Qualquer mudança neles precisa ser combinada pelos
-dois agentes (via o usuário) e registrada na seção 7 deste documento.
+### Agente B
 
----
-
-## 2. Propriedade dos arquivos
-
-### Agente A — Motor de detecção e dados (FASES 3, 4, 5, 6, backend da 10, testes do motor na 11)
-
-| Área | Arquivos |
+| Área | Caminhos |
 |---|---|
-| Orquestração | `gamekernel/core/scanner.py` (implementa `ScannerProtocol`), `core/enumerator.py`, `core/worker.py`, `core/detection_engine.py`, `core/risk_engine.py`, `core/tools.py` (localização de binários), `core/integrity.py` (verificação do manifesto de integridade) |
-| Motores | `gamekernel/engines/clamav_engine.py`, `yara_engine.py`, `pe_analyzer.py`, `authenticode.py`, `strings_analyzer.py`, `static_heuristics.py`, `script_analyzer.py`, `archive_engine.py`, `pyinstaller.py`, `lnk_parser.py`, `reputation.py`, `game_context.py` (módulo especial de cracks) |
-| Tempo real (backend) | `gamekernel/realtime/monitor.py` |
-| CLI | `gamekernel/cli.py` (`python -m gamekernel.cli scan <pasta> --mode quick --json saida.json`) |
-| Assinaturas base | `signatures/yara/**`, `signatures/ioc/**`, `signatures/clamav/**` (assinaturas locais, ex.: EICAR) |
-| Ferramentas | `tools/build_known_good.py`, `tools/build_integrity_manifest.py` |
-| Testes | `tests/foundation/**`, `tests/engines/**`, `tests/core/**`, `tests/realtime/**`, `tests/perf/**`, `tests/pe_builder.py` (gerador de PEs benignos para testes — pode ser usado pelo B) |
-| Docs | `docs/THREAT_COVERAGE.md` (detecção e limitações por categoria), `docs/DETECTION_RULES.md` (regras YARA documentadas), `docs/PROGRESS_A.md`, `docs/TEST_REPORT_A.md` |
+| Interface Qt 6 (C++) | `cpp/app/**` (janela, menu lateral, páginas, tema/QSS, ícones, bandeja, notificações) |
+| Helper Python | `gamekernel/helper/**` (servidor JSON-RPC: relatórios, sandbox, inteligência de ameaças, preparação de pacotes) |
+| Python de apoio | `gamekernel/` exceto os arquivos do Agente A listados acima (modelos, config, paths, netguard, db, crypto_utils, threat_catalog — mantidos para ferramentas, helper e testes) |
+| Relatórios | `gamekernel/reports/**` |
+| Sandbox | `gamekernel/sandbox/**` (inclui `monitor.ps1`) |
+| Regras/IOC — ferramentas | `gamekernel/rules/**`, `gamekernel/intel/**`, `tools/**` (exceto geradores que o A criar em `tools/core_*`) |
+| Testes (motor de testes) | `tests/integration/**`, `tests/regression/**`, `tests/perf/**`, `tests/fp/**`, `tests/helper/**`, `tests/ui/**`, `tests/corpus/**` |
+| Empacotamento | `installer/**`, `.github/workflows/` (exceto `core-ci.yml`), `assets/**` |
+| Docs | `README.md`, `docs/INSTALL.md`, `docs/USAGE.md`, `docs/OFFLINE_UPDATES.md`, `docs/PRIVACY.md`, `docs/LIMITATIONS.md`, `docs/PROGRESS_B.md`; seção "Empacotamento" de `docs/BUILD.md`; seção "Motor de testes" de `docs/TESTING.md`; seção "Agente B" de `CHANGELOG.md` |
 
-### Agente B — Aplicativo, proteção e distribuição (FASES 7, 8, 9, UI da 10, 12, seções 7, 14, 15, 16)
+## 3. Interfaces entre A e B
 
-| Área | Arquivos |
+| A entrega | B usa em |
 |---|---|
-| Entrada | `main.py` (raiz do repositório) |
-| Interface (PySide6) | `gamekernel/ui/**` — tema escuro, ícones, menu lateral, Dashboard, Scanner, Resultados, Quarentena, Histórico, Tempo real, Sandbox, Atualizações, Privacidade/Rede, Configurações, notificações internas, bandeja do sistema, `ui/workers.py` (QThread em volta do `Scanner`) |
-| Quarentena | `gamekernel/quarantine/vault.py` (AES-256-GCM, chave protegida por DPAPI, `.gkq`, restaurar/excluir com confirmação) |
-| Atualização offline | `gamekernel/updates/**` (formato `.gkpkg`, verificação Ed25519, instalação atômica com rollback, importação de CVD oficiais do ClamAV) |
-| Relatórios | `gamekernel/core/report_engine.py` (JSON, HTML autocontido, PDF via reportlab), `gamekernel/core/sysinfo.py` |
-| Sandbox | `gamekernel/engines/sandbox_manager.py`, `gamekernel/engines/sandbox/monitor.ps1` (Windows Sandbox sem rede) |
-| Ferramentas | `tools/gk_keygen.py`, `tools/make_update_package.py`, `tools/network_audit.ps1`, `tools/make_icon.py` |
-| Distribuição | `installer/**` (spec do PyInstaller, script Inno Setup, `build_windows.ps1`), `.github/workflows/**`, `assets/**` (ícone/identidade visual) |
-| Testes | `tests/ui/**`, `tests/quarantine/**`, `tests/updates/**`, `tests/reports/**`, `tests/sandbox/**` |
-| Docs | `README.md`, `docs/INSTALL.md`, `docs/USAGE.md`, `docs/OFFLINE_UPDATES.md`, `docs/BUILD.md`, `docs/PRIVACY.md`, `docs/LIMITATIONS.md` (consolida e referencia `THREAT_COVERAGE.md`), `docs/PROGRESS_B.md`, `docs/TEST_REPORT_B.md` |
+| `gk_native` (pybind11, `docs/INTEGRATION.md` §2) | motor de testes, ferramentas |
+| `cpp/bridge`: `ScanService`, `ResultsModel`, `QuarantineService`, `UpdateService`, `RealtimeService`, `PerformanceService`, `OptimizerService`, `IntegrityService`, `HelperClient` | páginas da UI |
+| `contracts/schema.sql`, `contracts/*.schema.json`, `contracts/threat_catalog.json` | helper, relatórios, testes |
+| `gk-cli` (varreduras sem UI, saída JSON) | testes de integração, automação |
+| Verificação/instalação de pacotes em C++ (`UpdateService`) | Offline Update Center; ferramentas de preparação geram o formato que o núcleo verifica |
 
----
-
-## 3. Contratos entre as partes
-
-### 3.1 Scanner (A implementa, B consome)
-
-```python
-from gamekernel.core.scanner import Scanner                 # A
-from gamekernel.core.scan_api import ScanOptions, ScanMode  # fundação
-
-scanner = Scanner(settings, db, on_progress=cb_prog, on_result=cb_res, on_log=cb_log)
-summary = scanner.run(ScanOptions(targets=[pasta], mode=ScanMode.DEEP, label="Jogo completo"))  # bloqueante
-scanner.pause(); scanner.resume(); scanner.cancel()          # thread-safe
-```
-
-* `run()` é bloqueante → B o executa dentro de um `QThread` e reemite os callbacks como sinais Qt.
-* Callbacks são chamados na thread de `run()`; `on_progress` ≈ 10/s no máximo.
-* O scanner grava tudo no banco (`scans`, `scan_files`); a UI lê os resultados com
-  `db.get_file_results(scan_id, ...)` e `db.count_file_results(...)` (paginação e filtros prontos).
-* **Retomar varredura interrompida**: `main.py` (B) chama `db.mark_interrupted_scans()` na inicialização;
-  o Histórico oferece "Retomar", que executa `ScanOptions(targets=scan["targets"], mode=..., origin="resume",
-  resume_of=scan_id)`. Arquivos já analisados vêm do cache automaticamente.
-
-### 3.2 Estado dos motores e assinaturas (A implementa, B exibe no Dashboard/Atualizações)
-
-```python
-from gamekernel.core.detection_engine import engine_statuses, signature_overview   # A
-engine_statuses(settings) -> list[EngineStatus]
-signature_overview(settings, db) -> SignatureOverview       # inclui stale / stale_reason
-```
-
-### 3.3 Layout das assinaturas instaladas (B escreve, A lê)
-
-```
-<data>/signatures/active/manifest.json
-<data>/signatures/active/clamav/   *.cvd *.cld *.cud *.hdb *.hsb *.ndb *.ldb *.cdb *.ign2 *.fp *.sfp
-<data>/signatures/active/yara/     *.yar *.yara
-<data>/signatures/active/ioc/      *.json  (formato abaixo)
-<data>/signatures/previous/        (conjunto anterior, para rollback)
-<data>/signatures/staging/         (temporário durante a instalação)
-```
-Funções: `app_paths.active_signatures_dir()`, `previous_signatures_dir()`, `staging_signatures_dir()`.
-Os motores carregam **as assinaturas base** (`<instalação>/signatures/`) **+ as ativas**; um arquivo ativo
-com o mesmo nome substitui o base. Depois de instalar um pacote, B chama
-`db.set_signature_state(componente, versão, origem, detalhes)` para `clamav`, `yara` e `ioc`.
-
-Validação antes de ativar (A implementa, B chama no instalador de pacotes, sobre a pasta `staging`):
-
-```python
-from gamekernel.engines.yara_engine import validate_rules_dir        # -> (ok: bool, mensagens: list[str], n_regras: int)
-from gamekernel.engines.clamav_engine import verify_database_dir     # -> (ok: bool, mensagens: list[str], info: list[dict])
-from gamekernel.engines.reputation import validate_ioc_file          # -> (ok: bool, mensagens: list[str], n_entradas: int)
-```
-
-Formato IOC (`gamekernel-ioc`):
-```json
-{"format": "gamekernel-ioc", "version": "2026.11.12",
- "entries": [{"sha256": "<64 hex>", "verdict": "bad|good", "name": "…", "category": "<ThreatCategory>",
-              "severity": "CRITICAL|HIGH|MEDIUM|LOW|INFO", "source": "…", "note": "…"}]}
-```
-
-### 3.4 Binários de terceiros (B empacota, A usa)
-
-```
-<recursos>/third_party/clamav/   clamscan.exe sigtool.exe libclamav.dll (+ DLLs do pacote oficial)
-<recursos>/third_party/7zip/     7z.exe 7z.dll
-```
-A resolve os caminhos em `core/tools.py` (fallback para o PATH no Linux de desenvolvimento) e verifica
-cada binário com `core/integrity.py` antes de usá-lo.
-
-### 3.5 Manifesto de integridade (A implementa verificação e gerador, B chama no build)
-
-* Build (B): `python tools/build_integrity_manifest.py <pasta_dist> --key <chave_privada>` gera
-  `integrity_manifest.json` + `integrity_manifest.sig` (Ed25519, chave de release).
-* Execução: `from gamekernel.core.integrity import check_installation` → `IntegrityReport(ok, verified, missing, modified, unsigned, detail)`; B exibe em Privacidade/Dashboard.
-
-### 3.6 Sandbox (B implementa, A reavalia o risco)
-
-* B: `sandbox_manager.check_availability() -> (disponível, motivo)`; `SandboxManager(settings).analyze(caminho, ...) -> SandboxReport` com `evidences: list[Evidence]` (`source=EvidenceSource.BEHAVIORAL`).
-  Se o isolamento não estiver disponível, **não executa** e informa o motivo.
-* A: `from gamekernel.core.risk_engine import reassess` → `reassess(file_result, extra_evidences) -> FileResult`.
-  B persiste com `db.update_file_result(file_result.db_id, novo_resultado)`.
-
-### 3.7 Tempo real (A implementa backend, B faz a página e as notificações)
-
-```python
-from gamekernel.realtime.monitor import RealtimeMonitor, RealtimeEvent   # A
-mon = RealtimeMonitor(settings, db, on_event=callback)   # callback chamado em thread de fundo
-mon.start(); mon.stop(); mon.is_running; mon.watched_folders
-```
-`RealtimeEvent(path, kind, result: FileResult | None, message)`. B decide notificações
-(`settings realtime.notify_min_risk`) e mostra o histórico via `db.list_realtime_events()`.
-
-### 3.8 Quarentena, auditoria e reputação (fundação; B usa)
-
-* Tabelas e métodos prontos em `db.py`: `add_quarantine_item`, `list_quarantine`, `update_quarantine_status`,
-  `add_quarantine_event`, `list_quarantine_events`, `append_audit`, `verify_audit_chain`,
-  `set_reputation` (marcar "confiável" = possível falso positivo), `get_reputation`.
-* Membros de arquivos compactados (`FileResult.container` preenchido): a quarentena isola o arquivo
-  **contêiner** (`container`), explicando isso ao usuário.
-
----
-
-## 4. Ordem de entrega e dependências
-
-| Entrega do A | Libera para o B |
+| B entrega | A usa em |
 |---|---|
-| A1 — motores estáticos + `Scanner` + `cli.py` | integrar Scanner/Resultados/Histórico com dados reais |
-| A2 — `engine_statuses`, `signature_overview`, validadores de assinaturas | Dashboard e instalador de pacotes completos |
-| A3 — `RealtimeMonitor`, `reassess`, `integrity` | página de tempo real, sandbox, integridade |
+| Helper Python (`gk-helper`) com métodos documentados em `contracts/ipc.md` | `HelperClient` no bridge (A implementa o cliente; B implementa o servidor) |
+| Formato do pacote `.gkpkg` e ferramentas de geração | verificação/instalação no núcleo (o formato é fixado em `contracts/update_package.md`, escrito por B e revisado por A) |
+| Corpus de testes e suíte de integração | validação contínua do núcleo |
 
-B pode começar imediatamente: tema/widgets/páginas, quarentena, atualizações, relatórios,
-sandbox, empacotamento e CI só dependem da fundação. Até A1 chegar, B pode testar a UI com
-um **duplo de teste** de `ScannerProtocol` restrito a `tests/ui/` (nunca no código do produto).
+## 4. Fluxo Git
 
----
+Branch base: `claude/magical-bell-fi6jw1`. Cada agente trabalha na sua branch, altera só seus arquivos,
+roda `pytest -q` (e o build CMake, quando houver C++) antes de cada push. O usuário mescla em `main`.
 
-## 5. Fluxo Git
+## 5. Regras comuns
 
-1. Base comum: branch `claude/magical-bell-fi6jw1` (commit da fundação).
-2. O Agente B cria **sua própria branch** a partir desse commit e só altera arquivos que lhe pertencem.
-3. Integração: o usuário mescla as duas branches em `main` (PRs). Como os arquivos são disjuntos,
-   não há conflitos. Cada agente pode mesclar `main` na sua branch quando precisar testar a integração.
-4. Commits pequenos e frequentes; `pytest -q` precisa passar antes de cada push.
-
----
-
-## 6. Regras comuns (definição de pronto)
-
-* Nada de funções vazias, `TODO`, botões sem função ou resultados simulados no código do produto.
-* Python 3.13, `from __future__ import annotations`, type hints, `logging.getLogger(__name__)`.
-* **Textos da interface e documentação em português (pt-BR)**; identificadores e comentários em inglês.
-* Nenhum uso de rede (requests/urllib/QtNetwork proibidos). `main.py` chama `netguard.install()`
-  **antes** de qualquer outro import e `multiprocessing.freeze_support()`.
-* Subprocessos: caminho absoluto, `shell=False`, `CREATE_NO_WINDOW`, `cwd` = pasta da ferramenta.
-* Nunca executar, abrir ou carregar arquivos analisados (exceto dentro da sandbox isolada).
-* Amostras de teste perigosas (EICAR, scripts com comandos suspeitos) são **geradas em tempo de teste**
-  em pastas temporárias — nunca commitadas — para não disparar o antivírus de quem clona o repositório.
-* Mudanças em arquivos da fundação ou em contratos: combinar via usuário e registrar na seção 7.
-
----
+* Nada de funções vazias, `TODO`, simulações ou botões sem função no produto.
+* Textos para o usuário em pt-BR; identificadores e comentários em inglês.
+* Nenhuma rede. Nenhum arquivo analisado é executado fora da sandbox isolada.
+* Amostras perigosas (EICAR etc.) são geradas em tempo de teste, nunca commitadas.
+* Mudanças de contrato: combinadas via usuário e registradas no §7.
 
 ## 7. Registro de mudanças de contrato
 
 | Data | Agente | Mudança |
 |---|---|---|
-| 2026-11-12 | A | Versão inicial dos contratos. |
+| 2026-11-12 | A | Revisão 1: contratos Python iniciais. |
+| 2026-11-12 | A | Revisão 2: arquitetura híbrida; quarentena passa para A (C++); UI permanece com B em Qt 6 C++ consumindo `cpp/bridge`; `scan_api.py` será substituído pela API C++/IPC. |

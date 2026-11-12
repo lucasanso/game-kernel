@@ -1,112 +1,105 @@
-# Game Kernel — Arquitetura (FASE 1)
+# Game Kernel — Arquitetura híbrida C++20 / Python
 
-Game Kernel é um aplicativo **desktop nativo para Windows 10/11 x64** (Python 3 + PySide6/Qt),
-100% offline, especializado em investigar pastas de jogos, cracks, repacks, mods e launchers.
+> Revisão 2 (2026-11-12): adoção da arquitetura híbrida definida na diretriz de refatoração.
+> A revisão 1 (100% Python) está no histórico do Git; o plano de transição está em `MIGRATION_PLAN.md`.
+
+Game Kernel é um **aplicativo desktop nativo para Windows 10/11 x64**, 100% offline, especializado em
+investigar jogos, cracks, repacks, mods e launchers. O usuário final instala um único programa; C++ e
+Python ficam invisíveis.
 
 ## 1. Princípios
 
-| Princípio | Como é aplicado |
+| Princípio | Aplicação |
 |---|---|
-| Offline por construção | Nenhum módulo de rede é usado. Um *audit hook* do Python (`gamekernel/netguard.py`) bloqueia `connect`, `getaddrinfo`, `sendto`, `urllib`, `webbrowser` etc. em todos os processos do app. O instalador pode criar regras de firewall de saída. Atualizações apenas por pacote local assinado. |
-| Nunca executar o que é analisado | Toda análise é estática (leitura de bytes). A análise comportamental só ocorre dentro de uma VM descartável (Windows Sandbox) sem rede; se o isolamento não estiver disponível, a execução é recusada. |
-| Evidência, não palpite | Cada achado é um objeto `Evidence` com fonte, regra, local exato (offset/RVA/seção/linha), confiança qualitativa e nota de falso positivo. A classificação final é derivada por regras explicáveis. Nenhuma porcentagem inventada. |
-| Contexto de jogos | Cracks, emuladores de Steam, proxies de DLL (ReShade, ASI Loader) e DRM têm características parecidas com malware. O módulo de contexto (`game_context.py`) reconhece esses componentes e rebaixa apenas indicadores *esperados* — nunca detecções por assinatura. |
-| Preservação | Nada é apagado ou movido automaticamente. Quarentena é sempre ação do usuário (exceto se ele habilitar explicitamente a quarentena automática do monitor em tempo real). |
+| Offline por construção | Nenhum binário C++ vincula bibliotecas de rede (verificado por teste de imports). Processos Python rodam com `netguard` (audit hook). Atualizações apenas por pacote local assinado. Regras de firewall de saída opcionais no instalador. |
+| Nunca executar o que é analisado | Análise estática apenas. Comportamental somente em VM descartável (Windows Sandbox) sem rede; sem isolamento disponível → não executa. |
+| Isolamento de falhas | Parsers de formatos hostis (PE, compactados, YARA) rodam em **processos worker** limitados (Job Object, memória máxima, integridade baixa). Uma falha encerra só o worker; o arquivo é marcado como "não analisado: o analisador falhou" e o worker é reiniciado. |
+| Evidência, não palpite | Cada achado é uma `Evidence` com fonte, regra, local exato (offset/RVA/seção/linha), confiança qualitativa e nota de falso positivo. Sem porcentagens inventadas. |
+| Contexto de jogos | Cracks, emuladores, proxies de DLL e DRM são reconhecidos; só indicadores *esperados* são atenuados, nunca detecções por assinatura. |
+| Preservação | Nada é apagado ou movido sem ação explícita do usuário. |
 
-## 2. Visão geral
+## 2. Processos
 
 ```
-┌──────────────────────────── UI (PySide6) ─────────────────────────────┐
-│ Dashboard │ Scanner │ Resultados │ Quarentena │ Histórico │ Tempo real │
-│ Sandbox │ Atualizações │ Privacidade/Rede │ Configurações                │
-└───────────────┬───────────────────────────────────────────────────────┘
-                │ QThread (ScanWorker) / sinais Qt
-┌───────────────▼──────────────── core ─────────────────────────────────┐
-│ scanner.py (Orquestrador: enumeração → hash/cache → pool de processos │
-│            → ClamAV em lote → contexto de pasta → risco → persistência)│
-│ detection_engine.py (executa os motores sobre 1 arquivo, em worker)   │
-│ risk_engine.py (agrega evidências → risco, classificação, explicação) │
-│ threat_catalog.py (o que cada ameaça faz, dados em risco, ações)      │
-│ report_engine.py (JSON / HTML / PDF)                                   │
-└───────┬─────────────────────────────────────────────┬─────────────────┘
-        │                                             │
-┌───────▼──────── engines (independentes) ──────┐  ┌──▼── infraestrutura ──┐
-│ clamav_engine   – clamscan em lote (assinat.) │  │ database (SQLite WAL)  │
-│ yara_engine     – regras YARA compiladas      │  │ quarantine (AES-GCM)   │
-│ pe_analyzer     – estrutura PE, seções, IAT,  │  │ updates (Ed25519)      │
-│                   recursos, overlay, entropia │  │ realtime (watchdog)    │
-│ authenticode    – WinVerifyTrust / signify    │  │ integrity, audit log   │
-│ strings_analyzer– strings + IOCs com offset   │  │ netguard (offline)     │
-│ static_heuristics–correlação de capacidades   │  └────────────────────────┘
-│ script_analyzer – BAT/PS1/VBS/JS/REG/HTA/LNK  │
-│ archive_engine  – ZIP/7z/RAR/ISO/TAR/CAB/MSI  │
-│ pyinstaller     – arquivos embutidos          │
-│ reputation      – hashes locais bons/ruins    │
-│ game_context    – cracks, emuladores, mods    │
-│ sandbox_manager – Windows Sandbox (opcional)  │
-└───────────────────────────────────────────────┘
+┌──────────────────────── GameKernel.exe (C++20 + Qt 6 Widgets) ────────────────────────┐
+│  UI (Agente B): Dashboard · Game Security · Deep Forensic Analysis · Resultados ·      │
+│  Quarentena · Histórico · Tempo real · System Optimizer · Performance Monitor ·        │
+│  Offline Update Center · Privacidade/Rede · Configurações                              │
+│        │ sinais/slots Qt                                                               │
+│  gk_bridge (Agente A): serviços QObject (ScanService, QuarantineService, ...)           │
+│        │ API C++ (sem Qt)                                                              │
+│  gk_core (Agente A): orquestrador, fila de tarefas, cancelamento, banco SQLite,        │
+│  risco, contexto de jogo, quarentena, atualização/integridade, tempo real,             │
+│  performance, otimizador                                                               │
+└─────────┬───────────────────────────────────┬─────────────────────────────┬───────────┘
+          │ IPC (quadros JSON, pipes)          │ processo                    │ IPC JSON-RPC (stdio)
+┌─────────▼──────────────┐        ┌───────────▼─────────┐        ┌──────────▼───────────────┐
+│ gk-scanworker.exe ×N   │        │ clamscan.exe (lote) │        │ gk-helper.exe (Python    │
+│ (C++, Job Object,      │        │ ClamAV oficial      │        │ congelado; Agente B):    │
+│ integridade baixa):    │        └─────────────────────┘        │ relatórios, sandbox,     │
+│ SHA-256, tipo real, PE,│                                       │ inteligência de ameaças, │
+│ Authenticode, YARA,    │                                       │ preparação de pacotes    │
+│ compactados, scripts   │                                       └──────────────────────────┘
+└────────────────────────┘
 ```
 
-## 3. Pipeline de análise
+## 3. Divisão por linguagem (decisão técnica)
 
-1. **Enumeração** (`core/enumerator.py`): caminha a pasta sem seguir links, aplica exclusões,
-   identifica o tipo **pelo conteúdo** (magic bytes) e não só pela extensão, e prioriza
-   (executáveis e scripts primeiro). No modo rápido, arquivos de dados grandes (pak, vídeo, áudio)
-   recebem apenas verificação de cabeçalho (detecta PE disfarçado).
-2. **Hash + cache** (`core/hashing.py`): SHA-256 em streaming; cache `(caminho, tamanho, mtime)` →
-   SHA-256 e `(SHA-256, impressão dos motores)` → evidências. Arquivos inalterados não são relidos.
-3. **Análise por arquivo** (`core/worker.py`, pool de processos): YARA, PE, Authenticode, strings,
-   scripts, arquivos compactados recursivos (com limites anti-bomba), PyInstaller, reputação.
-   Membros executáveis extraídos de compactados são gravados (sem extensão executável) numa pasta
-   temporária privada para a segunda passada do ClamAV.
-4. **ClamAV em lote** (`engines/clamav_engine.py`): um único `clamscan --file-list` por lote
-   (o banco é carregado uma vez). Pausável (suspensão do processo) e cancelável.
-5. **Contexto de pasta** (`engines/game_context.py`): correlaciona arquivos irmãos
-   (ex.: `steam_api64.dll` sem assinatura da Valve + `steam_settings/` = emulador Goldberg).
-6. **Risco** (`core/risk_engine.py`): combina evidências → nível (CRÍTICO…INFORMATIVO),
-   classificação (legítimo conhecido, desconhecido, modificado, PUA, suspeito, malware,
-   inconclusivo), estado de crack e a explicação passo a passo.
-7. **Persistência** (`database/db.py`): resultados, evidências e histórico em SQLite (WAL).
-
-## 4. Escolha de tecnologias
-
-| Tecnologia | Versão fixada | Avaliação |
+| Componente | Linguagem | Motivo |
 |---|---|---|
-| Python | 3.13 | Orquestração; empacotado com PyInstaller (usuário não precisa de Python). |
-| PySide6 | 6.12.0 | Qt oficial, LGPL; UI nativa, QThread, pintura customizada (sem QtCharts/QtWebEngine). |
-| ClamAV | 1.5.x (binários Windows oficiais) | Motor de assinaturas maduro; bancos CVD assinados digitalmente pela Cisco Talos. Executado via `clamscan` em lote — sem daemon e sem rede. |
-| YARA (yara-python) | 4.5.4 | Padrão da indústria; módulos `pe`, `dotnet`, `math` disponíveis. |
-| pefile | 2024.8.26 | Parser PE puro Python, tolerante a arquivos malformados. |
-| signify | 0.9.3 | Parser Authenticode multiplataforma (fallback e detalhes de certificado). No Windows a validação principal usa `WinVerifyTrust` com recuperação de URL **apenas de cache** (sem CRL/OCSP online). |
-| SQLite | embutido | WAL, `quick_check` na inicialização, recuperação automática. |
-| cryptography | 50.0.2 | Ed25519 (pacotes de atualização, manifesto de integridade) e AES-256-GCM (quarentena). |
-| py7zr / rarfile / pycdlib | 1.1.4 / 4.5 / 1.22.0 | Leitura de 7z, RAR (via `unrar`/`7z` locais) e ISO em memória. |
-| 7-Zip (7z.exe) | 24.x | Backend opcional para RAR/CAB/MSI e formatos não suportados em Python. |
-| watchdog | 7.1.0 | `ReadDirectoryChangesW` no Windows — sem hooks de kernel. |
-| psutil | 7.2.2 | CPU/memória, prioridade de processos, auditoria de conexões. |
-| reportlab | 5.1.0 | PDF offline. |
-| Windows Sandbox | recurso do Windows Pro/Enterprise/Education | VM descartável baseada em Hyper-V; configurada sem rede, sem clipboard, pasta da amostra somente leitura. |
+| Orquestração de análise, fila, cancelamento, memória | C++ | Controle de recursos, paralelismo real (sem GIL), integração com Job Objects |
+| Leitura de arquivos, SHA-256, tipo real, PE, imports/exports, recursos, Authenticode | C++ | Caminho quente; dados hostis; WinVerifyTrust/CryptoAPI nativas |
+| YARA, compactados | C++ (libyara, libarchive) | Bibliotecas nativas maduras; streaming com limites |
+| Quarentena | C++ | Criptografia autenticada, DPAPI, controle de ACL e integridade |
+| Verificação/instalação de pacotes, integridade da instalação | C++ | Exigência de segurança: validação no núcleo |
+| Tempo real, System Optimizer, Performance Monitor | C++ | WinAPI (ReadDirectoryChangesW, PDH, DXGI, Toolhelp) |
+| Interface | C++ / Qt 6 Widgets | Nativa, sem navegador; threads/sinais Qt |
+| Relatórios (HTML/JSON/PDF) | Python (helper) | Produtividade; reportlab; não é caminho quente |
+| Sandbox (Windows Sandbox) | Python (helper) | Orquestração e geração de configuração; sem processamento pesado |
+| Preparação de pacotes, assinatura, IOC, regras YARA | Python (ferramentas) | Automação offline do mantenedor |
+| Testes (integração, regressão, equivalência, desempenho, FP) | Python (pytest + `gk_native`) | Controle de testes em Python, conforme diretriz |
 
-## 5. Dados e diretórios
+## 4. Dependências
+
+| Dependência | Uso | Licença | Justificativa |
+|---|---|---|---|
+| libyara 4.5 | Motor YARA | BSD-3 | Requisito do produto |
+| libarchive 3.7 | ZIP/7z/RAR/ISO/CAB/TAR/XZ em memória | BSD-2 | Substitui py7zr/rarfile/pycdlib/7z.exe com uma só biblioteca; streaming com limites |
+| libsodium 1.0.18+ | SHA-256, Ed25519 (verificação), XChaCha20-Poly1305 (quarentena), zeragem segura | ISC | Criptografia auditada; nunca implementar primitivas próprias |
+| SQLite 3 | Banco local | Domínio público | Requisito |
+| nlohmann/json 3.11 | JSON (IPC, configurações, manifestos) | MIT | Header-only, amplamente usado |
+| Qt 6 (Core, Gui, Widgets, Svg) | UI e camada de serviços | LGPL-3 | Requisito; **QtNetwork não é usado** |
+| pybind11 2.13 | Módulo `gk_native` (testes/automação) | BSD-3 | Integração direta sem processo para testes |
+| ClamAV 1.5 (binários oficiais) | Assinaturas | GPL-2 (processo separado) | Requisito; executado como processo independente |
+| Windows SDK | wintrust, crypt32, pdh, dxgi, psapi, advapi32, shell32 | — | APIs oficiais |
+
+Gerenciamento: **vcpkg (manifesto `vcpkg.json`) no Windows**, pacotes do sistema no Linux de desenvolvimento.
+
+## 5. Layout do repositório (alvo)
+
+```
+CMakeLists.txt, vcpkg.json, CMakePresets.json
+cpp/core/      gk_core — biblioteca C++ sem Qt (include/gk/*.hpp, src/*.cpp, src/win/*.cpp)
+cpp/worker/    gk-scanworker — processo isolado de análise
+cpp/cli/       gk-cli — varreduras sem interface (automação e testes)
+cpp/bridge/    gk_bridge — serviços Qt (QObject) sobre o núcleo
+cpp/app/       GameKernel.exe — interface Qt (Agente B)
+cpp/bindings/  gk_native — módulo pybind11
+contracts/     schema.sql, *.schema.json, threat_catalog.json, protocolo IPC
+gamekernel/    pacote Python (helper, ferramentas, modelo de dados no lado Python)
+signatures/    regras YARA, IOCs, assinaturas locais, chaves públicas confiáveis
+tools/         automação (pacotes, chaves, manifestos, regras)
+tests/         suíte pytest (equivalência, integração, regressão, desempenho, FP)
+installer/     empacotamento Windows (Agente B)
+docs/          documentação
+```
+
+## 6. Dados e diretórios (inalterado)
 
 | Caminho | Conteúdo |
 |---|---|
-| `<instalação>\` | Executável, regras YARA base, chaves públicas confiáveis, ClamAV, 7-Zip, `integrity_manifest.json(.sig)` |
-| `%LOCALAPPDATA%\GameKernel\` | `gamekernel.db`, `settings.json`, `quarantine\`, `signatures\active\`, `reports\`, `logs\`, `temp\` |
-| Versão portátil | igual, mas em `.\data\` ao lado do executável (arquivo `portable.flag`) |
+| `<instalação>\` | executáveis, `third_party\clamav`, regras base, chaves públicas, `integrity_manifest.json(.sig)` |
+| `%LOCALAPPDATA%\GameKernel\` | `gamekernel.db`, `settings.json`, `quarantine\`, `signatures\{active,previous,staging}`, `reports\`, `logs\`, `temp\` |
+| Portátil | `.\data\` ao lado do executável (`portable.flag`) |
 
-## 6. Segurança do próprio aplicativo
-
-* Subprocessos sempre com caminho absoluto, `shell=False`, sem janela e com diretório de trabalho
-  no diretório da ferramenta (evita sequestro de DLL a partir da pasta do jogo).
-* Binários auxiliares (clamscan, 7z, sigtool) verificados contra o manifesto de integridade antes do uso.
-* Log administrativo encadeado por hash (adulteração detectável).
-* Chave da quarentena protegida por DPAPI (Windows) — os arquivos isolados são cifrados com
-  AES-256-GCM e gravados com extensão `.gkq`, impedindo execução acidental.
-
-## 7. Extensibilidade
-
-Cada motor implementa uma interface simples (`analyze(ctx) -> list[Evidence]`) e pode ser
-desligado nas configurações. O `sandbox_manager` define um *backend* abstrato; o backend
-Windows Sandbox é o implementado, e outros (VirtualBox/Hyper-V com snapshot) podem ser
-adicionados sem alterar o resto do sistema.
+O formato do banco (`contracts/schema.sql`) e de `settings.json` é o mesmo para C++ e Python.

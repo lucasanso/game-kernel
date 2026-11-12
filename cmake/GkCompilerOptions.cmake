@@ -1,0 +1,28 @@
+# Warnings, hardening and sanitizers applied to every Game Kernel target via gk_apply_options().
+function(gk_apply_options target)
+  if(MSVC)
+    target_compile_options(${target} PRIVATE /W4 /permissive- /utf-8 /sdl /guard:cf /Zc:__cplusplus /EHsc)
+    target_link_options(${target} PRIVATE /guard:cf /DYNAMICBASE /HIGHENTROPYVA /NXCOMPAT /CETCOMPAT)
+    target_compile_definitions(${target} PRIVATE _UNICODE UNICODE WIN32_LEAN_AND_MEAN NOMINMAX _WIN32_WINNT=0x0A00)
+    if(GK_WARNINGS_AS_ERRORS)
+      target_compile_options(${target} PRIVATE /WX)
+    endif()
+  else()
+    target_compile_options(${target} PRIVATE -Wall -Wextra -Wpedantic -Wshadow -Wnon-virtual-dtor
+                                             -Wcast-align -Wnull-dereference -Wformat=2 -fstack-protector-strong)
+    if(WIN32)  # mingw-w64 compile checks
+      target_compile_definitions(${target} PRIVATE _UNICODE UNICODE WIN32_LEAN_AND_MEAN NOMINMAX _WIN32_WINNT=0x0A00)
+    endif()
+    if(NOT CMAKE_BUILD_TYPE STREQUAL "Debug" AND NOT GK_SANITIZE)
+      target_compile_definitions(${target} PRIVATE _FORTIFY_SOURCE=2)
+    endif()
+    if(GK_WARNINGS_AS_ERRORS)
+      target_compile_options(${target} PRIVATE -Werror)
+    endif()
+    if(GK_SANITIZE)
+      target_compile_options(${target} PRIVATE -fsanitize=address,undefined -fno-omit-frame-pointer
+                                               -fno-sanitize-recover=undefined)
+      target_link_options(${target} PRIVATE -fsanitize=address,undefined)
+    endif()
+  endif()
+endfunction()

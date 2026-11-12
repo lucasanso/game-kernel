@@ -1,0 +1,64 @@
+# Game Kernel — C++ core CI (owner: Agent A). Builds the native core and runs the Python-controlled tests.
+name: core-ci
+
+on:
+  push:
+    branches: ["main", "claude/**"]
+    paths: ["cpp/**", "cmake/**", "CMakeLists.txt", "CMakePresets.json", "vcpkg.json", "tests/**", "gamekernel/**",
+            "contracts/**", ".github/workflows/core-ci.yml"]
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  linux:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+      - name: System dependencies
+        run: sudo apt-get update && sudo apt-get install -y ninja-build libsodium-dev g++-mingw-w64-x86-64
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.13"
+      - name: Python test dependencies
+        run: python -m pip install pytest==9.2.0 cryptography==50.0.2 pybind11==2.13.6
+      - name: Build (release, warnings as errors)
+        run: |
+          cmake --preset linux-release -DPython_EXECUTABLE="$(which python)"
+          cmake --build --preset linux-release
+      - name: Tests
+        env:
+          GK_REQUIRE_NATIVE: "1"
+          GK_NATIVE_DIR: build/linux-release/cpp/bindings
+        run: python -m pytest -q tests/foundation tests/native
+      - name: Build and test with AddressSanitizer + UBSan
+        run: |
+          cmake --preset linux-asan -DPython_EXECUTABLE="$(which python)"
+          cmake --build --preset linux-asan
+          LD_PRELOAD="$(gcc -print-file-name=libasan.so):$(gcc -print-file-name=libubsan.so)" \
+          ASAN_OPTIONS=detect_leaks=0 GK_REQUIRE_NATIVE=1 GK_NATIVE_DIR=build/linux-asan/cpp/bindings \
+          python -m pytest -q tests/native
+
+  windows:
+    runs-on: windows-2022
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.13"
+      - name: Python test dependencies
+        run: python -m pip install pytest==9.2.0 cryptography==50.0.2 pybind11==2.13.6
+      - name: Configure (MSVC + vcpkg, static triplet)
+        shell: pwsh
+        run: |
+          $env:VCPKG_ROOT = $env:VCPKG_INSTALLATION_ROOT
+          cmake --preset windows-release -DPython_EXECUTABLE="$((Get-Command python).Source)"
+      - name: Build
+        run: cmake --build --preset windows-release
+      - name: Tests
+        env:
+          GK_REQUIRE_NATIVE: "1"
+          GK_NATIVE_DIR: build/windows-release/cpp/bindings/Release
+        run: python -m pytest -q tests/foundation tests/native
