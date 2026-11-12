@@ -83,6 +83,24 @@ def _deploy_qt_runtime(executable: Path) -> None:
                            "--no-system-d3d-compiler", str(executable)], capture_output=True, text=True, encoding="utf-8", errors="replace")
     if proc.returncode != 0:
         pytest.fail(f"windeployqt falhou para {executable.name}:\n{proc.stdout[-3000:]}\n{proc.stderr[-3000:]}")
+    # Headless tests use QT_QPA_PLATFORM=offscreen; windeployqt only deploys the qwindows platform plugin.
+    plugins = _qt_plugins_dir()
+    offscreen = plugins / "platforms" / "qoffscreen.dll" if plugins else None
+    if offscreen and offscreen.is_file():
+        (executable.parent / "platforms").mkdir(exist_ok=True)
+        shutil.copy2(offscreen, executable.parent / "platforms" / offscreen.name)
+
+
+def _qt_plugins_dir() -> Path | None:
+    for tool in ("qtpaths6", "qtpaths"):
+        exe = shutil.which(tool)
+        if not exe:
+            continue
+        proc = subprocess.run([exe, "--query", "QT_INSTALL_PLUGINS"], capture_output=True, text=True,
+                              encoding="utf-8", errors="replace")
+        if proc.returncode == 0 and proc.stdout.strip():
+            return Path(proc.stdout.strip())
+    return None
 
 
 # Windows NTSTATUS values seen as process exit codes when a program cannot even start.

@@ -143,3 +143,12 @@ def test_environment_is_sanitised(isolated_data_dir, monkeypatch):
 
 def test_fault_helper_path_exists():
     assert FAULT_HELPER.exists()
+
+
+def test_network_selftest_proves_the_helper_is_offline(real_client):
+    result = real_client.call("system.network_selftest")
+    assert result["ok"] is True and result["netguard_installed"] is True
+    assert result["dns"] == "bloqueado" and result["connect"] == "bloqueado"
+    events = {a["event"] for a in result["blocked_attempts"]}
+    assert {"socket.getaddrinfo", "socket.connect"} <= events
+    assert real_client.call("system.info")["network_blocked_attempts"] >= 2

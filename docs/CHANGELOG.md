@@ -41,6 +41,10 @@ Formato: [Keep a Changelog](https://keepachangelog.com/pt-BR/1.1.0/). Cada entra
 - **(B)** CI do produto (`.github/workflows/ci.yml`): Linux (suíte completa + ASan/UBSan) e Windows (MSVC 2022, Qt 6.8,
   vcpkg, sintaxe do `monitor.ps1` no PowerShell 5.1 e 7, PyInstaller do auxiliar e teste do auxiliar congelado).
 - **(B)** `contracts/update_package.md` (contrato normativo do `.gkpkg`), `README.md`, `docs/PRIVACY.md`, `docs/LIMITATIONS.md`.
+- **(B)** Interface Qt 6 C++ (`native/app`, parte 1): janela, menu lateral, tema escuro, ícones SVG próprios,
+  notificações internas, instância única; páginas Central de Atualização Offline, Análise comportamental e
+  Privacidade e rede; 11 testes QtTest (`tests/ui/`) com pacotes reais e o auxiliar real, capturas de tela.
+- **(B)** Método `system.network_selftest` no auxiliar: tenta DNS e conexão de saída e comprova o bloqueio.
 
 ### Alterado
 - **(B)** Escopo do Agente B ajustado à arquitetura híbrida: a quarentena passa ao núcleo C++ (Agente A); interface

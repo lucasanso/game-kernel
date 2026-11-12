@@ -24,7 +24,7 @@ Agente A depois de integrar as duas branches). Esta branch já contém a branch 
 | B6 | Usar `gk_native` (A) no motor de testes | em andamento conforme o A amplia a API |
 | B7 | Sandbox (Windows Sandbox sem rede) no auxiliar | ✅ (sem VM no Linux; `monitor.ps1` com sintaxe verificada na CI Windows) |
 | B8 | CI Linux + Windows/MSVC, auxiliar congelado | ✅ |
-| B9 | Interface Qt 6 C++ (`native/app`, pendência P2) | ⏳ próxima; consome `native/bridge` (A) |
+| B9 | Interface Qt 6 C++ (`native/app`, pendência P2) | 🔄 parte 1 ✅ (esqueleto + 3 páginas com serviços do B); páginas do núcleo aguardam `native/bridge` (A) |
 | B10 | Instalador (Inno Setup), versão portátil, docs de usuário (INSTALL, USAGE) | ⏳ depende do executável da interface |
 
 ## Decisões de linguagem (B1)
@@ -52,6 +52,39 @@ Agente A depois de integrar as duas branches). Esta branch já contém a branch 
   assinar (inclusive com os validadores C++) e relatório de atualização; ferramentas em `tools/`.
 * **Sandbox** (`gamekernel/engines/sandbox_manager.py`, `sandbox/monitor.ps1`).
 * **CI** (`.github/workflows/ci.yml`) e PyInstaller do auxiliar (`installer/gk_helper.spec`).
+
+## B9 — Interface Qt 6 C++, parte 1 (`native/app`)
+
+Só entram páginas com serviço real por trás. As do núcleo (Painel, Scanner, Resultados, Quarentena, Histórico,
+Tempo real, Desempenho e Otimizador) chegam quando o `native/bridge` do A existir, sem telas ou botões sem função.
+
+* **Esqueleto**: janela própria com o ícone do produto (escudo + "chip", SVG próprio), menu lateral, cabeçalho
+  por página, notificações internas (*toasts*, com histórico na sessão), indicador "100% offline" e instância única
+  (trava em `<dados>/.app.lock`). Tema escuro: fundo grafite, destaques em azul e verde, risco em amarelo, laranja
+  e vermelho; ícones SVG próprios; fonte Segoe UI/Inter.
+* **Central de Atualização Offline** (`native/updates`): estado do conjunto ativo (com aviso de desatualização
+  pela data do pacote e por `updates.stale_after_days`), componentes, importação em *thread* de trabalho
+  (verificar → mostrar publicador, versão, chave e componentes → confirmar → instalar), *downgrade* só com
+  confirmação explícita, reversão, histórico, chaves confiáveis (adicionar mostrando o identificador; remover só
+  as do usuário; as embutidas não podem ser removidas pela interface).
+* **Análise comportamental** (helper `sandbox.*`): disponibilidade com o motivo, ativação gravada em
+  `settings.json`, escolha da amostra, tempo de observação, confirmação com as limitações, progresso por eventos,
+  cancelamento, tabela de evidências comportamentais (severidade, possibilidade de falso positivo). Sem isolamento
+  real, o botão fica desabilitado e explica por quê.
+* **Privacidade e rede** (helper `system.info` e o novo `system.network_selftest`): estado do processo auxiliar
+  e do `netguard`, reinício do auxiliar, **autoteste que tenta DNS e conexão de saída de verdade e comprova o
+  bloqueio**, lista de tentativas bloqueadas e política de privacidade.
+* `AppContext`: caminhos com as mesmas regras do `app_paths.py` (portátil, `GAMEKERNEL_DATA_DIR`), leitura e
+  escrita atômica do `settings.json` preservando as demais chaves, e confirmações injetáveis para testes.
+
+Testes (`tests/ui/test_native_app.py` → `native/app/tests/tst_app.cpp`, 11 casos; também limpos sob ASan/UBSan):
+pacotes **reais** gerados pelas ferramentas Python e instalados pela interface (v1 → v2 → *downgrade* recusado
+→ reversão), pacote inválido, recusa do usuário, publicador não confiável até a chave ser adicionada, chave inválida,
+chave embutida protegida, sandbox recusada sem isolamento, autoteste de rede pelo auxiliar real, navegação,
+notificações e **capturas de tela** das três páginas (`build/native-app/screenshots/`), inspecionadas visualmente.
+
+Pedido ao A: incluir `add_subdirectory(native/app)` no `CMakeLists.txt` da raiz quando Qt 6 Widgets e Svg
+estiverem disponíveis. O app já compila sozinho (`cmake -S native/app`).
 
 ## Conciliação com a rev. 3 (esta etapa)
 

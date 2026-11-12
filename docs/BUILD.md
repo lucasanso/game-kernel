@@ -39,6 +39,15 @@ No Windows: `-DCMAKE_TOOLCHAIN_FILE=%VCPKG_ROOT%/scripts/buildsystems/vcpkg.cmak
 A libyara do vcpkg é estática e é ligada pelo alvo `unofficial::libyara::libyara` (pacote `unofficial-libyara`),
 que traz OpenSSL::Crypto, Crypt32 e Ws2_32.
 
+### Interface (`native/app`)
+```bash
+sudo apt-get install -y qt6-base-dev libqt6svg6-dev   # Linux; no Windows o Qt 6.8 do aqtinstall já inclui Svg
+cmake -S native/app -B build/native-app -G Ninja && cmake --build build/native-app --target GameKernel
+```
+Executável: `GameKernel(.exe)`. Em desenvolvimento, o processo auxiliar vem de `GK_DEV_REPO` (raiz do repositório) e
+`GK_DEV_PYTHON` (ou `python3` no PATH); instalado, de `<app>/helper/gk-helper(.exe)`. Sem nenhum dos dois, as páginas
+que dependem do auxiliar mostram "indisponível" com o motivo.
+
 ### Processo auxiliar Python (`gk-helper`)
 ```bash
 pip install -r requirements-dev.txt

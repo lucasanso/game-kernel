@@ -33,7 +33,7 @@ jobs:
       - name: Pacotes do sistema (toolchain C++, Qt 6, libsodium, libyara)
         run: |
           sudo apt-get update
-          sudo apt-get install -y --no-install-recommends cmake ninja-build g++ pkg-config qt6-base-dev \
+          sudo apt-get install -y --no-install-recommends cmake ninja-build g++ pkg-config qt6-base-dev libqt6svg6-dev \
             libgl-dev libegl1 libxkbcommon0 libsodium-dev libyara-dev fonts-dejavu-core clamav p7zip-full
       - name: Dependências Python
         run: python -m pip install -r requirements-dev.txt

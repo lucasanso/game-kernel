@@ -127,6 +127,7 @@ prefixo do *logger*. O stderr do auxiliar também vai para o log (`helper.stderr
 | `system.ping` | teste de vida (`{"echo": …}`) | `gamekernel/ipc/helper.py` |
 | `system.info` | versão, protocolo, Python, `netguard`, métodos | `gamekernel/ipc/helper.py` |
 | `system.shutdown` | encerra após responder | `gamekernel/ipc/helper.py` |
+| `system.network_selftest` | tenta DNS e conexão de saída e confirma que ambos são bloqueados (`{ok, dns, connect, netguard_installed, blocked_attempts}`) | `gamekernel/ipc/helper.py` |
 | `reports.generate` | gera o relatório forense de uma varredura (ver abaixo) | `gamekernel/ipc/services/reports.py` |
 | `reports.formats` | formatos disponíveis (`pdf` só se o reportlab estiver presente) e pasta padrão | `gamekernel/ipc/services/reports.py` |
 | `sandbox.availability` | informa se há isolamento real (nada é executado) | `gamekernel/ipc/services/sandbox.py` |

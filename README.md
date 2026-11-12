@@ -4,7 +4,8 @@ Antivírus **offline** especializado em jogos para Windows 10/11 (64 bits): inve
 repacks, mods e launchers, explica **o que** foi encontrado, **onde** (arquivo e posição dentro dele), **por que**
 é suspeito e **o que fazer**, sem nunca enviar nada para a internet.
 
-> **Estado: em desenvolvimento.** Ainda não há instalador nem interface utilizável. Abaixo está o que existe
+> **Estado: em desenvolvimento.** Ainda não há instalador. A interface (Qt 6 C++) já tem as páginas de atualização
+> offline, análise comportamental e privacidade; as páginas de varredura chegam com os serviços do núcleo. Abaixo está o que existe
 > e foi testado. O progresso detalhado está em `docs/PROGRESS_A.md` (núcleo) e `docs/PROGRESS_B.md`
 > (integração, ferramentas, interface e distribuição).
 

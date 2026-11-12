@@ -145,7 +145,22 @@ class HelperServer:
                     "Teste de vida do processo auxiliar."),
             Service("system.info", self._info, "Versões, métodos e estado do bloqueio de rede."),
             Service("system.shutdown", self._shutdown, "Encerra o processo auxiliar após responder."),
+            Service("system.network_selftest", self._network_selftest,
+                    "Tenta resolver DNS e abrir uma conexão e confirma que ambos são bloqueados."),
         ]
+
+    def _network_selftest(self, params: dict[str, Any], ctx: RequestContext) -> dict[str, Any]:
+        """Actively prove the helper cannot reach the network (spec §14: auditable offline mode)."""
+        result = netguard.self_test()
+        attempts = netguard.blocked_attempts()[-20:]
+        return {
+            "ok": bool(result.get("ok")),
+            "dns": result.get("dns"),
+            "connect": result.get("connect"),
+            "netguard_installed": netguard.is_installed(),
+            "blocked_attempts": [{"timestamp": a.timestamp, "event": a.event, "target": a.target, "origin": a.origin}
+                                 for a in attempts],
+        }
 
     def _info(self, params: dict[str, Any], ctx: RequestContext) -> dict[str, Any]:
         return {

@@ -51,6 +51,7 @@ GK_PYTHON=$(which python3) GK_REPO=$PWD ./build/native-ipc-asan/gk_ipc_tests
 | `tests/native/test_{hash,filetype,pe,yara,archive,contracts}.py`, `tests/corpus_pe/` | núcleo C++ via `gk_native` (equivalência com hashlib, `filetypes.py`, pefile, yara-python; fuzzing) | A |
 | `tests/ipc/` | protocolo gk-ipc e processo auxiliar real com falhas provocadas (`fault_helper.py`) | B |
 | `tests/sandbox/` | sandbox: recusa sem isolamento, `.wsb` sem rede, fluxo com duplo da VM, mapeamento de comportamento, `monitor.ps1` estático | B |
+| `tests/ui/` | interface Qt 6 C++ (`native/app`): fluxos reais de atualização, chaves, sandbox, autoteste de rede, navegação e capturas de tela (`build/native-app/screenshots/`) | B |
 | `tests/reports/` | relatórios: conteúdo, cracks, privacidade, escape, PDF, serviço no auxiliar (`sample_scan.py` grava uma varredura realista) | B |
 | `tests/updates/` | pacotes `.gkpkg`: construtor, **equivalência Python × C++**, adulterações, mutações aleatórias, instalador C++ | B |
 | `tests/ti/` | IOC, YARA (yara-python × libyara), ferramentas do publicador ponta a ponta | B |
