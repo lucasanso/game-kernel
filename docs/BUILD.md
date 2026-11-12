@@ -18,6 +18,11 @@ Build com sanitizers (ASan + UBSan) para testes de segurança de memória:
 cmake --preset linux-asan -DPython_EXECUTABLE=$PWD/.venv/bin/python
 cmake --build --preset linux-asan
 ```
+Para rodar os testes contra esse build, os runtimes dos sanitizers e a libstdc++ precisam ser pré-carregados
+(o interpretador Python não é compilado com ASan e não carrega a libstdc++ por conta própria):
+```bash
+LD_PRELOAD="$(gcc -print-file-name=libasan.so):$(gcc -print-file-name=libubsan.so):$(gcc -print-file-name=libstdc++.so)" ASAN_OPTIONS=detect_leaks=0:abort_on_error=1 GK_NATIVE_DIR=build/linux-asan/cpp/bindings python -m pytest -q tests/native
+```
 
 ### Windows (produto)
 Requisitos: Visual Studio 2022 (MSVC v143), CMake ≥ 3.25, vcpkg (`VCPKG_ROOT`), Qt 6.8 LTS (MSVC 2022 64-bit).

@@ -1,0 +1,181 @@
+{
+  "format": "gamekernel-components",
+  "version": "2026.11.12",
+  "notes": "Componentes de jogos reconhecidos pelo módulo de cracks/mods. Reconhecer um componente NÃO o torna seguro: a análise de ameaças continua aplicada. Só traços esperados para o tipo de componente (empacotamento, proxy de DLL, anti-depuração) são atenuados. Correspondência: nomes de arquivo/pasta sem diferenciar maiúsculas; padrões com * e ?; version_markers procuram texto em ProductName/CompanyName/FileDescription/InternalName/OriginalFilename.",
+  "components": [
+    {
+      "id": "goldberg",
+      "name": "Goldberg Steam Emulator",
+      "kind": "crack",
+      "description": "Emulador de código aberto da API da Steam (substitui steam_api.dll/steam_api64.dll).",
+      "evidence": {"dirs": ["steam_settings"], "files": ["ColdClientLoader.ini", "local_save.txt"]},
+      "targets": ["steam_api.dll", "steam_api64.dll", "steamclient.dll", "steamclient64.dll", "steamclient_loader.exe", "steamclient_loader_x64.exe"]
+    },
+    {
+      "id": "smartsteamemu",
+      "name": "SmartSteamEmu",
+      "kind": "crack",
+      "description": "Emulador da API da Steam.",
+      "evidence": {"dirs": ["SmartSteamEmu"], "files": ["SmartSteamEmu.ini", "SmartSteamEmu.dll", "SmartSteamEmu64.dll"]},
+      "targets": ["steam_api.dll", "steam_api64.dll", "SmartSteamLoader.exe", "SmartSteamLoader_x64.exe", "SmartSteamEmu.dll", "SmartSteamEmu64.dll"]
+    },
+    {
+      "id": "steam_emu_ini",
+      "name": "Emulador da Steam de grupos de cracks (steam_emu.ini)",
+      "kind": "crack",
+      "description": "Configuração usada pelos emuladores de grupos como CODEX e RUNE; o grupo é identificado pelo conteúdo do arquivo quando possível.",
+      "evidence": {"files": ["steam_emu.ini"]},
+      "content_labels": {"CODEX": "CODEX", "RUNE": "RUNE", "PLAZA": "PLAZA", "EMPRESS": "EMPRESS", "TENOKE": "TENOKE"},
+      "targets": ["steam_api.dll", "steam_api64.dll"]
+    },
+    {
+      "id": "group_ini",
+      "name": "Configuração de crack de grupo (CPY, ALI213, 3DM, SKIDROW)",
+      "kind": "crack",
+      "description": "Arquivos de configuração característicos de cracks de grupos conhecidos.",
+      "evidence": {"files": ["CPY.ini", "ALI213.ini", "3DMGAME.ini", "SKIDROW.ini"]},
+      "targets": ["steam_api.dll", "steam_api64.dll", "uplay_r1_loader.dll", "uplay_r1_loader64.dll", "uplay_r2_loader.dll", "uplay_r2_loader64.dll", "3dmgame.dll"]
+    },
+    {
+      "id": "creamapi",
+      "name": "CreamAPI (desbloqueador de DLC)",
+      "kind": "unlocker",
+      "description": "Proxy da steam_api que desbloqueia DLCs; mantém a DLL original renomeada com o sufixo _o.",
+      "evidence": {"files": ["cream_api.ini"]},
+      "targets": ["steam_api.dll", "steam_api64.dll", "steam_api_o.dll", "steam_api64_o.dll"]
+    },
+    {
+      "id": "acidicoala_unlockers",
+      "name": "SmokeAPI / ScreamAPI / Koaloader / UplayR1Unlocker (desbloqueadores de DLC)",
+      "kind": "unlocker",
+      "description": "Desbloqueadores de DLC de código aberto (projetos acidicoala).",
+      "evidence": {"files": ["SmokeAPI.config.json", "ScreamAPI.config.json", "Koaloader.config.json", "UplayR1Unlocker.config.json", "UplayR2Unlocker.config.json"]},
+      "targets": ["steam_api.dll", "steam_api64.dll", "steam_api_o.dll", "steam_api64_o.dll", "EOSSDK-Win64-Shipping.dll", "EOSSDK-Win32-Shipping.dll", "EOSSDK-Win64-Shipping_o.dll", "version.dll", "winmm.dll", "winhttp.dll", "uplay_r1_loader64.dll", "uplay_r2_loader64.dll"]
+    },
+    {
+      "id": "onlinefix",
+      "name": "Online-Fix (multijogador em cópias não oficiais)",
+      "kind": "crack",
+      "description": "Correção que permite jogo online em cópias sem DRM; usa proxy de DLL (winmm.dll) e emula serviços de rede.",
+      "evidence": {"files": ["OnlineFix.ini", "OnlineFix64.dll", "OnlineFix.dll", "OnlineFix.url"]},
+      "targets": ["winmm.dll", "OnlineFix64.dll", "OnlineFix.dll", "steam_api64.dll", "steam_api.dll"]
+    },
+    {
+      "id": "nemirtingas_epic",
+      "name": "Nemirtingas Epic Emulator",
+      "kind": "crack",
+      "description": "Emulador do SDK da Epic Online Services.",
+      "evidence": {"files": ["NemirtingasEpicEmu.json"]},
+      "targets": ["EOSSDK-Win64-Shipping.dll", "EOSSDK-Win32-Shipping.dll"]
+    },
+    {
+      "id": "anadius",
+      "name": "Emulador EA/Origin (anadius)",
+      "kind": "crack",
+      "description": "Emulador dos serviços da EA/Origin.",
+      "evidence": {"files": ["anadius.cfg"]},
+      "targets": ["anadius64.dll", "anadius32.dll", "version.dll"]
+    },
+    {
+      "id": "lumaplay",
+      "name": "LumaPlay (emulador Ubisoft)",
+      "kind": "crack",
+      "description": "Emulador dos serviços Ubisoft Connect.",
+      "evidence": {"dirs": ["LumaPlay"], "files": ["LumaPlay_x64.exe", "LumaPlay_x86.exe", "LumaPlay.ini"]},
+      "targets": ["uplay_r1_loader.dll", "uplay_r1_loader64.dll", "LumaPlay_x64.exe", "LumaPlay_x86.exe"]
+    },
+    {
+      "id": "steamless",
+      "name": "Executável desprotegido pelo Steamless",
+      "kind": "crack",
+      "description": "O Steamless remove a proteção SteamStub e grava uma cópia com o sufixo .unpacked.exe.",
+      "evidence": {"patterns": ["*.unpacked.exe"]},
+      "targets": ["*.unpacked.exe"]
+    },
+    {
+      "id": "reshade",
+      "name": "ReShade",
+      "kind": "mod",
+      "description": "Injetor de pós-processamento gráfico; carregado como proxy de DLL de vídeo.",
+      "evidence": {"dirs": ["reshade-shaders"], "files": ["ReShade.ini", "ReShadePreset.ini", "ReShade.log"]},
+      "version_markers": ["ReShade", "crosire"],
+      "targets": ["dxgi.dll", "d3d9.dll", "d3d10.dll", "d3d11.dll", "d3d12.dll", "opengl32.dll", "dinput8.dll", "ReShade64.dll", "ReShade32.dll"]
+    },
+    {
+      "id": "enb",
+      "name": "ENBSeries",
+      "kind": "mod",
+      "description": "Modificação gráfica (proxy de d3d9/d3d11).",
+      "evidence": {"dirs": ["enbseries"], "files": ["enbseries.ini", "enblocal.ini"]},
+      "version_markers": ["ENBSeries", "Boris Vorontsov"],
+      "targets": ["d3d9.dll", "d3d11.dll", "d3dcompiler_46e.dll"]
+    },
+    {
+      "id": "asi_loader",
+      "name": "Ultimate ASI Loader",
+      "kind": "mod",
+      "description": "Carregador de plugins .asi (proxy de dinput8/winmm/version e outras DLLs).",
+      "evidence": {"patterns": ["*.asi"]},
+      "version_markers": ["Ultimate ASI Loader", "ThirteenAG"],
+      "targets": ["dinput8.dll", "winmm.dll", "version.dll", "d3d9.dll", "d3d11.dll", "dsound.dll", "xinput1_3.dll", "winhttp.dll", "msacm32.dll", "vorbisfile.dll", "*.asi"]
+    },
+    {
+      "id": "specialk",
+      "name": "Special K",
+      "kind": "mod",
+      "description": "Ferramenta de ajustes gráficos e de desempenho.",
+      "evidence": {"files": ["SpecialK64.dll", "SpecialK32.dll"]},
+      "version_markers": ["Special K", "Kaldaien"],
+      "targets": ["SpecialK64.dll", "SpecialK32.dll", "dxgi.dll", "d3d11.dll", "d3d9.dll", "opengl32.dll", "dinput8.dll"]
+    },
+    {
+      "id": "dxvk",
+      "name": "DXVK",
+      "kind": "mod",
+      "description": "Tradução de Direct3D para Vulkan.",
+      "evidence": {"files": ["dxvk.conf"]},
+      "version_markers": ["DXVK"],
+      "targets": ["d3d9.dll", "d3d10core.dll", "d3d11.dll", "dxgi.dll"]
+    },
+    {
+      "id": "bepinex",
+      "name": "BepInEx (Unity Doorstop)",
+      "kind": "mod",
+      "description": "Framework de mods para jogos Unity; carregado por proxy de winhttp.dll/version.dll.",
+      "evidence": {"dirs": ["BepInEx"], "files": ["doorstop_config.ini"]},
+      "targets": ["winhttp.dll", "version.dll", "doorstop.dll"]
+    },
+    {
+      "id": "melonloader",
+      "name": "MelonLoader",
+      "kind": "mod",
+      "description": "Carregador de mods para jogos Unity.",
+      "evidence": {"dirs": ["MelonLoader"]},
+      "targets": ["version.dll", "winmm.dll"]
+    },
+    {
+      "id": "scripthookv",
+      "name": "Script Hook V",
+      "kind": "mod",
+      "description": "Biblioteca de scripts para GTA V.",
+      "evidence": {"files": ["ScriptHookV.dll"]},
+      "targets": ["ScriptHookV.dll", "dinput8.dll"]
+    },
+    {
+      "id": "script_extenders",
+      "name": "Script Extender (SKSE/F4SE e similares)",
+      "kind": "mod",
+      "description": "Extensores de scripts para jogos da Bethesda.",
+      "evidence": {"files": ["skse64_loader.exe", "skse_loader.exe", "f4se_loader.exe", "sfse_loader.exe"]},
+      "targets": ["skse64_loader.exe", "skse_loader.exe", "f4se_loader.exe", "sfse_loader.exe", "skse64_*.dll", "f4se_*.dll", "sfse_*.dll"]
+    },
+    {
+      "id": "fitgirl_repack",
+      "name": "Instalador de repack (FitGirl)",
+      "kind": "repack",
+      "description": "Instalador de repack com dados em arquivos fg-*.bin. O conteúdo comprimido não pode ser inspecionado antes da instalação.",
+      "evidence": {"patterns": ["fg-*.bin"], "files": ["Verify BIN files before installation.bat"]},
+      "targets": ["setup.exe", "Verify BIN files before installation.bat", "QuickSFV.exe"]
+    }
+  ]
+}

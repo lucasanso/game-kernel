@@ -1,11 +1,13 @@
 // gk_native — thin pybind11 mirror of the Game Kernel C++ core (docs/INTEGRATION.md §2).
 // No logic lives here: functions convert arguments, release the GIL for long operations and
 // translate C++ exceptions into Python exceptions.
+#include <pybind11/gil_safe_call_once.h>
 #include <pybind11/pybind11.h>
 #include <pybind11/stl.h>
 #include <pybind11/stl/filesystem.h>
 
 #include <string>
+#include <string_view>
 
 #include "gk/analysis.hpp"
 #include "gk/archive.hpp"
@@ -29,11 +31,21 @@ gk::ByteView view_of(const py::bytes& b, std::string& storage) {
     return gk::ByteView(storage);
 }
 
+// Python objects kept for the lifetime of the module live in gil_safe_call_once_and_store, which never runs
+// a destructor: a plain `static py::object` is destroyed when the C runtime unloads the module, after the
+// interpreter has finalized, and its Py_DECREF then touches freed memory (access violation on Windows).
+const py::object& json_function(const char* name) {
+    PYBIND11_CONSTINIT static py::gil_safe_call_once_and_store<py::object> loads_storage;
+    PYBIND11_CONSTINIT static py::gil_safe_call_once_and_store<py::object> dumps_storage;
+    auto& storage = std::string_view(name) == "loads" ? loads_storage : dumps_storage;
+    return storage.call_once_and_store_result([name] { return py::module_::import("json").attr(name); })
+        .get_stored();
+}
+
 // Contract documents are produced once, in C++ (gk/serialize.hpp), and handed to Python through the
 // standard json module so Python receives exactly what the IPC channel would carry.
 py::object json_to_py(const nlohmann::json& j) {
-    static py::object loads = py::module_::import("json").attr("loads");
-    return loads(j.dump(-1, ' ', false, nlohmann::json::error_handler_t::replace));
+    return json_function("loads")(j.dump(-1, ' ', false, nlohmann::json::error_handler_t::replace));
 }
 
 py::dict type_to_dict(const gk::TypeInfo& t) {
@@ -111,14 +123,15 @@ PYBIND11_MODULE(gk_native, m) {
     m.attr("API_VERSION") = gk::kNativeApiVersion;
     m.attr("CORE_VERSION") = gk::kVersion;
 
-    static py::exception<gk::Error> gk_error(m, "GkError", PyExc_RuntimeError);
+    PYBIND11_CONSTINIT static py::gil_safe_call_once_and_store<py::object> gk_error;
+    gk_error.call_once_and_store_result([&m] { return py::exception<gk::Error>(m, "GkError", PyExc_RuntimeError); });
     py::register_exception_translator([](std::exception_ptr p) {
         try {
             if (p) std::rethrow_exception(p);
         } catch (const gk::Error& e) {
             // args = (code, message) so Python code can inspect e.args[0].
             py::tuple args = py::make_tuple(static_cast<int>(e.code()), std::string(e.what()));
-            PyErr_SetObject(gk_error.ptr(), args.ptr());
+            PyErr_SetObject(gk_error.get_stored().ptr(), args.ptr());
         }
     });
 
@@ -436,7 +449,7 @@ PYBIND11_MODULE(gk_native, m) {
     m.def(
         "risk_assess",
         [](const py::list& results, const std::filesystem::path& components, const std::filesystem::path& catalog) {
-            static py::object dumps = py::module_::import("json").attr("dumps");
+            const py::object& dumps = json_function("dumps");
             std::vector<gk::FileResult> files;
             for (const auto& item : results) {
                 files.push_back(gk::file_result_from_json(nlohmann::json::parse(dumps(item).cast<std::string>())));

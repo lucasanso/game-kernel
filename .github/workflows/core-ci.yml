@@ -39,7 +39,9 @@ jobs:
         run: |
           cmake --preset linux-asan -DPython_EXECUTABLE="$(which python)"
           cmake --build --preset linux-asan
-          LD_PRELOAD="$(gcc -print-file-name=libasan.so):$(gcc -print-file-name=libubsan.so)" \
+          # libstdc++ is preloaded too: the interpreter does not link it, so without it ASan cannot resolve
+          # __cxa_throw in child interpreters started by the tests.
+          LD_PRELOAD="$(gcc -print-file-name=libasan.so):$(gcc -print-file-name=libubsan.so):$(gcc -print-file-name=libstdc++.so)" \
           ASAN_OPTIONS=detect_leaks=0:abort_on_error=1 UBSAN_OPTIONS=halt_on_error=1:print_stacktrace=1 \
           GK_SLOWDOWN_FACTOR=20 GK_FUZZ_ITERATIONS=2000 GK_REQUIRE_NATIVE=1 GK_NATIVE_DIR=build/linux-asan/cpp/bindings \
           python -m pytest -q tests/native

@@ -3,6 +3,8 @@
 ## Agente A — Core e Segurança
 
 ### [não lançado]
+- Correção: `signatures/data/game_components.json` não estava no repositório (o padrão `data/` do `.gitignore` também casava com `signatures/data/`; agora só `/data/` na raiz é ignorado).
+- Correção: o `gk_native` derrubava o interpretador na saída no Windows (0xC0000005): objetos Python em `static` (exceção `GkError`, `json.loads`/`json.dumps`) eram destruídos depois da finalização do Python. Agora ficam em `gil_safe_call_once_and_store`, que nunca roda destrutor. Novo teste executa cada componente num interpretador próprio e exige saída limpa.
 - M8: varredura ponta a ponta. `gk-scanworker` (processo isolado, servidor gk-ipc v1, cancelamento, membros de
   compactados como eventos); orquestrador Qt `gk::scan::Scanner` supervisionando N workers pelo cliente gk-ipc
   (Job Object, prazo, reinício), cache por caminho/mtime e por SHA-256 + impressão das regras, ClamAV em lotes com
