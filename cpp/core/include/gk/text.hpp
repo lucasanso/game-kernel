@@ -28,6 +28,8 @@ std::string display_utf8(std::string_view raw, std::size_t max_bytes = 4096);
 // UTF-8 text of a path on every platform. Never use path::string() for display or keys: on Windows it
 // converts through the ANSI code page and throws or mangles names outside it.
 std::string path_utf8(const std::filesystem::path& p);
+// Inverse of path_utf8 (UTF-8 text stored in the database or JSON back to a native path).
+std::filesystem::path utf8_path(std::string_view text);
 
 // Printable representation: ASCII 0x20..0x7E kept, everything else as \xNN.
 std::string escape_bytes(std::string_view raw);

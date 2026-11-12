@@ -6,6 +6,7 @@
 #include <pybind11/stl.h>
 #include <pybind11/stl/filesystem.h>
 
+#include <algorithm>
 #include <string>
 #include <string_view>
 
@@ -19,6 +20,7 @@
 #include "gk/hash.hpp"
 #include "gk/risk.hpp"
 #include "gk/pe.hpp"
+#include "gk/quarantine.hpp"
 #include "gk/serialize.hpp"
 #include "gk/version.hpp"
 #include "gk/yara_engine.hpp"
@@ -331,6 +333,75 @@ PYBIND11_MODULE(gk_native, m) {
             return json_to_py(j);
         },
         py::arg("path"));
+    // ---- quarantine vault (database bookkeeping lives in gk::quarantine::Manager, exercised through gk-cli)
+    py::class_<gk::quarantine::Pending, std::unique_ptr<gk::quarantine::Pending>>(m, "PendingQuarantine")
+        .def_property_readonly("metadata",
+                               [](const gk::quarantine::Pending& p) { return json_to_py(gk::quarantine::to_json(p.metadata())); })
+        .def("commit", [](gk::quarantine::Pending& p) {
+            py::gil_scoped_release release;
+            p.commit();
+        })
+        .def("abort", &gk::quarantine::Pending::abort);
+    py::class_<gk::quarantine::Vault, std::unique_ptr<gk::quarantine::Vault>>(m, "QuarantineVault")
+        .def_static("open", &gk::quarantine::Vault::open, py::arg("dir"))
+        .def_property_readonly("dir", &gk::quarantine::Vault::dir)
+        .def_property_readonly("key_id", &gk::quarantine::Vault::key_id)
+        .def_property_readonly("warnings", &gk::quarantine::Vault::warnings)
+        .def("item_path", &gk::quarantine::Vault::item_path, py::arg("id"))
+        .def(
+            "prepare",
+            [](gk::quarantine::Vault& v, const std::filesystem::path& file, std::optional<std::string> expected_sha256,
+               const std::string& reason, int risk) {
+                gk::quarantine::Request r;
+                r.file = file;
+                r.expected_sha256 = std::move(expected_sha256);
+                r.reason = reason;
+                r.risk = static_cast<gk::Risk>(std::clamp(risk, 0, 5));
+                py::gil_scoped_release release;
+                return std::make_unique<gk::quarantine::Pending>(v.prepare(r));
+            },
+            py::arg("file"), py::arg("expected_sha256") = py::none(), py::arg("reason") = "", py::arg("risk") = 0,
+            py::keep_alive<0, 1>())
+        .def(
+            "restore",
+            [](gk::quarantine::Vault& v, const std::string& id, const std::filesystem::path& destination, bool overwrite,
+               std::optional<std::string> expected_sha256) {
+                gk::quarantine::Metadata meta;
+                {
+                    py::gil_scoped_release release;
+                    meta = v.restore(id, destination, overwrite, expected_sha256);
+                }
+                return json_to_py(gk::quarantine::to_json(meta));
+            },
+            py::arg("id"), py::arg("destination"), py::arg("overwrite") = false, py::arg("expected_sha256") = py::none())
+        .def("inspect",
+             [](gk::quarantine::Vault& v, const std::string& id) {
+                 gk::quarantine::Metadata meta;
+                 {
+                     py::gil_scoped_release release;
+                     meta = v.inspect(id);
+                 }
+                 return json_to_py(gk::quarantine::to_json(meta));
+             })
+        .def("erase", &gk::quarantine::Vault::erase, py::arg("id"))
+        .def(
+            "verify",
+            [](gk::quarantine::Vault& v, const std::vector<std::string>& known) {
+                gk::quarantine::VerifyReport rep;
+                {
+                    py::gil_scoped_release release;
+                    rep = v.verify(known);
+                }
+                py::list damaged, unknown;
+                for (const auto& [id, why] : rep.damaged) damaged.append(py::make_tuple(id, why));
+                for (const auto& meta : rep.unknown) unknown.append(json_to_py(gk::quarantine::to_json(meta)));
+                py::dict d;
+                d["ok"] = rep.ok;
+                d["damaged"] = damaged;
+                d["unknown"] = unknown;
+                return d;
+            },
+            py::arg("known") = std::vector<std::string>{});
     m.def("sha1_bytes", [](const py::bytes& data) {
         std::string storage;
         gk::Sha1 h;

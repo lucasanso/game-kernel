@@ -26,13 +26,14 @@ add_library(gk_core STATIC
   src/authenticode.cpp
   src/authenticode_trust.cpp
   src/signature_rules.cpp
+  src/quarantine.cpp
 )
 target_include_directories(gk_core PUBLIC
   ${CMAKE_CURRENT_SOURCE_DIR}/include
   ${CMAKE_CURRENT_BINARY_DIR}/generated)
 target_link_libraries(gk_core PUBLIC gk::json PRIVATE gk::sodium gk::yara gk::archive gk::sqlite)
 if(WIN32)
-  # WinVerifyTrust / catalog lookup (offline flags; see src/authenticode_trust.cpp)
-  target_link_libraries(gk_core PRIVATE wintrust crypt32)
+  # WinVerifyTrust / catalog lookup (src/authenticode_trust.cpp); DPAPI and ACLs (src/quarantine.cpp)
+  target_link_libraries(gk_core PRIVATE wintrust crypt32 advapi32)
 endif()
 gk_apply_options(gk_core)

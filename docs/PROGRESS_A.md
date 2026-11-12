@@ -63,6 +63,17 @@
 * Testes: 48 em `test_authenticode.py` (oráculo asn1crypto + hashlib; 5 000 iterações de fuzzing sob ASan);
   CI Windows valida catálogo do sistema, assinatura real do `python.exe` e cópia adulterada.
 
+## M9 — quarentena em C++ ✅
+* `gk/quarantine.hpp`: cofre `.gkq` com libsodium secretstream (XChaCha20-Poly1305), metadados cifrados no bloco
+  final (permitem reconstruir um banco perdido), uma única leitura do arquivo (hash enquanto cifra), cópia
+  decifrada e conferida antes de apagar o original; no Windows o original fica travado contra escrita e é apagado
+  pelo mesmo handle (`FileDispositionInfoEx`); chave DPAPI; ACL restrita; restauração atômica sem sobrescrever.
+* `Manager`: banco (`quarantine`, `quarantine_events`) + auditoria encadeada; `verify` recupera itens órfãos e
+  limpa cópias de itens já restaurados/apagados. `gk-cli quarantine add|list|restore|delete|verify`.
+* Testes: 24 em `test_quarantine.py` (tamanhos de 0 a >3 MiB, adulteração em cada região, truncamento,
+  reordenação, chave errada, ids inválidos, conflito de destino, ciclo completo lido pelo Python com cadeia de
+  auditoria válida, banco perdido e recuperado) + 2 000 mutações de bytes sob ASan.
+
 ## Correções de CI (rodada atual)
 * `signatures/data/game_components.json` não estava versionado (padrão `data/` do `.gitignore`).
 * `gk_native` derrubava o Python na saída no Windows (objetos Python em `static`); teste de ciclo de vida.
@@ -70,7 +81,7 @@
   `localtime_s`/`localtime_r` e `text::path_utf8`.
 
 ## Próximo
-* M9 quarentena em C++ (XChaCha20-Poly1305 + DPAPI, `.gkq`), M10 verificação de integridade em C++,
+* M10 verificação de integridade em C++,
   M11 tempo real (`ReadDirectoryChangesW`), M12 Performance Monitor / System Optimizer, M13 serviços Qt para a UI.
 * `cpp/updates` delegar a validação de YARA ao `gk::yara::validate_rules_dir`; auditoria de imports dos binários
   (nenhuma função de rede); token de integridade baixa para o `gk-scanworker`.

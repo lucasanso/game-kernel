@@ -136,4 +136,8 @@ std::string path_utf8(const std::filesystem::path& p) {
     return std::string(reinterpret_cast<const char*>(u8.data()), u8.size());
 }
 
+std::filesystem::path utf8_path(std::string_view text) {
+    return std::filesystem::path(std::u8string(reinterpret_cast<const char8_t*>(text.data()), text.size()));
+}
+
 }  // namespace gk::text

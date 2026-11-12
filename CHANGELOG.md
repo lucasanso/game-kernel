@@ -3,6 +3,7 @@
 ## Agente A — Core e Segurança
 
 ### [não lançado]
+- M9: quarentena em C++. Cofre `.gkq` (XChaCha20-Poly1305 em fluxo, metadados cifrados, verificação antes de apagar o original, exclusão pelo mesmo handle no Windows, chave DPAPI, ACL restrita), restauração atômica conferida por SHA-256, `Manager` com banco/eventos/auditoria e recuperação de banco perdido, `gk-cli quarantine`.
 - M4: assinaturas digitais (Authenticode). Núcleo portátil lê a tabela de certificados e o PKCS#7 (leitor DER limitado, assinaturas aninhadas), calcula o resumo da imagem e detecta adulteração e dados escondidos, inclusive em membros de compactados; no Windows, `WinVerifyTrust` sem rede + catálogos do sistema. Evidências `PE.Signature.*`, arquivo adulterado classificado como modificado, explicação com o assinante verificado, relatórios com "presente, não verificada". SHA-1 e SHA-384/512 no `gk/hash.hpp`. `signify` removido; `asn1crypto` (oráculo) e `osslsigncode` nos testes.
 - Correção (Windows/MSVC): `localtime` → `localtime_s`; `path::string()` → `text::path_utf8` (nomes fora da página de código ANSI quebravam a recuperação do banco e a carga de IOCs).
 - Correção: `signatures/data/game_components.json` não estava no repositório (o padrão `data/` do `.gitignore` também casava com `signatures/data/`; agora só `/data/` na raiz é ignorado).

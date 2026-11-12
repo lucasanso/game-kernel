@@ -15,6 +15,7 @@ Complementa `docs/INTEGRATION.md` (Agente B), que define os mecanismos de integr
 | `gk/yara_engine.hpp` | Regras YARA: compilação isolada por arquivo, `include` bloqueado, varredura thread-safe, validação de pacotes |
 | `gk/archive.hpp` | Compactados em memória (libarchive) com limites anti-bomba e recursão |
 | `gk/authenticode.hpp` | `inspect` (tabela de certificados, PKCS#7 e aninhadas, resumo da imagem, adulteração — portátil) e `verify_trust` (Windows, offline, com catálogos) |
+| `gk/quarantine.hpp` | `Vault` (`prepare`→`Pending::commit/abort`, `restore`, `inspect`, `erase`, `verify`) e `Manager` (cofre + banco + eventos + auditoria; `verify` recupera itens de um banco perdido) |
 | `gk/text.hpp` | UTF-16LE, `display_utf8` (texto hostil para exibição), `path_utf8` (nunca use `path::string()`) |
 | `gk/serialize.hpp` | JSON dos resultados — mesmo formato no pybind11 e no IPC |
 | `gk/error.hpp` | `gk::Error` com códigos (`FileAccess`, `ResourceLimit`, `Timeout`, `Cancelled`, `InvalidFormat`, `Internal`) |
@@ -35,6 +36,7 @@ na aplicação, através da camada de serviços Qt.
 | `YaraRules.compile_source(src)`, `YaraRules.compile_files(paths)` → `(regras, relatório)`; `.scan(data, filename=…, …)`, `.metadata()`, `.save(p)`, `YaraRules.load(p)`, `.rule_count` | YARA |
 | `yara_validate_dir(p)`, `yara_version()` | validação de regras de pacotes |
 | `archive_walk(b, limites)`, `archive_recognised(b)`, `libarchive_version()` | compactados |
+| `QuarantineVault.open(dir)` → `.prepare(arquivo, expected_sha256=None, reason="", risk=0)` → `PendingQuarantine` (`.metadata`, `.commit()`, `.abort()`); `.restore(id, destino, overwrite=False, expected_sha256=None)`, `.inspect(id)`, `.erase(id)`, `.verify(ids)`, `.key_id`, `.warnings` | quarentena (sem banco) |
 | `authenticode_inspect(b)`, `authenticode_image_digest(b, alg)`, `authenticode_verify_trust(p)`, `authenticode_trust_supported()`, `sha1_bytes(b)`, `sha512_bytes(b, sha384=False)` | assinaturas digitais |
 
 Exceções: `gk::Error` → `gk_native.GkError` com `args = (código, mensagem)`. O GIL é liberado em toda
@@ -80,3 +82,8 @@ enquadramento e envelope do processo auxiliar Python, sem um segundo protocolo.
 * Falha ou travamento do worker: o arquivo recebe `status=error/partial` com o motivo e a varredura continua.
 * `gk-cli scan <alvos> [--quick] [--json saída] [--data-dir dir] [--workers n] [--no-cache]` — códigos de saída:
   0 nada suspeito · 3 ameaças/suspeitos/PUA · 2 erro · 4 cancelada (Ctrl+C).
+* `gk-cli quarantine add <arquivo> [--expect-sha256 h] [--reason texto]` · `list [--all] [--json saída]` ·
+  `restore <id> [--to caminho] [--overwrite]` · `delete <id>` · `verify [--json saída]` — mesmo `Manager` usado
+  pelo aplicativo (cofre em `<dados>/quarantine`, banco `<dados>/gamekernel.db`); `verify` sai com 5 quando há
+  itens danificados. Eventos gravados em `quarantine_events`: `quarantine`, `restore`, `delete`, `recovered`;
+  auditoria: `quarantine`, `restore`, `delete`, `quarantine_recovered`.

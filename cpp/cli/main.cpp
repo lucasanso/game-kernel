@@ -1,8 +1,14 @@
 // gk-cli — scans without the graphical interface (automation, tests, troubleshooting).
 //
 //   gk-cli scan <folder|file>... [--quick] [--json report.json] [--data-dir DIR] [--workers N] [--no-cache]
+//   gk-cli quarantine add <file> [--expect-sha256 HASH] [--reason TEXT]
+//   gk-cli quarantine list [--all] [--json out.json]
+//   gk-cli quarantine restore <id> [--to PATH] [--overwrite]
+//   gk-cli quarantine delete <id>
+//   gk-cli quarantine verify [--json out.json]
 //
-// Exit codes: 0 nothing suspicious · 3 threats/suspicious/PUA found · 2 error · 4 cancelled.
+// Exit codes: 0 ok / nothing suspicious · 3 threats/suspicious/PUA found · 2 error · 4 cancelled ·
+//             5 damaged quarantine items found by `verify`.
 #include <QCommandLineParser>
 #include <QCoreApplication>
 #include <QDir>
@@ -16,7 +22,11 @@
 #include <csignal>
 #include <cstdio>
 
+#include "gk/db.hpp"
+#include "gk/error.hpp"
+#include "gk/quarantine.hpp"
 #include "gk/scan/scanner.hpp"
+#include "gk/text.hpp"
 #include "gk/version.hpp"
 
 namespace {
@@ -37,6 +47,117 @@ QString default_data_dir() {
 #endif
 }
 
+std::filesystem::path native_path(const QString& s) { return gk::text::utf8_path(s.toStdString()); }
+
+QJsonValue to_qjson(const nlohmann::json& j) {
+    return QJsonDocument::fromJson(QByteArray::fromStdString(nlohmann::json::array({j}).dump())).array().at(0);
+}
+
+bool write_json(const QString& file, const QJsonValue& value, QTextStream& err) {
+    QFile out(file);
+    if (!out.open(QIODevice::WriteOnly | QIODevice::Truncate)) {
+        err << "não foi possível gravar " << file << "\n";
+        return false;
+    }
+    out.write(value.isArray() ? QJsonDocument(value.toArray()).toJson(QJsonDocument::Indented)
+                              : QJsonDocument(value.toObject()).toJson(QJsonDocument::Indented));
+    return true;
+}
+
+nlohmann::json record_json(const gk::db::QuarantineRecord& r) {
+    return {{"id", r.id},         {"original_path", r.original_path}, {"sha256", r.sha256},
+            {"size", r.size},     {"quarantined_at", r.quarantined_at}, {"reason", r.reason},
+            {"risk", r.risk},     {"classification", r.classification}, {"detection", r.detection},
+            {"status", r.status}, {"stored_name", r.stored_name}};
+}
+
+struct QuarantineOptions {
+    QString to, expectSha256, reason, json;
+    bool overwrite = false, all = false;
+};
+
+// Synchronous: no event loop needed. Every operation goes through gk::quarantine::Manager (vault + database +
+// audit log), exactly as the application does.
+int run_quarantine(const QStringList& positional, const QString& data, const QuarantineOptions& opt) {
+    QTextStream out(stdout);
+    QTextStream err(stderr);
+    const QString command = positional.value(1);
+    const QString arg = positional.value(2);
+    const bool needsArg = command == QStringLiteral("add") || command == QStringLiteral("restore") ||
+                          command == QStringLiteral("delete");
+    if (command.isEmpty() || (needsArg && arg.isEmpty())) {
+        err << "uso: gk-cli quarantine add <arquivo> | list | restore <id> | delete <id> | verify\n";
+        return 2;
+    }
+    try {
+        auto vault = gk::quarantine::Vault::open(native_path(QDir(data).filePath(QStringLiteral("quarantine"))));
+        for (const auto& w : vault->warnings()) err << "aviso: " << QString::fromStdString(w) << "\n";
+        auto db = gk::db::Database::open(native_path(QDir(data).filePath(QStringLiteral("gamekernel.db"))));
+        gk::quarantine::Manager manager(*vault, *db);
+
+        if (command == QStringLiteral("add")) {
+            gk::quarantine::Request request;
+            request.file = native_path(QFileInfo(arg).absoluteFilePath());
+            if (!opt.expectSha256.isEmpty()) request.expected_sha256 = opt.expectSha256.toStdString();
+            request.reason = opt.reason.isEmpty() ? std::string("manual (gk-cli)") : opt.reason.toStdString();
+            const auto meta = manager.quarantine(request);
+            out << QString::fromStdString(meta.id) << "\n";
+            if (!opt.json.isEmpty() && !write_json(opt.json, to_qjson(gk::quarantine::to_json(meta)), err)) return 2;
+            return 0;
+        }
+        if (command == QStringLiteral("list")) {
+            QJsonArray rows;
+            for (const auto& r : db->list_quarantine(opt.all ? std::string() : std::string("quarantined"))) {
+                out << QString::fromStdString(r.id) << "  " << QString::fromStdString(r.status) << "  "
+                    << QString::fromStdString(r.original_path) << "\n";
+                rows.append(to_qjson(record_json(r)));
+            }
+            if (!opt.json.isEmpty() && !write_json(opt.json, rows, err)) return 2;
+            return 0;
+        }
+        if (command == QStringLiteral("restore")) {
+            std::optional<std::filesystem::path> to;
+            if (!opt.to.isEmpty()) to = native_path(QFileInfo(opt.to).absoluteFilePath());
+            const auto where = manager.restore(arg.toStdString(), to, opt.overwrite);
+            out << "restaurado em " << QString::fromStdString(gk::text::path_utf8(where)) << "\n";
+            return 0;
+        }
+        if (command == QStringLiteral("delete")) {
+            manager.erase(arg.toStdString());
+            out << "item apagado definitivamente\n";
+            return 0;
+        }
+        if (command == QStringLiteral("verify")) {
+            const auto report = manager.verify();
+            out << "íntegros: " << report.ok.size() << "  danificados: " << report.damaged.size()
+                << "  recuperados: " << report.unknown.size() << "\n";
+            QJsonArray damaged;
+            for (const auto& [id, why] : report.damaged) {
+                out << "  " << QString::fromStdString(id) << ": " << QString::fromStdString(why) << "\n";
+                damaged.append(QJsonObject{{QStringLiteral("id"), QString::fromStdString(id)},
+                                           {QStringLiteral("reason"), QString::fromStdString(why)}});
+            }
+            QJsonArray ok, recovered;
+            for (const auto& id : report.ok) ok.append(QString::fromStdString(id));
+            for (const auto& m : report.unknown) recovered.append(to_qjson(gk::quarantine::to_json(m)));
+            if (!opt.json.isEmpty() &&
+                !write_json(opt.json, QJsonObject{{QStringLiteral("ok"), ok}, {QStringLiteral("damaged"), damaged},
+                                                  {QStringLiteral("recovered"), recovered}}, err)) {
+                return 2;
+            }
+            return report.damaged.empty() ? 0 : 5;
+        }
+        err << "comando de quarentena desconhecido: " << command << "\n";
+        return 2;
+    } catch (const gk::Error& e) {
+        err << "erro: " << QString::fromUtf8(e.what()) << "\n";
+        return 2;
+    } catch (const std::exception& e) {
+        err << "erro interno: " << QString::fromUtf8(e.what()) << "\n";
+        return 2;
+    }
+}
+
 }  // namespace
 
 int main(int argc, char** argv) {
@@ -47,7 +168,7 @@ int main(int argc, char** argv) {
     parser.setApplicationDescription(QStringLiteral("Game Kernel — análise offline sem interface gráfica"));
     parser.addHelpOption();
     parser.addVersionOption();
-    parser.addPositionalArgument(QStringLiteral("command"), QStringLiteral("scan"));
+    parser.addPositionalArgument(QStringLiteral("command"), QStringLiteral("scan | quarantine"));
     parser.addPositionalArgument(QStringLiteral("targets"), QStringLiteral("Pastas e/ou arquivos"), QStringLiteral("[alvos...]"));
     QCommandLineOption quick(QStringLiteral("quick"), QStringLiteral("Análise rápida"));
     QCommandLineOption json(QStringLiteral("json"), QStringLiteral("Gravar resultado JSON"), QStringLiteral("arquivo"));
@@ -59,14 +180,30 @@ int main(int argc, char** argv) {
                               QStringLiteral("arquivo"));
     QCommandLineOption fileTimeout(QStringLiteral("file-timeout"), QStringLiteral("Tempo limite por arquivo (ms)"),
                                    QStringLiteral("ms"));
-    parser.addOptions({quick, json, dataDir, workers, noCache, quiet, worker, fileTimeout});
+    QCommandLineOption to(QStringLiteral("to"), QStringLiteral("quarantine restore: destino"), QStringLiteral("caminho"));
+    QCommandLineOption overwrite(QStringLiteral("overwrite"), QStringLiteral("quarantine restore: substituir destino existente"));
+    QCommandLineOption expectSha(QStringLiteral("expect-sha256"),
+                                 QStringLiteral("quarantine add: recusar se o arquivo mudou desde a análise"), QStringLiteral("hash"));
+    QCommandLineOption reason(QStringLiteral("reason"), QStringLiteral("quarantine add: motivo"), QStringLiteral("texto"));
+    QCommandLineOption all(QStringLiteral("all"), QStringLiteral("quarantine list: incluir restaurados e apagados"));
+    parser.addOptions({quick, json, dataDir, workers, noCache, quiet, worker, fileTimeout, to, overwrite, expectSha, reason, all});
     parser.process(app);
     const QStringList positional = parser.positionalArguments();
+    const QString data = parser.isSet(dataDir) ? parser.value(dataDir) : default_data_dir();
+    if (positional.value(0) == QStringLiteral("quarantine")) {
+        QDir().mkpath(data);
+        QuarantineOptions opt;
+        opt.to = parser.value(to);
+        opt.overwrite = parser.isSet(overwrite);
+        opt.expectSha256 = parser.value(expectSha);
+        opt.reason = parser.value(reason);
+        opt.all = parser.isSet(all);
+        opt.json = parser.value(json);
+        return run_quarantine(positional, data, opt);
+    }
     if (positional.size() < 2 || positional.first() != QStringLiteral("scan")) {
         parser.showHelp(2);
     }
-
-    const QString data = parser.isSet(dataDir) ? parser.value(dataDir) : default_data_dir();
     QDir().mkpath(data);
     gk::scan::Config config = gk::scan::Config::defaults(QCoreApplication::applicationDirPath(), data);
     config.workers = std::max(1, parser.value(workers).toInt());

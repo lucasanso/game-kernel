@@ -58,6 +58,18 @@ with tempfile.TemporaryDirectory() as d:
     db.append_audit("test", "lifecycle", "core")
     del db
 """,
+    "quarantine": """
+import tempfile, os
+with tempfile.TemporaryDirectory() as d:
+    f = os.path.join(d, "a.bin")
+    open(f, "wb").write(b"x" * 5000)
+    v = gk_native.QuarantineVault.open(os.path.join(d, "vault"))
+    p = v.prepare(f)
+    meta = p.metadata
+    p.commit()
+    v.restore(meta["id"], f)
+    del p, v
+""",
     # The test session loads a second libyara (yara-python, used for equivalence tests) beside gk_native.
     "with_yara_python": """
 try:

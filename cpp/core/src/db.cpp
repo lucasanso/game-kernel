@@ -68,6 +68,7 @@ public:
         return p ? std::string(p, static_cast<std::size_t>(sqlite3_column_bytes(stmt_, col))) : std::string();
     }
     std::int64_t integer(int col) { return sqlite3_column_int64(stmt_, col); }
+    double real(int col) { return sqlite3_column_double(stmt_, col); }
     bool is_null(int col) { return sqlite3_column_type(stmt_, col) == SQLITE_NULL; }
 
 private:
@@ -331,6 +332,82 @@ void Database::append_audit(const std::string& action, const std::string& detail
     ins.bind(1, at).bind(2, actor).bind(3, action).bind(4, detail).bind(5, prev).bind(6, sha256_hex(ByteView(payload)));
     ins.step();
     tx.commit();
+}
+
+// ------------------------------------------------------------------ quarantine
+
+namespace {
+constexpr const char* kQuarantineColumns =
+    "id, original_path, sha256, size, quarantined_at, reason, risk, classification, detection, scan_id, stored_name, "
+    "status, meta_json";
+
+QuarantineRecord quarantine_row(Stmt& s) {
+    QuarantineRecord r;
+    r.id = s.text(0);
+    r.original_path = s.text(1);
+    r.sha256 = s.text(2);
+    r.size = static_cast<std::uint64_t>(s.integer(3));
+    r.quarantined_at = s.real(4);
+    r.reason = s.text(5);
+    r.risk = static_cast<int>(s.integer(6));
+    r.classification = s.text(7);
+    r.detection = s.text(8);
+    if (!s.is_null(9)) r.scan_id = s.integer(9);
+    r.stored_name = s.text(10);
+    r.status = s.text(11);
+    const std::string meta = s.text(12);
+    r.meta = meta.empty() ? json::object() : json::parse(meta, nullptr, false);
+    if (r.meta.is_discarded()) r.meta = json::object();
+    return r;
+}
+}  // namespace
+
+void Database::add_quarantine_item(const QuarantineRecord& r) {
+    Stmt s(db_, (std::string("INSERT INTO quarantine(") + kQuarantineColumns + ") VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?)").c_str());
+    s.bind(1, r.id).bind(2, r.original_path).bind(3, r.sha256).bind(4, static_cast<std::int64_t>(r.size));
+    s.bind(5, r.quarantined_at).bind(6, r.reason).bind(7, static_cast<std::int64_t>(r.risk)).bind(8, r.classification);
+    s.bind(9, r.detection);
+    if (r.scan_id) {
+        s.bind(10, *r.scan_id);
+    } else {
+        s.bind_null(10);
+    }
+    s.bind(11, r.stored_name).bind(12, r.status).bind(13, r.meta.dump());
+    s.step();
+}
+
+void Database::remove_quarantine_item(const std::string& id) {
+    Stmt s(db_, "DELETE FROM quarantine WHERE id=?");
+    s.bind(1, id);
+    s.step();
+}
+
+void Database::update_quarantine_status(const std::string& id, const std::string& status) {
+    Stmt s(db_, "UPDATE quarantine SET status=? WHERE id=?");
+    s.bind(1, status).bind(2, id);
+    s.step();
+}
+
+std::optional<QuarantineRecord> Database::quarantine_item(const std::string& id) {
+    Stmt s(db_, (std::string("SELECT ") + kQuarantineColumns + " FROM quarantine WHERE id=?").c_str());
+    s.bind(1, id);
+    if (!s.step()) return std::nullopt;
+    return quarantine_row(s);
+}
+
+std::vector<QuarantineRecord> Database::list_quarantine(const std::string& status) {
+    std::vector<QuarantineRecord> out;
+    Stmt s(db_, (std::string("SELECT ") + kQuarantineColumns + " FROM quarantine" +
+                 (status.empty() ? "" : " WHERE status=?") + " ORDER BY quarantined_at DESC").c_str());
+    if (!status.empty()) s.bind(1, status);
+    while (s.step()) out.push_back(quarantine_row(s));
+    return out;
+}
+
+void Database::add_quarantine_event(const std::string& id, const std::string& action, const std::string& detail) {
+    Stmt s(db_, "INSERT INTO quarantine_events(item_id, action, at, detail) VALUES(?,?,?,?)");
+    s.bind(1, id).bind(2, action).bind(3, now()).bind(4, detail);
+    s.step();
 }
 
 }  // namespace gk::db
