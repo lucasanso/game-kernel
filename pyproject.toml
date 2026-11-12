@@ -1,0 +1,19 @@
+[project]
+name = "game-kernel"
+version = "1.0.0"
+description = "Game Kernel - offline security scanner specialised in PC games (Windows desktop)."
+requires-python = ">=3.11"
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+qt_api = "pyside6"
+addopts = "-ra"
+markers = [
+    "slow: long-running tests (performance)",
+    "windows_only: requires Windows APIs",
+    "needs_clamav: requires clamscan/sigtool binaries",
+    "needs_7z: requires the 7-Zip binary",
+]
+
+[tool.ruff]
+line-length = 120
