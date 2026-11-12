@@ -423,11 +423,34 @@ def test_trust_is_reported_as_not_checked_outside_windows(native, tmp_path):
 class TestWindowsTrust:
     SYSTEM32 = Path(os.environ.get("SystemRoot", r"C:\Windows")) / "System32"
 
+    def _catalog_only_dll(self, native) -> Path:
+        """A System32 DLL without an embedded signature (which DLLs carry one varies between Windows builds)."""
+        for dll in sorted(self.SYSTEM32.glob("*.dll")):
+            try:
+                if dll.stat().st_size > 4 << 20:
+                    continue
+                data = dll.read_bytes()
+            except OSError:
+                continue
+            if data[:2] == b"MZ" and not native.authenticode_inspect(data)["present"]:
+                return dll
+        pytest.fail("nenhuma DLL do System32 sem assinatura embutida")
+
     def test_catalog_signed_system_dll(self, native):
-        t = native.authenticode_verify_trust(str(self.SYSTEM32 / "kernel32.dll"))
-        assert t["state"] == "trusted", t
+        dll = self._catalog_only_dll(native)
+        t = native.authenticode_verify_trust(str(dll))
+        assert t["state"] == "trusted", (dll, t)
         assert t["from_catalog"] and t["catalog"].lower().endswith(".cat")
         assert "Microsoft" in t["signer"] and len(t["signer_thumbprint"]) == 64
+
+    def test_embedded_system_signature(self, native):
+        dll = self.SYSTEM32 / "kernel32.dll"
+        report = native.authenticode_inspect(dll.read_bytes())
+        t = native.authenticode_verify_trust(str(dll))
+        assert t["state"] == "trusted", t
+        assert t["from_catalog"] == (not report["present"])
+        if report["present"]:
+            _assert_matches_oracle(native, dll.read_bytes())
 
     def test_embedded_signature_of_python(self, native):
         exe = Path(sys.base_exec_prefix) / "python.exe"
@@ -460,7 +483,13 @@ class TestWindowsTrust:
         assert "wintrust" in doc["engines"]
         assert doc["features"]["signature_valid"] is True and "Microsoft" in doc["features"]["signer"]
         ev = next(e for e in doc["evidences"] if e["rule_id"] == "PE.Signature.Trusted")
-        assert ev["severity"] == "INFO" and ev["details"]["catalogo"].lower().endswith(".cat")
+        assert ev["severity"] == "INFO" and "Microsoft" in ev["details"]["assinante"]
+        assert not any(e["rule_id"] == "PE.Signature.Present" for e in doc["evidences"])   # superseded by trust
+
+    def test_analysis_of_catalog_signed_file(self, native, rules):
+        doc = native.analyze_file(str(self._catalog_only_dll(native)), rules)["result"]
+        ev = next(e for e in doc["evidences"] if e["rule_id"] == "PE.Signature.Trusted")
+        assert ev["details"]["catalogo"].lower().endswith(".cat") and doc["features"]["signed"]
 
 
 def test_report_signature_labels():
