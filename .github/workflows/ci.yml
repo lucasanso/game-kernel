@@ -42,7 +42,7 @@ jobs:
       - name: Testes com AddressSanitizer + UBSan
         env:
           GK_NATIVE_SANITIZE: "1"
-        run: python -m pytest -q tests/native tests/updates tests/ti
+        run: python -m pytest -q tests/integration tests/helper
 
   windows:
     name: Windows — MSVC, testes e auxiliar congelado
@@ -88,7 +88,7 @@ jobs:
         shell: pwsh
         run: |
           $env:GK_FROZEN_HELPER = "$PWD\dist\gk-helper\gk-helper.exe"
-          python -m pytest -q tests/ipc/test_frozen_helper.py
+          python -m pytest -q tests/helper/test_frozen_helper.py
       - name: Artefatos
         uses: actions/upload-artifact@v4
         with:

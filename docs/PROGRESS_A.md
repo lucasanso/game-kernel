@@ -12,7 +12,15 @@
   contrato do scanner, identificação de tipos, hashing, catálogo de ameaças.
 * Testes: `tests/foundation/` — 23 testes passando.
 
-## Próximas etapas do Agente A
+## Arquitetura híbrida — ETAPAS 1 a 4 ✅
+* Auditoria e plano: `docs/MIGRATION_PLAN.md`; contratos: `docs/INTEGRATION.md`; módulos: `docs/MODULES.md`.
+
+## M1 — base do núcleo C++ ✅
+* `cpp/core`: `ByteView`, `ReadOnlyFile`/`MappedFile`, SHA-256/MD5, identificação de tipo; `cpp/bindings/gk_native`.
+* Testes: 99 passando (Linux release com -Werror); 75 testes nativos sob ASan/UBSan sem erros;
+  arquivos C++ compilam contra os cabeçalhos do Windows (mingw-w64).
+
+## Próximas etapas do Agente A (histórico da revisão 1)
 * FASE 3 — motor de detecção: ClamAV em lote, YARA, reputação local, orquestrador `Scanner`.
 * FASE 4 — análise estática: PE, Authenticode, strings com offset/RVA, heurísticas de correlação, scripts, LNK.
 * FASE 5 — compactados recursivos com proteção anti-bomba, PyInstaller embutido.

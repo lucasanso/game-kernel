@@ -90,6 +90,8 @@ A importação **direta** de CVD avulso, sem `.gkpkg`, depende da verificação 
 
 ## 4. Formato `.gkpkg` v1
 
+> Especificação normativa: `contracts/update_package.md`. Resumo:
+
 ```
 offset 0   magic        "GKPKG" 0x00 0x01 0x00        (8 bytes; byte 6 = versão do formato)
 offset 8   manifest_len uint32 LE                      (1 … 1 MiB)
@@ -132,10 +134,11 @@ administrativo encadeado por hash (`audit_log`) é gravado pelo aplicativo a par
 
 | Parte | Linguagem | Arquivo |
 |---|---|---|
+| Contrato do formato | — | `contracts/update_package.md` |
 | Formato, construção e assinatura, verificador de referência | Python | `gamekernel/updates/package.py` |
-| Preparação (YARA, IOC, ClamAV) e relatório de atualização | Python | `gamekernel/ti/` |
-| Ferramentas do publicador | Python | `tools/gk_keygen.py`, `tools/make_update_package.py` |
-| **Verificação criptográfica e instalação no aplicativo** | **C++ (libsodium, libyara, Qt Core)** | `native/updates/` (`gk::updates::verifyPackage`, `Installer`, validadores) |
+| Preparação (YARA, IOC, ClamAV) e relatório de atualização | Python | `gamekernel/updates/prepare.py`, `gamekernel/intel/ioc.py`, `gamekernel/rules/prepare.py` |
+| Ferramentas do publicador | Python | `tools/gk_keygen.py`, `tools/make_update_package.py`, `tools/ti_build_ioc.py` |
+| **Verificação criptográfica e instalação no aplicativo** | **C++** | núcleo do Agente A (M10, `UpdateService`). Implementação de referência do B, pronta e testada: `native/updates/` (`gk::updates::verifyPackage`, `Installer`, validadores; libsodium, libyara, Qt Core) |
 | CLI de administração e testes | C++ | `native/updates/tools/gk_update_cli.cpp` (`gk-update`) |
 
 Recuperação após queda de energia: se a energia cair entre as trocas de pasta, a próxima instalação ou
