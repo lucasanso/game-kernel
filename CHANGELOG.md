@@ -53,6 +53,9 @@
   comportamental (`sandbox.*`: disponibilidade com o motivo, ativação gravada em `settings.json`, confirmação com as
   limitações, progresso, cancelamento, evidências) e Privacidade e rede (`system.info`, autoteste de rede, reinício
   do auxiliar). As páginas do núcleo entram com o `cpp/bridge` (A), sem telas provisórias.
+- Ícone e versão do executável: logotipo com fonte única em `assets/gamekernel.svg` (recurso Qt), `assets/gamekernel.ico`
+  gerado por `tools/make_app_icon.py`, recurso Windows com ícone e `VERSIONINFO`; a versão vem do `project()` do CMake
+  e é a mesma exibida na interface.
 - Novo método do auxiliar `system.network_selftest`: tenta DNS e conexão de saída e comprova o bloqueio.
 - `invalid_params` passa a usar o código `-32602` do §3 (rev. 4), no auxiliar e, como ajuste mecânico, em `cpp/ipc`.
 - Testes: `tests/ui/` (11 casos QtTest com pacotes reais e o auxiliar real, capturas de tela; limpos sob ASan/UBSan);

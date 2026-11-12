@@ -55,6 +55,12 @@ desenvolvimento, o processo auxiliar vem de `GK_DEV_REPO` (raiz do repositório)
 PATH); instalado, de `<app>/helper/gk-helper(.exe)`. Sem nenhum dos dois, as páginas que dependem do auxiliar
 mostram "indisponível" com o motivo.
 
+Ícone e versão: o logotipo tem uma fonte única, `assets/gamekernel.svg`, embutida no executável como recurso Qt (ícone
+da janela). `assets/gamekernel.ico` (16 a 256 px, entradas PNG) é gerado a partir dele com
+`python tools/make_app_icon.py`; rode de novo sempre que o logotipo mudar (um teste acusa o `.ico` desatualizado).
+No Windows, `cpp/app/resources/gamekernel.rc.in` vira o recurso com o ícone e o `VERSIONINFO`; a versão vem do
+`project()` de `cpp/app/CMakeLists.txt`, a mesma mostrada na interface.
+
 ### CI
 `.github/workflows/ci.yml` (Agente B): Linux, com a suíte completa e a variante ASan/UBSan; Windows, com MSVC, Qt 6.8
 (aqtinstall), libsodium e yara (vcpkg), a suíte completa, o PyInstaller do auxiliar e o teste do auxiliar congelado.

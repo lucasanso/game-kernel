@@ -29,7 +29,7 @@ public:
     // GAMEKERNEL_DATA_DIR → <app>/data when <app>/portable.flag exists → %LOCALAPPDATA%\GameKernel (Windows)
     // → $XDG_DATA_HOME/game-kernel or ~/.local/share/game-kernel.
     static QString defaultDataDir(const QString& appDir);
-    static QString appVersion() { return QStringLiteral("1.0.0"); }
+    static QString appVersion() { return QStringLiteral(GK_APP_VERSION); }   // project() version in CMakeLists.txt
     static QString productName() { return QStringLiteral("Game Kernel"); }   // P1: name still to be confirmed
 
     QString dataDir() const { return dataDir_; }

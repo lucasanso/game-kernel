@@ -105,12 +105,16 @@ Tempo real, Desempenho e Otimizador) chegam quando o `cpp/bridge` do A existir, 
   do auxiliar, autoteste que tenta DNS e conexão de saída de verdade e comprova o bloqueio, tentativas bloqueadas.
 * `AppContext`: mesmas regras de caminho do `app_paths.py` (portátil, `GAMEKERNEL_DATA_DIR`), escrita atômica do
   `settings.json` preservando as demais chaves, confirmações injetáveis para testes.
+* **Ícone e versão do executável**: o logotipo tem fonte única (`assets/gamekernel.svg`, recurso Qt);
+  `assets/gamekernel.ico` (9 tamanhos, entradas PNG) sai de `tools/make_app_icon.py`; no Windows, recurso com
+  ícone e `VERSIONINFO`, com a versão do `project()` do CMake (a mesma exibida na interface).
 
 Transitório, até o M13: a interface usa `cpp/ipc` e `cpp/updates` diretamente. A rev. 4 diz que a interface consome
 só o `cpp/bridge`; quando ele existir, troco essas chamadas pelas do *bridge* sem mudar as páginas.
 
 Testes: `tests/ui/test_native_app.py` → `cpp/app/tests/tst_app.cpp` (11 casos), com pacotes reais e o auxiliar
-real, e capturas das três páginas em `build/native-app/screenshots/`.
+real, e capturas das três páginas em `build/native-app/screenshots/`; `tests/ui/test_app_resources.py`: `.ico`
+válido e em dia com o SVG e, no Windows, ícone e `VERSIONINFO` lidos do `GameKernel.exe` com pefile.
 
 ## Pendências
 

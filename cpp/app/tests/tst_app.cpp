@@ -12,7 +12,9 @@
 
 #include <QDir>
 #include <QFile>
+#include <QImage>
 #include <QJsonDocument>
+#include <QRegularExpression>
 #include <QSignalSpy>
 #include <QTemporaryDir>
 #include <QtTest>
@@ -73,6 +75,12 @@ private slots:
         for (const QString& name : iconNames()) QVERIFY2(!icon(name).isNull(), qPrintable(name));
         QVERIFY(icon(QStringLiteral("does-not-exist")).isNull());
         QVERIFY(!appIcon().isNull());
+        // The logo really comes from the compiled-in assets/gamekernel.svg: opaque shield rim, transparent corner.
+        const QImage logo = appIcon().pixmap(64, 64).toImage();
+        QCOMPARE(logo.width(), 64);
+        QVERIFY(qAlpha(logo.pixel(32, 6)) > 200);
+        QCOMPARE(qAlpha(logo.pixel(2, 2)), 0);
+        QVERIFY(QRegularExpression(QStringLiteral("^\\d+\\.\\d+\\.\\d+$")).match(AppContext::appVersion()).hasMatch());
         QVERIFY(styleSheet().contains(QStringLiteral("QFrame#card")));
         QCOMPARE(riskColor(QStringLiteral("CRITICAL")), palette::Critical);
         QCOMPARE(riskLabel(QStringLiteral("medium")), QStringLiteral("Médio"));

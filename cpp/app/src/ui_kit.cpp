@@ -1,6 +1,7 @@
 #include "ui_kit.hpp"
 
 #include <QApplication>
+#include <QFile>
 #include <QFont>
 #include <QFontDatabase>
 #include <QHeaderView>
@@ -86,18 +87,12 @@ QIcon icon(const QString& name, const QColor& color, int size) {
 }
 
 QIcon appIcon() {
-    // Shield with a gradient (blue → green) and a "kernel" chip in the centre.
-    static const QByteArray svg =
-        "<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'>"
-        "<defs><linearGradient id='g' x1='0' y1='0' x2='1' y2='1'>"
-        "<stop offset='0' stop-color='#3B82F6'/><stop offset='1' stop-color='#22C55E'/></linearGradient></defs>"
-        "<path d='M32 4l22 9v15c0 14-9.5 25.5-22 31C19.5 53.5 10 42 10 28V13z' fill='url(#g)'/>"
-        "<path d='M32 9l17 7v12c0 11.5-7.4 21-17 25.6C22.4 49 15 39.5 15 28V16z' fill='#0E1116'/>"
-        "<rect x='23' y='20' width='18' height='18' rx='3' fill='none' stroke='#E6EAF0' stroke-width='3'/>"
-        "<path d='M27 20v-4M32 20v-4M37 20v-4M27 38v4M32 38v4M37 38v4M23 25h-4M23 29h-4M23 33h-4M41 25h4M41 29h4M41 33h4' "
-        "stroke='#E6EAF0' stroke-width='2.4' stroke-linecap='round'/>"
-        "<path d='M28 29.5l3 3 5-6' fill='none' stroke='#22C55E' stroke-width='3' stroke-linecap='round' stroke-linejoin='round'/>"
-        "</svg>";
+    // assets/gamekernel.svg, compiled into the binary as a Qt resource (same source as gamekernel.ico).
+    static const QByteArray svg = [] {
+        QFile f(QStringLiteral(":/gk/gamekernel.svg"));
+        return f.open(QIODevice::ReadOnly) ? f.readAll() : QByteArray();
+    }();
+    if (svg.isEmpty() || !QSvgRenderer(svg).isValid()) return {};   // a missing logo must be visible in tests
     QIcon result;
     for (int s : {16, 24, 32, 48, 64, 128, 256}) result.addPixmap(renderSvg(svg, s));
     return result;
