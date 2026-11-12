@@ -83,5 +83,13 @@
 ## Próximo
 * M10 verificação de integridade em C++,
   M11 tempo real (`ReadDirectoryChangesW`), M12 Performance Monitor / System Optimizer, M13 serviços Qt para a UI.
-* `cpp/updates` delegar a validação de YARA ao `gk::yara::validate_rules_dir`; auditoria de imports dos binários
-  (nenhuma função de rede); token de integridade baixa para o `gk-scanworker`.
+* Token de integridade baixa para o `gk-scanworker`.
+* Pendente de acordo com o Agente B: `cpp/updates` delegar a validação de YARA ao `gk::yara::validate_rules_dir`.
+  Isso mudaria decisões de pacotes (o núcleo exige os metadados `category`/`severity` do contrato de regras) e
+  precisa ser feito junto com o validador Python e os testes de equivalência de pacotes, que são do Agente B;
+  além disso o `cpp/updates` precisa continuar compilável sozinho.
+
+## Auditoria de importações (rede) ✅
+* `tests/native/test_offline_imports.py` cumpre o que `SECURITY.md` promete: nenhum binário importa código de rede
+  (Windows: parser PE do núcleo; Linux: `nm`/`objdump`). O próprio verificador é testado com um PE que importa
+  `ws2_32!connect` e WinINet.
