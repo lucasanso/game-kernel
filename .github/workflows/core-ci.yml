@@ -16,14 +16,14 @@ jobs:
   linux:
     runs-on: ubuntu-24.04
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
       - name: System dependencies
-        run: sudo apt-get update && sudo apt-get install -y ninja-build libsodium-dev g++-mingw-w64-x86-64
-      - uses: actions/setup-python@v5
+        run: sudo apt-get update && sudo apt-get install -y ninja-build libsodium-dev nlohmann-json3-dev libyara-dev mingw-w64 binutils-mingw-w64
+      - uses: actions/setup-python@v6
         with:
           python-version: "3.13"
       - name: Python test dependencies
-        run: python -m pip install pytest==9.2.0 cryptography==50.0.2 pybind11==2.13.6
+        run: python -m pip install pytest==9.2.0 cryptography==50.0.2 pybind11==2.13.6 pefile==2024.8.26 yara-python==4.5.4
       - name: Build (release, warnings as errors)
         run: |
           cmake --preset linux-release -DPython_EXECUTABLE="$(which python)"
@@ -38,18 +38,19 @@ jobs:
           cmake --preset linux-asan -DPython_EXECUTABLE="$(which python)"
           cmake --build --preset linux-asan
           LD_PRELOAD="$(gcc -print-file-name=libasan.so):$(gcc -print-file-name=libubsan.so)" \
-          ASAN_OPTIONS=detect_leaks=0 GK_REQUIRE_NATIVE=1 GK_NATIVE_DIR=build/linux-asan/cpp/bindings \
+          ASAN_OPTIONS=detect_leaks=0:abort_on_error=1 UBSAN_OPTIONS=halt_on_error=1:print_stacktrace=1 \
+          GK_SLOWDOWN_FACTOR=20 GK_FUZZ_ITERATIONS=2000 GK_REQUIRE_NATIVE=1 GK_NATIVE_DIR=build/linux-asan/cpp/bindings \
           python -m pytest -q tests/native
 
   windows:
     runs-on: windows-2022
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-python@v5
+      - uses: actions/checkout@v5
+      - uses: actions/setup-python@v6
         with:
           python-version: "3.13"
       - name: Python test dependencies
-        run: python -m pip install pytest==9.2.0 cryptography==50.0.2 pybind11==2.13.6
+        run: python -m pip install pytest==9.2.0 cryptography==50.0.2 pybind11==2.13.6 pefile==2024.8.26 yara-python==4.5.4
       - name: Configure (MSVC + vcpkg, static triplet)
         shell: pwsh
         run: |

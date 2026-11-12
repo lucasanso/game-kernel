@@ -9,8 +9,12 @@
 
 #include "gk/error.hpp"
 #include "gk/filetype.hpp"
+#include "gk/file_view.hpp"
 #include "gk/hash.hpp"
+#include "gk/pe.hpp"
+#include "gk/serialize.hpp"
 #include "gk/version.hpp"
+#include "gk/yara_engine.hpp"
 
 namespace py = pybind11;
 
@@ -19,6 +23,13 @@ namespace {
 gk::ByteView view_of(const py::bytes& b, std::string& storage) {
     storage = static_cast<std::string>(b);
     return gk::ByteView(storage);
+}
+
+// Contract documents are produced once, in C++ (gk/serialize.hpp), and handed to Python through the
+// standard json module so Python receives exactly what the IPC channel would carry.
+py::object json_to_py(const nlohmann::json& j) {
+    static py::object loads = py::module_::import("json").attr("loads");
+    return loads(j.dump(-1, ' ', false, nlohmann::json::error_handler_t::replace));
 }
 
 py::dict type_to_dict(const gk::TypeInfo& t) {
@@ -37,6 +48,39 @@ gk::TypeInfo type_from_dict(const py::dict& d) {
     t.group = d["group"].cast<std::string>();
     t.disguised = d.contains("disguised") && d["disguised"].cast<bool>();
     return t;
+}
+
+py::dict report_to_dict(const gk::yara::CompileReport& r) {
+    py::dict d;
+    d["ok"] = r.ok;
+    d["rule_count"] = r.rule_count;
+    d["errors"] = r.errors;
+    d["warnings"] = r.warnings;
+    d["files"] = r.files;
+    return d;
+}
+
+py::list matches_to_list(const gk::yara::ScanResult& result) {
+    py::list out;
+    for (const auto& m : result.matches) {
+        py::dict d;
+        d["rule"] = m.rule;
+        d["namespace"] = m.ns;
+        d["tags"] = m.tags;
+        d["meta"] = m.meta;
+        py::list strings;
+        for (const auto& s : m.strings) {
+            py::dict sd;
+            sd["identifier"] = s.identifier;
+            sd["offset"] = s.offset;
+            sd["length"] = s.length;
+            sd["excerpt"] = s.excerpt;
+            strings.append(sd);
+        }
+        d["strings"] = strings;
+        out.append(d);
+    }
+    return out;
 }
 
 gk::FileTypeFilter filter_from_dict(const py::dict& d) {
@@ -134,5 +178,106 @@ PYBIND11_MODULE(gk_native, m) {
     m.def("priority", [](const py::dict& info, const std::string& name) {
         return gk::priority(type_from_dict(info), name);
     });
+    m.def("parse_pe", [](const py::bytes& data) {
+        std::string storage;
+        const gk::ByteView v = view_of(data, storage);
+        nlohmann::json j;
+        {
+            py::gil_scoped_release release;
+            j = gk::to_json(gk::pe::parse(v));
+        }
+        return json_to_py(j);
+    });
+    m.def("parse_pe_file", [](const std::filesystem::path& path) {
+        nlohmann::json j;
+        {
+            py::gil_scoped_release release;
+            const gk::MappedFile file = gk::MappedFile::open(path);
+            j = gk::to_json(gk::pe::parse(file.view()));
+        }
+        return json_to_py(j);
+    });
+    m.def("pe_rva_to_offset", [](const py::bytes& data, const std::vector<std::uint32_t>& rvas) {
+        std::string storage;
+        const gk::pe::PeInfo info = gk::pe::parse(view_of(data, storage));
+        std::vector<std::optional<std::uint64_t>> out;
+        for (std::uint32_t rva : rvas) out.push_back(info.rva_to_offset(rva));
+        return out;
+    });
+    m.def("pe_offset_to_rva", [](const py::bytes& data, const std::vector<std::uint64_t>& offsets) {
+        std::string storage;
+        const gk::pe::PeInfo info = gk::pe::parse(view_of(data, storage));
+        std::vector<std::pair<std::optional<std::string>, std::optional<std::uint32_t>>> out;
+        for (std::uint64_t off : offsets) {
+            auto sec = info.section_for_offset(off);
+            out.emplace_back(sec ? std::optional<std::string>(info.sections[*sec].name) : std::nullopt,
+                             info.offset_to_rva(off));
+        }
+        return out;
+    });
+    m.def("shannon_entropy", [](const py::bytes& data) {
+        std::string storage;
+        return gk::pe::shannon_entropy(view_of(data, storage));
+    });
+    py::class_<gk::yara::Rules, std::shared_ptr<gk::yara::Rules>>(m, "YaraRules")
+        .def_static(
+            "compile_source",
+            [](const std::string& source) {
+                gk::yara::CompileReport report;
+                auto rules = gk::yara::Rules::compile_source(source, report);
+                return py::make_tuple(rules ? py::cast(rules) : py::none(), report_to_dict(report));
+            })
+        .def_static(
+            "compile_files",
+            [](const std::vector<std::filesystem::path>& files) {
+                gk::yara::CompileReport report;
+                std::shared_ptr<gk::yara::Rules> rules;
+                {
+                    py::gil_scoped_release release;
+                    rules = gk::yara::Rules::compile_files(files, report);
+                }
+                return py::make_tuple(rules ? py::cast(rules) : py::none(), report_to_dict(report));
+            })
+        .def_static("load", &gk::yara::Rules::load)
+        .def("save", &gk::yara::Rules::save)
+        .def_property_readonly("rule_count", &gk::yara::Rules::rule_count)
+        .def("metadata", &gk::yara::Rules::metadata)
+        .def(
+            "scan",
+            [](const gk::yara::Rules& self, const py::bytes& data, const std::string& filename,
+               const std::string& filepath, const std::string& extension, const std::string& filetype,
+               int timeout, std::size_t max_instances, std::size_t max_strings) {
+                std::string storage;
+                const gk::ByteView v = view_of(data, storage);
+                gk::yara::ScanOptions options;
+                options.externals = {filename, filepath, extension, filetype};
+                options.timeout_seconds = timeout;
+                options.max_instances_per_string = max_instances;
+                options.max_strings_per_rule = max_strings;
+                gk::yara::ScanResult result;
+                {
+                    py::gil_scoped_release release;
+                    result = self.scan(v, options);
+                }
+                py::dict d;
+                d["matches"] = matches_to_list(result);
+                d["timed_out"] = result.timed_out;
+                d["cancelled"] = result.cancelled;
+                d["truncated"] = result.truncated;
+                d["error"] = result.error;
+                return d;
+            },
+            py::arg("data"), py::arg("filename") = "", py::arg("filepath") = "", py::arg("extension") = "",
+            py::arg("filetype") = "", py::arg("timeout") = 60, py::arg("max_instances") = 3,
+            py::arg("max_strings") = 16);
+    m.def("yara_validate_dir", [](const std::filesystem::path& dir) {
+        gk::yara::CompileReport report;
+        {
+            py::gil_scoped_release release;
+            report = gk::yara::validate_rules_dir(dir);
+        }
+        return report_to_dict(report);
+    });
+    m.def("yara_version", &gk::yara::version);
     m.def("extension_of", [](const std::filesystem::path& path) { return gk::extension_of(path); });
 }

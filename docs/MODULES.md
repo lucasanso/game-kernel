@@ -9,9 +9,9 @@ Legenda de estado: ✅ integrado e testado · 🔄 em migração · 🐍 mantido
 | Hashing (SHA-256/MD5 em streaming) | `hash.hpp/.cpp` | ✅ M1 (equivalência com hashlib, ASan) | `core/hashing.py` |
 | Tipo real de arquivo | `filetype.hpp/.cpp` | ✅ M1 (equivalência em ~450 cabeçalhos gerados/mutados) | `core/filetypes.py` |
 | Leitura limitada (`ByteView`) e arquivos somente leitura/mapeados | `byte_view.hpp`, `file_view.hpp/.cpp` | ✅ M1 | — |
-| Parser PE | `pe.hpp/.cpp` | ⏳ M2 | `pefile` |
+| Parser PE (cabeçalhos, seções, entropia, imports/delay-imports, exports/forwarders, recursos, version info, manifest, TLS, debug/PDB, Rich, overlay, mapeamento RVA↔offset) | `pe.hpp/.cpp`, `text.hpp/.cpp`, `serialize.hpp/.cpp` | ✅ M2 (equivalência com pefile em PEs reais x86/x64; fuzzing sob ASan/UBSan) | `pefile` |
 | Authenticode | `win/authenticode.cpp` | ⏳ M4 | `signify` |
-| YARA | `yara_engine.hpp/.cpp` | ⏳ M3 | `engines/yara_engine.py` |
+| YARA (compilação isolada por arquivo, `include` bloqueado, externals, limites, cancelamento, scanner por chamada — thread-safe) | `yara_engine.hpp/.cpp` | ✅ M3 (equivalência com yara-python: regras, namespaces, tags, metadados, offsets e trechos) | `engines/yara_engine.py` (oráculo) |
 | Compactados | `archive.hpp/.cpp` | ⏳ M5 | py7zr, rarfile, pycdlib |
 | Scripts / LNK / ClamAV / reputação | `scripts.cpp`, `lnk.cpp`, `clamav.cpp`, `reputation.cpp` | ⏳ M6 | — |
 | Risco + contexto de jogo/cracks | `risk.cpp`, `game_context.cpp` | ⏳ M7 | — |
@@ -32,7 +32,7 @@ Legenda de estado: ✅ integrado e testado · 🔄 em migração · 🐍 mantido
 | `gamekernel/netguard.py` | ✅ 🐍 | Bloqueio de rede em todo processo Python |
 | `gamekernel/crypto_utils.py` | ✅ 🐍 | Assinatura de pacotes/manifestos (ferramentas) |
 | `gamekernel/database/db.py` | ✅ 🐍 | Acesso de ferramentas/relatórios/testes; esquema em `contracts/schema.sql` |
-| `gamekernel/engines/indicators.py` | 🐍 | Gerador de `signatures/internal/indicators.yar` |
+| `gamekernel/engines/indicators.py` | 🐍 ✅ | Tabela de indicadores → `signatures/internal/indicators.yar` via `tools/core_gen_indicators.py` (teste de atualização) |
 | `gamekernel/core/integrity.py` | 🐍 | Geração do manifesto (build); verificação migra para C++ |
 | `gamekernel/core/filetypes.py`, `hashing.py` | 🗑️ | Oráculos dos testes de equivalência; removidos quando o orquestrador C++ (M8) os substituir no fluxo |
 | `gamekernel/engines/yara_engine.py` | 🗑️ | Oráculo para o M3 (motor YARA C++) |

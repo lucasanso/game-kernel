@@ -80,4 +80,5 @@ roda `pytest -q` (e o build CMake, quando houver C++) antes de cada push. O usu�
 | Data | Agente | Mudança |
 |---|---|---|
 | 2026-11-12 | A | Revisão 1: contratos Python iniciais. |
+| 2026-11-12 | A | `gamekernel/database/db.py`: correção de vazamento de handle na recuperação (bug do Windows encontrado pelo CI). Sem mudança de API. |
 | 2026-11-12 | A | Revisão 2: arquitetura híbrida; quarentena passa para A (C++); UI permanece com B em Qt 6 C++ consumindo `cpp/bridge`; `scan_api.py` será substituído pela API C++/IPC. |

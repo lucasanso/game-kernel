@@ -3,6 +3,8 @@
   "version": "1.0.0",
   "description": "Game Kernel - offline security scanner for PC games. Dependencies are added only when a migrated module uses them (docs/MIGRATION_PLAN.md).",
   "dependencies": [
-    "libsodium"
+    "libsodium",
+    "nlohmann-json",
+    "yara"
   ]
 }

@@ -1,0 +1,7 @@
+LIBRARY gk_exports.dll
+EXPORTS
+    gk_add
+    gk_mul
+    gk_hidden @7 NONAME
+    GetTickProxy = kernel32.GetTickCount
+    CloseProxy = kernel32.CloseHandle
