@@ -62,4 +62,10 @@ jobs:
         env:
           GK_REQUIRE_NATIVE: "1"
           GK_NATIVE_DIR: build/windows-release/cpp/bindings/Release
-        run: python -m pytest -q tests/foundation tests/native
+        shell: pwsh
+        run: |
+          python -m pip install pycdlib==1.22.0
+          python -m pytest -q tests/foundation tests/native
+          $code = $LASTEXITCODE
+          Write-Host "pytest exit code: $code"
+          exit $code
