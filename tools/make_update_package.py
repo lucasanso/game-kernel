@@ -78,7 +78,15 @@ def cmd_verify(args: argparse.Namespace) -> int:
     return 0
 
 
+def _utf8_stdio() -> None:
+    """JSON output may contain any Unicode (paths, names): never depend on the console code page."""
+    for stream in (sys.stdout, sys.stderr):
+        if hasattr(stream, "reconfigure"):
+            stream.reconfigure(encoding="utf-8", errors="replace")
+
+
 def main(argv: list[str] | None = None) -> int:
+    _utf8_stdio()
     ap = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     sub = ap.add_subparsers(dest="command", required=True)
     b = sub.add_parser("build", help="gera e assina um pacote")

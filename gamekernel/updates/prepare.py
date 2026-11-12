@@ -71,7 +71,7 @@ def find_gk_update(explicit: str | os.PathLike | None = None) -> Path | None:
 
 def native_validate(tool: Path, component: str, directory: Path) -> dict:
     proc = subprocess.run([str(tool), "validate", "--component", component, "--dir", str(directory)],
-                          capture_output=True, text=True, timeout=600, shell=False)
+                          capture_output=True, text=True, encoding="utf-8", errors="replace", timeout=600, shell=False)
     try:
         return json.loads(proc.stdout.strip().splitlines()[-1])
     except (ValueError, IndexError):

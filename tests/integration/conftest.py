@@ -104,7 +104,7 @@ def gk_update():
 
 
 def run_gk_update(tool: Path, *args: str) -> tuple[int, dict]:
-    proc = subprocess.run([str(tool), *map(str, args)], capture_output=True, text=True, timeout=300)
+    proc = subprocess.run([str(tool), *map(str, args)], capture_output=True, text=True, encoding="utf-8", errors="replace", timeout=300)
     lines = proc.stdout.strip().splitlines()
     assert lines, f"sem saída do gk-update (código {describe_exit(proc.returncode)}): {proc.stderr}"
     return proc.returncode, json.loads(lines[-1])

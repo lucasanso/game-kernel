@@ -54,13 +54,13 @@ def build_project(name: str, source: Path, target: str, extra_args: list[str] | 
         proc = subprocess.run(
             [cmake, "-S", str(source), "-B", str(build_dir), f"-DCMAKE_BUILD_TYPE={config}", *generator,
              *extra_args],
-            capture_output=True, text=True,
+            capture_output=True, text=True, encoding="utf-8", errors="replace",
         )
         if proc.returncode != 0:
             shutil.rmtree(build_dir, ignore_errors=True)
             _unavailable(f"configuração CMake falhou:\n{proc.stdout[-3000:]}\n{proc.stderr[-3000:]}")
     proc = subprocess.run([cmake, "--build", str(build_dir), "--config", config, "--target", target],
-                          capture_output=True, text=True)
+                          capture_output=True, text=True, encoding="utf-8", errors="replace")
     if proc.returncode != 0:
         pytest.fail(f"compilação de {target} falhou:\n{proc.stdout[-6000:]}\n{proc.stderr[-3000:]}")
     exe = target + (".exe" if sys.platform == "win32" else "")
@@ -80,7 +80,7 @@ def _deploy_qt_runtime(executable: Path) -> None:
     if not tool:
         _unavailable("windeployqt não encontrado (pasta bin do Qt fora do PATH)")
     proc = subprocess.run([tool, "--no-translations", "--no-compiler-runtime", "--no-opengl-sw",
-                           "--no-system-d3d-compiler", str(executable)], capture_output=True, text=True)
+                           "--no-system-d3d-compiler", str(executable)], capture_output=True, text=True, encoding="utf-8", errors="replace")
     if proc.returncode != 0:
         pytest.fail(f"windeployqt falhou para {executable.name}:\n{proc.stdout[-3000:]}\n{proc.stderr[-3000:]}")
 
@@ -105,7 +105,7 @@ def run_qtest(executable: Path, env_extra: dict[str, str], timeout: int = 600) -
     env.update(env_extra)
     env.setdefault("QT_QPA_PLATFORM", "offscreen")
     report = executable.parent / f"{executable.stem}-report.txt"
-    proc = subprocess.run([str(executable), "-o", f"{report},txt"], env=env, capture_output=True, text=True,
+    proc = subprocess.run([str(executable), "-o", f"{report},txt"], env=env, capture_output=True, text=True, encoding="utf-8", errors="replace",
                           timeout=timeout)
     text = report.read_text(encoding="utf-8", errors="replace") if report.exists() else ""
     return proc.returncode, (f"código de saída: {describe_exit(proc.returncode)}\n" + text + "\n"

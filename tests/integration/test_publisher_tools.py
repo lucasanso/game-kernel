@@ -16,8 +16,8 @@ TOOLS = ROOT / "tools"
 
 
 def run(*args, env=None):
-    return subprocess.run([sys.executable, *map(str, args)], capture_output=True, text=True, timeout=300,
-                          env={**os.environ, **(env or {})})
+    return subprocess.run([sys.executable, *map(str, args)], capture_output=True, text=True, encoding="utf-8", errors="replace", timeout=300,
+                          env={**os.environ, "PYTHONIOENCODING": "utf-8", **(env or {})})
 
 
 def test_keygen_refuses_overwrite_and_weak_passwords(tmp_path):

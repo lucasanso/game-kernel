@@ -20,7 +20,15 @@ sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 from gamekernel.crypto_utils import generate_keypair, key_id, load_public_key  # noqa: E402
 
 
+def _utf8_stdio() -> None:
+    """JSON output may contain any Unicode (paths, names): never depend on the console code page."""
+    for stream in (sys.stdout, sys.stderr):
+        if hasattr(stream, "reconfigure"):
+            stream.reconfigure(encoding="utf-8", errors="replace")
+
+
 def main(argv: list[str] | None = None) -> int:
+    _utf8_stdio()
     ap = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     ap.add_argument("--out-dir", required=True, type=Path)
     ap.add_argument("--name", default="release")

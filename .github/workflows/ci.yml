@@ -109,13 +109,16 @@ jobs:
           $env:GK_CMAKE_ARGS = "-DCMAKE_TOOLCHAIN_FILE=$($env:VCPKG_INSTALLATION_ROOT -replace '\\','/')/scripts/buildsystems/vcpkg.cmake -DCMAKE_PREFIX_PATH=C:/Qt/$env:QT_VERSION/msvc2022_64"
           python -m pytest -q
       - name: Auxiliar congelado (PyInstaller)
+        if: success() || failure()
         run: pyinstaller installer/gk_helper.spec --noconfirm --distpath dist --workpath build/pyinstaller
       - name: Teste do auxiliar congelado
+        if: success() || failure()
         shell: pwsh
         run: |
           $env:GK_FROZEN_HELPER = "$PWD\dist\gk-helper\gk-helper.exe"
           python -m pytest -q tests/helper/test_frozen_helper.py
       - name: Artefatos
+        if: success() || failure()
         uses: actions/upload-artifact@v4
         with:
           name: gamekernel-windows-componentes
