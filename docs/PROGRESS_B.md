@@ -18,9 +18,23 @@ Com `GK_NATIVE_SANITIZE=1` (ASan + UBSan nos binários C++ do B): `tests/helper`
 | B5 | Inteligência de ameaças: IOC, regras YARA, relatório de atualização | ✅ |
 | B6 | Testes de equivalência sobre o `gk_native` do A | depende das próximas APIs do A (M2+) |
 | B7 | Sandbox (Windows Sandbox sem rede) como serviço do auxiliar | ✅ (sem VM no Linux; `monitor.ps1` verificado só estaticamente) |
-| B8 | CI Linux + Windows/MSVC, auxiliar congelado | ✅ parte 1 (workflow publicado; resultado do Windows a confirmar) |
+| B8 | CI Linux + Windows/MSVC, auxiliar congelado | ✅ (Linux verde; Windows: tudo do B verde, ver abaixo) |
 | B9 | Interface Qt 6 C++ (`cpp/app/**`) | ⏳ próxima; depende do `cpp/bridge` (A, M13) para os serviços do núcleo |
 | B10 | Instalador Inno Setup, versão portátil, docs de usuário (README, INSTALL, USAGE, PRIVACY, LIMITATIONS) | ⏳ depende do executável da UI |
+
+## Estado da CI (`.github/workflows/ci.yml`, execução 43276423149, commit `a7e2a66`)
+
+| Job | Resultado |
+|---|---|
+| Linux (Ubuntu 24.04) | ✅ suíte completa + reexecução com ASan/UBSan |
+| Windows (MSVC 2022, Qt 6.8.3, vcpkg) | **226 passed**, 1 failed: `tests/foundation/test_db.py::test_corrupt_database_is_recovered` (Agente A, pendência 7). Todos os testes do B passam, inclusive o cliente C++ com Job Object contra o auxiliar real, `gk-update` com libyara do vcpkg, equivalência Python × C++ e a sintaxe do `monitor.ps1` (PowerShell 5.1 e 7) |
+| Windows: auxiliar congelado | ✅ `gk-helper.exe` (PyInstaller) gerado; teste de fumaça gera JSON, HTML e PDF; artefato `gamekernel-windows-componentes` publicado |
+
+Problemas que só apareceram no Windows e foram corrigidos: vcpkg em modo manifesto por causa do `vcpkg.json`
+da raiz (o passo agora roda fora do repositório); libyara estática sem dependências no *link* (alvo
+`unofficial::libyara::libyara`); DLL do Qt errada pelo `PATH` (`0xC0000139`; `windeployqt` ao lado dos executáveis
+de teste); saída UTF-8 decodificada como cp1252 nos testes e risco de `UnicodeEncodeError` nas ferramentas
+(decodificação explícita em UTF-8 e stdout UTF-8).
 
 ## Auditoria e decisões de linguagem (B1)
 
