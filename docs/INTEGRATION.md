@@ -15,7 +15,7 @@ Três mecanismos, cada um com um propósito. Nenhuma comunicação fora deles.
 | `contracts/schema.sql` | Esquema SQLite (versão em `meta.schema_version`) | C++ e Python carregam o mesmo arquivo |
 | `contracts/file_result.schema.json` | `FileResult`, `Evidence`, `Location`, `FileFeatures` | C++ produz; Python (`core/models.py`) consome; testes validam os dois lados |
 | `contracts/threat_catalog.json` | Textos de cada categoria de ameaça | UI C++ e relatórios Python |
-| `contracts/ipc.md` | Envelope, quadros, métodos e códigos de erro | C++ ↔ worker ↔ helper |
+| `contracts/helper_methods.md` | Métodos do auxiliar Python e extensões opcionais do envelope (Agente B) | C++ ↔ helper |
 
 Regras de compatibilidade:
 * Enums são serializados pelo **nome em texto** (`"HIGH"`, `"pe_exe"`, `"malware"`), nunca por número.
@@ -26,6 +26,7 @@ Regras de compatibilidade:
 ## 2. Módulo pybind11 `gk_native`
 
 * Construído por `cpp/bindings` (alvo CMake `gk_native`); versão exposta em `gk_native.API_VERSION`.
+* Lista completa e atualizada das funções: `docs/CORE_API.md`.
 * Espelho fino da API pública do núcleo; **não** contém lógica própria.
 * Tipos complexos são retornados como `dict` no formato dos contratos JSON (o mesmo que o IPC usa),
   para que o lado Python use `FileResult.from_dict()` sem conversões ad hoc.
@@ -58,7 +59,7 @@ gk_native.identify_file(path) -> {...mesmo formato...}
 * **Evento** (sem id, filho → pai): `{"v":1,"type":"event","name":"progress","data":{...}}`
 * **Logs** do filho: eventos `log` com `level` e `message`; o pai grava no log do app.
 
-Códigos de erro: `-32600` requisição inválida · `-32601` método inexistente · `1001` arquivo inacessível ·
+Códigos de erro: `-32600` requisição inválida · `-32601` método inexistente · `-32602` parâmetros inválidos · `1001` arquivo inacessível ·
 `1002` limite de recurso excedido · `1003` tempo limite · `1004` cancelado · `1005` formato inválido ·
 `1099` erro interno.
 

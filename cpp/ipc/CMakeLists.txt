@@ -1,5 +1,5 @@
 # gk_ipc — C++ client of the gk-ipc v1 helper protocol (Qt 6 Core).
-# Buildable standalone (cmake -S native/ipc) or from a parent project via add_subdirectory().
+# Buildable standalone (cmake -S cpp/ipc) or from a parent project via add_subdirectory().
 cmake_minimum_required(VERSION 3.21)
 project(gk_ipc VERSION 1.0.0 LANGUAGES CXX)
 

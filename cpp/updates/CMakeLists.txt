@@ -1,6 +1,6 @@
 # gk_updates — verification and atomic installation of signed offline update packages (.gkpkg).
 # Dependencies: Qt 6 Core, libsodium (Ed25519), optional libyara (rule compilation check).
-# Buildable standalone (cmake -S native/updates) or via add_subdirectory().
+# Buildable standalone (cmake -S cpp/updates) or via add_subdirectory().
 cmake_minimum_required(VERSION 3.21)
 project(gk_updates VERSION 1.0.0 LANGUAGES CXX)
 

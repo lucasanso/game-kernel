@@ -18,9 +18,11 @@ find_package(nlohmann_json 3.11 CONFIG REQUIRED)
 add_library(gk::json ALIAS nlohmann_json::nlohmann_json)
 
 # ---- libyara ----------------------------------------------------------------------------------
-find_package(unofficial-yara CONFIG QUIET)
-if(TARGET unofficial::yara::libyara)
-  add_library(gk::yara ALIAS unofficial::yara::libyara)
+# vcpkg exports the static library with its dependencies (OpenSSL::Crypto, Crypt32, Ws2_32 — the latter only
+# for byte-order helpers) as unofficial::libyara::libyara.
+find_package(unofficial-libyara CONFIG QUIET)
+if(TARGET unofficial::libyara::libyara)
+  add_library(gk::yara ALIAS unofficial::libyara::libyara)
 elseif(PKG_CONFIG_FOUND AND NOT WIN32)
   pkg_check_modules(GK_YARA REQUIRED IMPORTED_TARGET yara)
   add_library(gk::yara ALIAS PkgConfig::GK_YARA)

@@ -2,7 +2,7 @@
 
 Escrito pelo Agente B (servidor: `gamekernel/helper/`). O envelope, os quadros e os códigos de erro são os
 de `docs/INTEGRATION.md` §3 (Agente A). O cliente de produção é o `HelperClient` de `cpp/bridge` (Agente A).
-O cliente C++ de referência em `native/ipc/` e o cliente Python em `gamekernel/helper/client.py` são usados
+O cliente C++ de referência em `cpp/ipc/` e o cliente Python em `gamekernel/helper/client.py` são usados
 nos testes de integração (`tests/helper/`, `tests/integration/test_cpp_helper_client.py`).
 
 ## 1. Execução

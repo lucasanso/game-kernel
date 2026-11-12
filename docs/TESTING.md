@@ -17,7 +17,7 @@ pytest -q tests/native    # núcleo C++ (requer o build)
 
 ## Motor de testes (Agente B)
 
-O pytest também compila e executa os componentes C++ do B (`native/ipc`, `native/updates`) via
+O pytest também compila e executa os componentes C++ `cpp/ipc` e `cpp/updates` via
 `tests/integration/native_build.py` (CMake; Ninja no Linux, Visual Studio no Windows).
 
 | Pasta | Conteúdo |

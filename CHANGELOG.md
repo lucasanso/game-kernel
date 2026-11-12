@@ -3,6 +3,18 @@
 ## Agente A — Core e Segurança
 
 ### [não lançado]
+- WORK_SPLIT rev. 4: árvore C++ única em `cpp/`; o A adota `cpp/ipc` (cliente gk-ipc) e `cpp/updates` (verificação
+  e instalação de pacotes), escritos pelo B, como propôs o B — sem módulos duplicados.
+- M5: compactados em memória (libarchive) com formatos e filtros em lista branca (sem `mtree`, sem programas
+  externos), limites anti-bomba com orçamento compartilhado entre níveis, SFX, nomes perigosos, links e criptografia.
+- M3: motor YARA em C++ (libyara) equivalente ao yara-python; 10 regras de detecção documentadas
+  (`docs/DETECTION_RULES.md`) e 95 indicadores gerados (`tools/core_gen_indicators.py`, literais em `\xNN`).
+- M2: parser PE em C++ para entrada hostil, equivalente ao pefile em PEs reais (mingw-w64) e em DLLs do System32
+  (CI Windows); fuzzing por mutação sob ASan/UBSan; ordinais de WS2_32/WSOCK32/OLEAUT32 nomeados como no pefile.
+- Correções: vazamento de handle na recuperação do banco (Windows); alvo vcpkg `unofficial::libyara::libyara`;
+  OpenSSL para a libyara estática; desempenho do parser PE em entradas hostis (cache e orçamento de recursos,
+  busca de seção O(log n)).
+- Dependências: nlohmann/json (MIT), libyara (BSD-3), libarchive (BSD-2).
 - M1: núcleo C++20 `gk_core` — `ByteView` (leitura com limites e aritmética verificada), arquivos somente leitura e
   mapeados (compartilhamento total, só arquivos comuns), SHA-256 (libsodium) e MD5, identificação de tipo real.
 - M1: módulo pybind11 `gk_native` (API v1) com tradução de exceções (`GkError`, `args=(código, mensagem)`).
@@ -22,7 +34,7 @@
   com extensões opcionais (cancelamento, prazo, id em eventos, `error.data.reason`), isolamento de falhas
   (exceção → 1099 com o auxiliar ativo; proteção de stdout; `netguard`), cliente Python; métodos em
   `contracts/helper_methods.md`.
-- Cliente C++/Qt de referência (`native/ipc/`): QProcess, sinais e slots, Job Object (Windows), RLIMIT_AS e
+- Cliente C++/Qt (`native/ipc/`, hoje `cpp/ipc/`, mantido pelo A): QProcess, sinais e slots, Job Object (Windows), RLIMIT_AS e
   PDEATHSIG (Linux), prazo → cancelamento → morte, reinício limitado. Oferecido ao Agente A para o `cpp/bridge` (M13).
 - Relatórios forenses (`gamekernel/reports/`): JSON, HTML autocontido sem JavaScript (CSP `default-src 'none'`),
   PDF (reportlab, fonte Unicode); 15 seções e relatório individual de cracks; redação de usuário e de nome do

@@ -1,4 +1,4 @@
-"""Cross-language integration: the C++ gk-ipc client (native/ipc) against the real Python helpers,
+"""Cross-language integration: the C++ gk-ipc client (cpp/ipc) against the real Python helpers,
 including an end-to-end report generated from a scan stored in SQLite."""
 
 from __future__ import annotations
@@ -13,7 +13,7 @@ from .native_build import ROOT, build_project, run_qtest
 
 
 def test_cpp_ipc_client_against_python_helpers(isolated_data_dir, tmp_path):
-    exe = build_project("native-ipc", ROOT / "native" / "ipc", "gk_ipc_tests")
+    exe = build_project("native-ipc", ROOT / "cpp" / "ipc", "gk_ipc_tests")
     db = Database()
     scan_id = sample_scan.build(db)
     db.close()

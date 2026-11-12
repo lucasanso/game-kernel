@@ -1,7 +1,7 @@
 """Python client for gk-ipc v1 helpers.
 
 Used by automated tests and Python tools. The production host is the C++ HelperClient of the
-application (``cpp/bridge``, Agent A; reference client in ``native/ipc``); both follow docs/INTEGRATION.md.
+application (``cpp/bridge``, Agent A; client library in ``cpp/ipc``); both follow docs/INTEGRATION.md.
 """
 
 from __future__ import annotations

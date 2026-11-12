@@ -7,7 +7,7 @@ registro em `docs/WORK_SPLIT.md` §7.
 Implementações que seguem este contrato e são testadas entre si (mesma decisão e mesmo código de erro):
 
 * Python, publicador e referência: `gamekernel/updates/package.py`;
-* C++, verificador e instalador de referência: `native/updates/` (`gk::updates`, CLI `gk-update`), oferecido ao
+* C++, verificador e instalador de referência: `cpp/updates/` (`gk::updates`, CLI `gk-update`), oferecido ao
   Agente A para o M10;
 * testes: `tests/integration/test_update_equivalence.py` (válidos, 14 adulterações, 27 manifestos assinados porém
   inválidos, 60 mutações aleatórias) e `tests/integration/test_update_installer.py`.

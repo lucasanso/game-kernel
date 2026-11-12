@@ -138,8 +138,8 @@ administrativo encadeado por hash (`audit_log`) é gravado pelo aplicativo a par
 | Formato, construção e assinatura, verificador de referência | Python | `gamekernel/updates/package.py` |
 | Preparação (YARA, IOC, ClamAV) e relatório de atualização | Python | `gamekernel/updates/prepare.py`, `gamekernel/intel/ioc.py`, `gamekernel/rules/prepare.py` |
 | Ferramentas do publicador | Python | `tools/gk_keygen.py`, `tools/make_update_package.py`, `tools/ti_build_ioc.py` |
-| **Verificação criptográfica e instalação no aplicativo** | **C++** | núcleo do Agente A (M10, `UpdateService`). Implementação de referência do B, pronta e testada: `native/updates/` (`gk::updates::verifyPackage`, `Installer`, validadores; libsodium, libyara, Qt Core) |
-| CLI de administração e testes | C++ | `native/updates/tools/gk_update_cli.cpp` (`gk-update`) |
+| **Verificação criptográfica e instalação no aplicativo** | **C++** | núcleo do Agente A (M10, `UpdateService`). Implementação de referência do B, pronta e testada: `cpp/updates/` (`gk::updates::verifyPackage`, `Installer`, validadores; libsodium, libyara, Qt Core) |
+| CLI de administração e testes | C++ | `cpp/updates/tools/gk_update_cli.cpp` (`gk-update`) |
 
 Recuperação após queda de energia: se a energia cair entre as trocas de pasta, a próxima instalação ou
 reversão (ou `Installer::recoverInterrupted()` na inicialização) restaura o conjunto anterior e remove os temporários.

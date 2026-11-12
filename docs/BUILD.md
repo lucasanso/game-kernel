@@ -10,7 +10,7 @@ python3 -m venv .venv && .venv/bin/pip install -r requirements-dev.txt
 cmake --preset linux-debug -DPython_EXECUTABLE=$PWD/.venv/bin/python
 cmake --build --preset linux-debug
 ```
-O módulo `gk_native` é gerado em `build/linux-debug/native/bindings/` e os testes o encontram via
+O módulo `gk_native` é gerado em `build/linux-debug/cpp/bindings/` e os testes o encontram via
 `GK_NATIVE_DIR` (definido automaticamente pelo `tests/conftest.py` quando o build padrão existe).
 
 Build com sanitizers (ASan + UBSan) para testes de segurança de memória:
@@ -39,8 +39,8 @@ Saída: `dist/gk-helper/` (*one-folder*), copiada para `<instalação>/helper/`.
 
 ### Componentes C++ do Agente B (independentes do preset do núcleo)
 ```bash
-cmake -S native/updates -B build/native-updates -G Ninja && cmake --build build/native-updates   # gk-update
-cmake -S native/ipc -B build/native-ipc -G Ninja && cmake --build build/native-ipc               # cliente de referência + testes
+cmake -S cpp/updates -B build/native-updates -G Ninja && cmake --build build/native-updates   # gk-update
+cmake -S cpp/ipc -B build/native-ipc -G Ninja && cmake --build build/native-ipc               # cliente de referência + testes
 ```
 No Windows: `-DCMAKE_TOOLCHAIN_FILE=%VCPKG_ROOT%/scripts/buildsystems/vcpkg.cmake -DCMAKE_PREFIX_PATH=C:/Qt/6.8.3/msvc2022_64`
 (libsodium e yara pelo vcpkg).

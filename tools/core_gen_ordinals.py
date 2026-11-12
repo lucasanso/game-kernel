@@ -1,4 +1,4 @@
-"""Generate native/core/src/ordinal_names.inc from pefile's ordlookup tables (owner: Agent A).
+"""Generate cpp/core/src/ordinal_names.inc from pefile's ordlookup tables (owner: Agent A).
 
 DLLs such as WS2_32, WSOCK32 and OLEAUT32 are often imported by ordinal only; malware relies on this to
 hide names like ``connect``. The C++ PE parser resolves those ordinals with the same table pefile uses,
@@ -16,7 +16,7 @@ from pathlib import Path
 import ordlookup  # shipped with pefile
 
 ROOT = Path(__file__).resolve().parents[1]
-OUTPUT = ROOT / "native" / "core" / "src" / "ordinal_names.inc"
+OUTPUT = ROOT / "cpp" / "core" / "src" / "ordinal_names.inc"
 
 
 def build() -> str:

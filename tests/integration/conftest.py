@@ -100,7 +100,7 @@ def base_manifest(private: Ed25519PrivateKey, files: dict[str, bytes], version: 
 
 @pytest.fixture(scope="session")
 def gk_update():
-    return build_project("native-updates", ROOT / "native" / "updates", "gk-update")
+    return build_project("native-updates", ROOT / "cpp" / "updates", "gk-update")
 
 
 def run_gk_update(tool: Path, *args: str) -> tuple[int, dict]:
