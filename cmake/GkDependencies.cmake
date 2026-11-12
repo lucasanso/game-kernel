@@ -30,6 +30,12 @@ else()
   add_library(gk_yara_imported UNKNOWN IMPORTED)
   set_target_properties(gk_yara_imported PROPERTIES IMPORTED_LOCATION "${GK_YARA_LIBRARY}"
                         INTERFACE_INCLUDE_DIRECTORIES "${GK_YARA_INCLUDE_DIR}")
+  if(WIN32)
+    # vcpkg builds libyara statically against OpenSSL (hash and Authenticode modules) and ships no CMake
+    # config, so the transitive dependency must be declared here.
+    find_package(OpenSSL REQUIRED COMPONENTS Crypto)
+    set_property(TARGET gk_yara_imported APPEND PROPERTY INTERFACE_LINK_LIBRARIES OpenSSL::Crypto crypt32)
+  endif()
   add_library(gk::yara ALIAS gk_yara_imported)
 endif()
 
