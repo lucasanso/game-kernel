@@ -19,7 +19,7 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
-from gamekernel.ti import ioc  # noqa: E402
+from gamekernel.intel import ioc  # noqa: E402
 
 
 def parse_source(spec: str) -> tuple[Path, str | None, str]:
@@ -32,7 +32,15 @@ def parse_source(spec: str) -> tuple[Path, str | None, str]:
     return Path(spec), None, ""
 
 
+def _utf8_stdio() -> None:
+    """JSON output may contain any Unicode (paths, names): never depend on the console code page."""
+    for stream in (sys.stdout, sys.stderr):
+        if hasattr(stream, "reconfigure"):
+            stream.reconfigure(encoding="utf-8", errors="replace")
+
+
 def main(argv: list[str] | None = None) -> int:
+    _utf8_stdio()
     ap = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     ap.add_argument("sources", nargs="+")
     ap.add_argument("--version", required=True)

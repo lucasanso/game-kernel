@@ -67,7 +67,7 @@ HelperConfig HelperConfig::forInstallation(const QString& appDir, const QString&
 HelperConfig HelperConfig::forDevelopment(const QString& python, const QString& repoRoot, const QString& dataDir) {
     HelperConfig c;
     c.program = python;
-    c.arguments = {QStringLiteral("-I"), QDir(repoRoot).filePath(QStringLiteral("gk_helper.py"))};
+    c.arguments = {QStringLiteral("-I"), QDir(repoRoot).filePath(QStringLiteral("gamekernel/helper/entry.py"))};
     c.workingDirectory = repoRoot;
     c.environment = sanitizedEnvironment(dataDir);
     return c;
@@ -157,7 +157,7 @@ HelperClient::HelperClient(HelperConfig config, QObject* parent)
     connect(&tick_, &QTimer::timeout, this, &HelperClient::onTick);
     helloTimer_.setSingleShot(true);
     connect(&helloTimer_, &QTimer::timeout, this, [this] {
-        retire(error_code::HelperUnavailable, QStringLiteral("o processo auxiliar não respondeu ao handshake em %1 ms")
+        retire(reason::HelperUnavailable, QStringLiteral("o processo auxiliar não respondeu ao handshake em %1 ms")
                                                   .arg(config_.helloTimeoutMs));
     });
 }
@@ -192,7 +192,7 @@ void HelperClient::startProcess() {
         exitReason_ = QStringLiteral("caminho do processo auxiliar não é absoluto: %1").arg(config_.program);
         consecutiveFailures_ = config_.maxRestarts;   // configuration error: retrying cannot help
         setState(State::Unavailable);
-        failAllLater(error_code::HelperUnavailable, exitReason_);
+        failAllLater(reason::HelperUnavailable, exitReason_);
         return;
     }
     if (process_) {
@@ -233,7 +233,7 @@ qint64 HelperClient::call(const QString& method, const QJsonObject& params, int 
 
     if (state_ == State::Unavailable) {
         QMetaObject::invokeMethod(this, [this, id] {
-            finish(id, false, {}, CallError::make(error_code::HelperUnavailable,
+            finish(id, false, {}, CallError::make(reason::HelperUnavailable,
                                                   QStringLiteral("processo auxiliar indisponível após %1 falhas "
                                                                  "seguidas: %2")
                                                       .arg(consecutiveFailures_).arg(exitReason_)));
@@ -250,7 +250,7 @@ void HelperClient::cancel(qint64 id) {
     auto it = pending_.find(id);
     if (it == pending_.end()) return;
     if (!it->second.sent) {
-        finish(id, false, {}, CallError::make(error_code::Cancelled, QStringLiteral("cancelado antes do envio")));
+        finish(id, false, {}, CallError::make(reason::Cancelled, QStringLiteral("cancelado antes do envio")));
         return;
     }
     if (!it->second.cancelSent) {
@@ -311,7 +311,7 @@ void HelperClient::flushQueue() {
             // Too large to send: fail this call only.
             const qint64 failedId = id;
             QMetaObject::invokeMethod(this, [this, failedId] {
-                finish(failedId, false, {}, CallError::make(error_code::ResourceLimit,
+                finish(failedId, false, {}, CallError::make(reason::ResourceLimit,
                                                             QStringLiteral("requisição excede o tamanho máximo")));
             }, Qt::QueuedConnection);
             p.sent = true;
@@ -344,7 +344,7 @@ void HelperClient::onStderr() {
 }
 
 void HelperClient::protocolFailure(const QString& reason) {
-    retire(error_code::HelperCrashed, QStringLiteral("erro de protocolo vindo do processo auxiliar: %1").arg(reason));
+    retire(reason::HelperCrashed, QStringLiteral("erro de protocolo vindo do processo auxiliar: %1").arg(reason));
 }
 
 void HelperClient::retire(const char* code, const QString& reason) {
@@ -367,45 +367,51 @@ void HelperClient::failAllLater(const char* code, const QString& reason) {
     // Fail exactly the calls pending *now*; calls made afterwards go to the next helper.
     std::vector<qint64> ids;
     for (const auto& [id, p] : pending_) ids.push_back(id);
-    const QString codeStr = QString::fromLatin1(code);
-    QMetaObject::invokeMethod(this, [this, ids, codeStr, reason] {
-        const QByteArray c = codeStr.toLatin1();
-        for (qint64 id : ids) finish(id, false, {}, CallError::make(c.constData(), reason));
+    const QByteArray r(code);
+    QMetaObject::invokeMethod(this, [this, ids, r, reason] {
+        for (qint64 id : ids) finish(id, false, {}, CallError::make(r.constData(), reason));
     }, Qt::QueuedConnection);
 }
 
 void HelperClient::handleMessage(const QJsonObject& m) {
-    const QString type = m.value("type").toString();
-    if (type == "hello") {
+    const QString kind = kindOf(m);
+    if (kind == "hello") {
         if (state_ != State::Starting) return protocolFailure(QStringLiteral("hello repetido"));
+        if (m.value("protocol").toInt() != kProtocolVersion)
+            return protocolFailure(QStringLiteral("versão de protocolo do processo auxiliar incompatível: %1")
+                                       .arg(m.value("protocol").toInt()));
         helloTimer_.stop();
         hello_ = m;
         setState(State::Ready);
         emit ready(hello_);
         flushQueue();
-    } else if (type == "log") {
-        emit logReceived(m.value("level").toString(), m.value("logger").toString(), m.value("message").toString());
-    } else if (type == "event") {
-        const qint64 id = qint64(m.value("id").toDouble());
+    } else if (kind == "event" && m.value("name").toString() == "log") {
+        const QJsonObject d = m.value("data").toObject();
+        emit logReceived(d.value("level").toString(), d.value("logger").toString(), d.value("message").toString());
+    } else if (kind == "event") {
+        // The contract does not require an id on events; the helper adds it (extension). Without
+        // it, an event can only be attributed when exactly one call is in flight.
+        qint64 id = -1;
+        if (m.contains("id")) id = qint64(m.value("id").toDouble());
+        else if (pending_.size() == 1) id = pending_.begin()->first;
         if (pending_.count(id)) emit eventReceived(id, m.value("name").toString(), m.value("data").toObject());
-    } else if (type == "response") {
+    } else if (kind == "response") {
         const qint64 id = qint64(m.value("id").toDouble());
         auto it = pending_.find(id);
         if (it == pending_.end()) return;   // late answer to a call already resolved locally
-        if (m.value("ok").toBool()) {
+        if (m.contains("result")) {
             finish(id, true, m.value("result"), {});
         } else {
             CallError e = CallError::fromJson(m.value("error").toObject());
-            if (it->second.timedOut && (e.code == QLatin1String(error_code::Cancelled) ||
-                                        e.code == QLatin1String(error_code::Timeout))) {
-                e = CallError::make(error_code::Timeout,
-                                    QStringLiteral("'%1' excedeu %2 ms e foi cancelado")
-                                        .arg(it->second.method).arg(it->second.timeoutMs));
+            if (it->second.timedOut && (e.reason == QLatin1String(reason::Cancelled) ||
+                                        e.reason == QLatin1String(reason::Timeout))) {
+                e = CallError::make(reason::Timeout, QStringLiteral("'%1' excedeu %2 ms e foi cancelado")
+                                                         .arg(it->second.method).arg(it->second.timeoutMs));
             }
             finish(id, false, {}, e);
         }
     } else {
-        protocolFailure(QStringLiteral("mensagem '%1' não esperada do processo auxiliar").arg(type));
+        protocolFailure(QStringLiteral("mensagem '%1' não esperada do processo auxiliar").arg(kind));
     }
 }
 
@@ -440,11 +446,11 @@ void HelperClient::onTick() {
         // calls then fail as helper_crashed in onFinished().
         for (qint64 id : killFor) {
             const QString method = pending_[id].method;
-            finish(id, false, {}, CallError::make(error_code::Timeout,
+            finish(id, false, {}, CallError::make(reason::Timeout,
                                                   QStringLiteral("'%1' não respondeu ao cancelamento; processo "
                                                                  "auxiliar encerrado").arg(method)));
         }
-        retire(error_code::HelperCrashed,
+        retire(reason::HelperCrashed,
                QStringLiteral("processo auxiliar encerrado por não responder ao cancelamento"));
     }
 }
@@ -466,7 +472,7 @@ void HelperClient::onProcessError(QProcess::ProcessError error) {
         old->disconnect(this);
         old->deleteLater();
         setState(consecutiveFailures_ >= config_.maxRestarts ? State::Unavailable : State::Stopped);
-        failAllLater(error_code::HelperUnavailable, exitReason_);
+        failAllLater(reason::HelperUnavailable, exitReason_);
         emit helperFinished(-1, exitReason_);
     }
 }
@@ -483,7 +489,7 @@ void HelperClient::onFinished(int exitCode, QProcess::ExitStatus status) {
     const bool wasStarting = state_ == State::Starting;
     if (!clean) ++consecutiveFailures_;
     setState(consecutiveFailures_ >= config_.maxRestarts ? State::Unavailable : State::Stopped);
-    failAll(wasStarting ? error_code::HelperUnavailable : error_code::HelperCrashed, reason);
+    failAll(wasStarting ? reason::HelperUnavailable : reason::HelperCrashed, reason);
     emit helperFinished(exitCode, reason);
 }
 

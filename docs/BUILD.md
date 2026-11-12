@@ -28,4 +28,27 @@ cmake --build --preset windows-release
 As dependências C/C++ vêm de `vcpkg.json` (modo manifesto).
 
 ## Empacotamento (Agente B)
-Seção mantida pelo Agente B.
+
+### Processo auxiliar Python (`gk-helper`)
+```bash
+pip install -r requirements-dev.txt
+pyinstaller installer/gk_helper.spec --noconfirm --distpath dist --workpath build/pyinstaller
+```
+Saída: `dist/gk-helper/` (*one-folder*), copiada para `<instalação>/helper/`. Teste de fumaça:
+`GK_FROZEN_HELPER=dist/gk-helper/gk-helper(.exe) pytest -q tests/helper/test_frozen_helper.py`.
+
+### Componentes C++ do Agente B (independentes do preset do núcleo)
+```bash
+cmake -S native/updates -B build/native-updates -G Ninja && cmake --build build/native-updates   # gk-update
+cmake -S native/ipc -B build/native-ipc -G Ninja && cmake --build build/native-ipc               # cliente de referência + testes
+```
+No Windows: `-DCMAKE_TOOLCHAIN_FILE=%VCPKG_ROOT%/scripts/buildsystems/vcpkg.cmake -DCMAKE_PREFIX_PATH=C:/Qt/6.8.3/msvc2022_64`
+(libsodium e yara pelo vcpkg).
+
+### CI
+`.github/workflows/ci.yml` (Agente B): Linux, com a suíte completa e a variante ASan/UBSan; Windows, com MSVC, Qt 6.8
+(aqtinstall), libsodium e yara (vcpkg), a suíte completa, o PyInstaller do auxiliar e o teste do auxiliar congelado.
+Nenhum segredo é usado; a chave privada de *release* nunca chega à CI.
+
+O instalador Windows (Inno Setup) e a versão portátil serão definidos quando o executável Qt da interface
+(`cpp/app`) e os binários do núcleo existirem.

@@ -1,4 +1,5 @@
-// Asynchronous Qt client for Game Kernel helper processes (gk-ipc v1).
+// Asynchronous Qt client for the Game Kernel helper process (envelope: docs/INTEGRATION.md §3).
+// Reference client of Agent B; the production HelperClient is cpp/bridge (Agent A, M13), which may adopt it.
 //
 // The application never embeds Python: Python services run in a separate process started and
 // supervised by this class. A crash, hang or memory blow-up of the helper only fails the pending
@@ -27,7 +28,7 @@ namespace gk::ipc {
 
 struct HelperConfig {
     QString program;                    // absolute path of gk-helper(.exe) or of the Python interpreter (dev)
-    QStringList arguments;              // e.g. {"-I", "<repo>/gk_helper.py"} in development
+    QStringList arguments;              // e.g. {"-I", "<repo>/gamekernel/helper/entry.py"} in development
     QString workingDirectory;           // the helper's own directory, never a scanned folder
     QProcessEnvironment environment;    // see sanitizedEnvironment()
     int helloTimeoutMs = 20000;
@@ -38,7 +39,7 @@ struct HelperConfig {
 
     // Frozen layout: <appDir>/helper/gk-helper(.exe).
     static HelperConfig forInstallation(const QString& appDir, const QString& dataDir);
-    // Development layout: <python> -I <repoRoot>/gk_helper.py
+    // Development layout: <python> -I <repoRoot>/gamekernel/helper/entry.py
     static HelperConfig forDevelopment(const QString& python, const QString& repoRoot, const QString& dataDir);
 };
 
@@ -109,10 +110,10 @@ private:
     void handleMessage(const QJsonObject& message);
     bool writeMessage(const QJsonObject& message);
     void protocolFailure(const QString& reason);
-    void failAll(const char* code, const QString& reason);
-    void failAllLater(const char* code, const QString& reason);
+    void failAll(const char* reasonCode, const QString& reason);
+    void failAllLater(const char* reasonCode, const QString& reason);
     // Kill the current process *now* and detach it, so new calls go to a fresh helper.
-    void retire(const char* code, const QString& reason);
+    void retire(const char* reasonCode, const QString& reason);
     void finish(qint64 id, bool ok, const QJsonValue& value, const CallError& error);
     void configurePlatform();
 

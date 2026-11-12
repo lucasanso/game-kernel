@@ -1,10 +1,13 @@
 #include "gk/ipc/protocol.hpp"
 
+#include <QHash>
 #include <QJsonDocument>
 #include <QJsonParseError>
 #include <QRegularExpression>
 #include <QStringDecoder>
 #include <QtEndian>
+
+#include <cmath>
 
 namespace gk::ipc {
 
@@ -20,36 +23,72 @@ const QStringList& logLevels() {
     return levels;
 }
 
-// A JSON number is an acceptable id only if it is an integer in [1, 2^53-1].
-bool isValidId(const QJsonValue& v) {
+bool isInteger(const QJsonValue& v) {
     if (!v.isDouble()) return false;
     const double d = v.toDouble();
-    if (d < 1.0 || d > double(kMaxId)) return false;
-    return double(qint64(d)) == d;
+    return std::isfinite(d) && std::floor(d) == d;
+}
+
+// A JSON number is an acceptable id only if it is an integer in [1, 2^53-1].
+bool isValidId(const QJsonValue& v) {
+    return isInteger(v) && v.toDouble() >= 1.0 && v.toDouble() <= double(kMaxId);
+}
+
+const QHash<QString, int>& reasonCodes() {
+    static const QHash<QString, int> map{
+        {reason::ProtocolError, error_code::InvalidRequest}, {reason::InvalidParams, error_code::InvalidRequest},
+        {reason::UnknownMethod, error_code::MethodNotFound},  {reason::NotFound, error_code::FileInaccessible},
+        {reason::IoError, error_code::FileInaccessible},      {reason::ResourceLimit, error_code::ResourceLimit},
+        {reason::Busy, error_code::ResourceLimit},            {reason::Timeout, error_code::Timeout},
+        {reason::Cancelled, error_code::Cancelled},           {reason::InvalidFormat, error_code::InvalidFormat},
+        {reason::InternalError, error_code::Internal},        {reason::HelperCrashed, error_code::Internal},
+        {reason::HelperUnavailable, error_code::Internal},
+    };
+    return map;
 }
 
 }  // namespace
 
-bool isRetryable(const QString& code) {
-    return code == QLatin1String(error_code::Timeout) || code == QLatin1String(error_code::Busy) ||
-           code == QLatin1String(error_code::HelperCrashed) || code == QLatin1String(error_code::HelperUnavailable);
+int codeForReason(const QString& r) { return reasonCodes().value(r, error_code::Internal); }
+
+QString reasonForCode(int code) {
+    switch (code) {
+        case error_code::InvalidRequest: return QString::fromLatin1(reason::ProtocolError);
+        case error_code::MethodNotFound: return QString::fromLatin1(reason::UnknownMethod);
+        case error_code::FileInaccessible: return QString::fromLatin1(reason::IoError);
+        case error_code::ResourceLimit: return QString::fromLatin1(reason::ResourceLimit);
+        case error_code::Timeout: return QString::fromLatin1(reason::Timeout);
+        case error_code::Cancelled: return QString::fromLatin1(reason::Cancelled);
+        case error_code::InvalidFormat: return QString::fromLatin1(reason::InvalidFormat);
+        default: return QString::fromLatin1(reason::InternalError);
+    }
 }
 
-CallError CallError::make(const char* code, const QString& message, QJsonObject details) {
+bool isRetryable(const QString& r) {
+    return r == QLatin1String(reason::Timeout) || r == QLatin1String(reason::Busy) ||
+           r == QLatin1String(reason::HelperCrashed) || r == QLatin1String(reason::HelperUnavailable);
+}
+
+CallError CallError::make(const char* r, const QString& message, QJsonObject data) {
     CallError e;
-    e.code = QString::fromLatin1(code);
+    e.reason = QString::fromLatin1(r);
+    e.code = codeForReason(e.reason);
     e.message = message;
-    e.retryable = isRetryable(e.code);
-    e.details = std::move(details);
+    e.retryable = isRetryable(e.reason);
+    e.data = std::move(data);
     return e;
 }
 
 CallError CallError::fromJson(const QJsonObject& error) {
     CallError e;
-    e.code = error.value("code").toString(QString::fromLatin1(error_code::InternalError));
+    e.code = isInteger(error.value("code")) ? int(error.value("code").toDouble()) : error_code::Internal;
     e.message = error.value("message").toString();
-    e.retryable = error.value("retryable").toBool(isRetryable(e.code));
-    e.details = error.value("details").toObject();
+    e.data = error.value("data").toObject();
+    e.reason = e.data.value("reason").toString();
+    if (e.reason.isEmpty()) e.reason = reasonForCode(e.code);
+    e.retryable = e.data.contains("retryable") ? e.data.value("retryable").toBool() : isRetryable(e.reason);
+    e.data.remove("reason");
+    e.data.remove("retryable");
     return e;
 }
 
@@ -62,40 +101,53 @@ std::optional<QByteArray> encodeFrame(const QJsonObject& message, qint64 maxFram
     return frame;
 }
 
+QString kindOf(const QJsonObject& m) {
+    if (m.contains("type")) return m.value("type").toString();
+    return m.contains("method") ? QStringLiteral("request") : QStringLiteral("response");
+}
+
 std::optional<QString> validateMessage(const QJsonObject& m) {
-    const QJsonValue proto = m.value("proto");
-    if (!proto.isDouble() || proto.toDouble() != double(kProtocolVersion))
-        return QStringLiteral("versão de protocolo incompatível");
-    const QString type = m.value("type").toString();
-    if (type == "request") {
-        if (!isValidId(m.value("id"))) return QStringLiteral("id inválido");
-        const QString method = m.value("method").toString();
-        if (method.size() > 128 || !methodRe().match(method).hasMatch()) return QStringLiteral("método inválido");
-        if (m.contains("params") && !m.value("params").isObject()) return QStringLiteral("params precisa ser objeto");
-    } else if (type == "cancel") {
-        if (!isValidId(m.value("id"))) return QStringLiteral("id inválido");
-    } else if (type == "event") {
-        if (!isValidId(m.value("id"))) return QStringLiteral("id inválido");
-        if (!m.value("name").isString()) return QStringLiteral("evento sem nome");
-        if (m.contains("data") && !m.value("data").isObject()) return QStringLiteral("data precisa ser objeto");
-    } else if (type == "response") {
-        if (!isValidId(m.value("id"))) return QStringLiteral("id inválido");
-        const QJsonValue ok = m.value("ok");
-        if (!ok.isBool()) return QStringLiteral("ok precisa ser booleano");
-        if (ok.toBool()) {
-            if (!m.contains("result")) return QStringLiteral("resposta sem result");
+    const QJsonValue v = m.value("v");
+    if (!isInteger(v) || v.toDouble() != double(kEnvelopeVersion)) return QStringLiteral("versão de envelope incompatível");
+    if (m.contains("type")) {
+        const QString type = m.value("type").toString();
+        if (type == "hello") {
+            if (!m.value("component").isString() || !isInteger(m.value("protocol")))
+                return QStringLiteral("hello precisa de component e protocol");
+        } else if (type == "event") {
+            if (!m.value("name").isString()) return QStringLiteral("evento sem nome");
+            if (m.contains("data") && !m.value("data").isObject()) return QStringLiteral("data precisa ser objeto");
+            if (m.contains("id") && !isValidId(m.value("id"))) return QStringLiteral("id inválido");
+            if (m.value("name").toString() == "log") {
+                const QJsonObject d = m.value("data").toObject();
+                if (!logLevels().contains(d.value("level").toString()) || !d.value("message").isString())
+                    return QStringLiteral("evento log inválido");
+            }
+        } else if (type == "cancel") {
+            if (!isValidId(m.value("id"))) return QStringLiteral("id inválido");
         } else {
-            const QJsonObject err = m.value("error").toObject();
-            if (!err.value("code").isString() || !err.value("message").isString())
-                return QStringLiteral("erro sem code/message");
+            return QStringLiteral("tipo de mensagem desconhecido: %1").arg(type);
         }
-    } else if (type == "log") {
-        if (!logLevels().contains(m.value("level").toString()) || !m.value("message").isString())
-            return QStringLiteral("log inválido");
-    } else if (type == "hello") {
-        if (!m.value("helper").isString() || !m.value("methods").isArray()) return QStringLiteral("hello inválido");
-    } else {
-        return QStringLiteral("tipo de mensagem desconhecido: %1").arg(type);
+        return std::nullopt;
+    }
+    if (!isValidId(m.value("id"))) return QStringLiteral("id inválido");
+    if (m.contains("method")) {
+        const QString method = m.value("method").toString();
+        if (!m.value("method").isString() || method.size() > 128 || !methodRe().match(method).hasMatch())
+            return QStringLiteral("método inválido");
+        if (m.contains("params") && !m.value("params").isObject()) return QStringLiteral("params precisa ser objeto");
+        if (m.contains("timeout_ms") && (!isInteger(m.value("timeout_ms")) || m.value("timeout_ms").toDouble() <= 0))
+            return QStringLiteral("timeout_ms inválido");
+        return std::nullopt;
+    }
+    const bool hasResult = m.contains("result");
+    const bool hasError = m.contains("error");
+    if (hasResult == hasError) return QStringLiteral("resposta precisa de result ou error");
+    if (hasError) {
+        const QJsonObject err = m.value("error").toObject();
+        if (!m.value("error").isObject() || !isInteger(err.value("code")) || !err.value("message").isString())
+            return QStringLiteral("erro precisa de code (inteiro) e message");
+        if (err.contains("data") && !err.value("data").isObject()) return QStringLiteral("error.data precisa ser objeto");
     }
     return std::nullopt;
 }
@@ -146,14 +198,13 @@ QJsonObject FrameDecoder::takeMessage() {
 }
 
 QJsonObject makeRequest(qint64 id, const QString& method, const QJsonObject& params, int timeoutMs) {
-    QJsonObject m{{"proto", kProtocolVersion}, {"type", "request"}, {"id", double(id)}, {"method", method},
-                  {"params", params}};
+    QJsonObject m{{"v", kEnvelopeVersion}, {"id", double(id)}, {"method", method}, {"params", params}};
     if (timeoutMs > 0) m.insert("timeout_ms", timeoutMs);
     return m;
 }
 
 QJsonObject makeCancel(qint64 id) {
-    return QJsonObject{{"proto", kProtocolVersion}, {"type", "cancel"}, {"id", double(id)}};
+    return QJsonObject{{"v", kEnvelopeVersion}, {"type", "cancel"}, {"id", double(id)}};
 }
 
 }  // namespace gk::ipc
