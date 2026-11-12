@@ -66,8 +66,38 @@ def build_project(name: str, source: Path, target: str, extra_args: list[str] | 
     exe = target + (".exe" if sys.platform == "win32" else "")
     for candidate in (build_dir / exe, build_dir / config / exe):
         if candidate.exists():
+            _deploy_qt_runtime(candidate)
             return candidate
     pytest.fail(f"executável {exe} não encontrado em {build_dir}")
+
+
+def _deploy_qt_runtime(executable: Path) -> None:
+    """Windows: copy the exact Qt DLLs next to the executable (windeployqt). The application folder is
+    searched before PATH, so a different Qt found on PATH (other tools, PySide6) can never be loaded."""
+    if sys.platform != "win32":
+        return
+    tool = shutil.which("windeployqt") or shutil.which("windeployqt6")
+    if not tool:
+        _unavailable("windeployqt não encontrado (pasta bin do Qt fora do PATH)")
+    proc = subprocess.run([tool, "--no-translations", "--no-compiler-runtime", "--no-opengl-sw",
+                           "--no-system-d3d-compiler", str(executable)], capture_output=True, text=True)
+    if proc.returncode != 0:
+        pytest.fail(f"windeployqt falhou para {executable.name}:\n{proc.stdout[-3000:]}\n{proc.stderr[-3000:]}")
+
+
+# Windows NTSTATUS values seen as process exit codes when a program cannot even start.
+NTSTATUS = {
+    0xC0000135: "STATUS_DLL_NOT_FOUND (DLL ausente)",
+    0xC0000139: "STATUS_ENTRYPOINT_NOT_FOUND (DLL de versão incompatível)",
+    0xC000007B: "STATUS_INVALID_IMAGE_FORMAT (DLL de 32/64 bits trocada)",
+    0xC0000005: "STATUS_ACCESS_VIOLATION",
+    0xC0000409: "STATUS_STACK_BUFFER_OVERRUN",
+}
+
+
+def describe_exit(code: int) -> str:
+    unsigned = code & 0xFFFFFFFF
+    return f"{code} ({NTSTATUS[unsigned]})" if unsigned in NTSTATUS else str(code)
 
 
 def run_qtest(executable: Path, env_extra: dict[str, str], timeout: int = 600) -> tuple[int, str]:
@@ -78,4 +108,5 @@ def run_qtest(executable: Path, env_extra: dict[str, str], timeout: int = 600) -
     proc = subprocess.run([str(executable), "-o", f"{report},txt"], env=env, capture_output=True, text=True,
                           timeout=timeout)
     text = report.read_text(encoding="utf-8", errors="replace") if report.exists() else ""
-    return proc.returncode, text + "\n" + proc.stderr[-4000:]
+    return proc.returncode, (f"código de saída: {describe_exit(proc.returncode)}\n" + text + "\n"
+                             + proc.stdout[-2000:] + "\n" + proc.stderr[-4000:])

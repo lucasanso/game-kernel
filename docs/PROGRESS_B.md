@@ -118,3 +118,9 @@ GUID (independente do idioma), iscas de credenciais com SACL, documentos-isca, c
    (`WinError 32`; no Linux, renomear um arquivo aberto é permitido). Correção sugerida: em `_connect`, fechar
    `conn` num `except BaseException` antes de relançar. Enquanto isso, o job Windows da minha CI também fica
    vermelho por causa desse teste. Não o pulei (regra: nunca desativar testes para ficar verde).
+8. **libyara no Windows importa `Ws2_32`** (achado da CI): o *port* `yara` do vcpkg é só estático e linka
+   `OpenSSL::Crypto`, `Crypt32` e `Ws2_32`. Este último entra pelas funções de ordem de bytes (`htonl`/`ntohl`),
+   não por *sockets*. Isso afeta a auditoria de *imports* do A ("nenhuma biblioteca de rede") quando o motor YARA
+   (M3) linkar a libyara. Sugestão: a auditoria proíbe as funções de rede (`socket`, `connect`, `WSAStartup`,
+   `getaddrinfo`, `send`/`recv`…) em vez da DLL inteira. O `gk-update` (B) usa o mesmo alvo
+   `unofficial::libyara::libyara`.

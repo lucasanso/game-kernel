@@ -17,7 +17,7 @@ from cryptography.hazmat.primitives.asymmetric.ed25519 import Ed25519PrivateKey
 
 from gamekernel.crypto_utils import key_id
 from gamekernel.updates import package as pkg
-from .native_build import ROOT, build_project
+from .native_build import ROOT, build_project, describe_exit
 
 YARA_RULE = '''rule GK_Test_Marker
 {
@@ -106,5 +106,5 @@ def gk_update():
 def run_gk_update(tool: Path, *args: str) -> tuple[int, dict]:
     proc = subprocess.run([str(tool), *map(str, args)], capture_output=True, text=True, timeout=300)
     lines = proc.stdout.strip().splitlines()
-    assert lines, f"sem saída do gk-update: {proc.stderr}"
+    assert lines, f"sem saída do gk-update (código {describe_exit(proc.returncode)}): {proc.stderr}"
     return proc.returncode, json.loads(lines[-1])
