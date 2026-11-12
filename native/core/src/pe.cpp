@@ -57,6 +57,30 @@ std::string format_guid(ByteView g) {
 
 std::string lower(std::string_view s) { return lower_ascii(s); }
 
+struct OrdinalName {
+    std::uint32_t ordinal;
+    const char* name;
+};
+struct OrdinalTable {
+    const char* dll;
+    const OrdinalName* names;
+    std::size_t count;
+};
+#include "ordinal_names.inc"
+
+// pefile semantics: for DLLs in the table, a missing ordinal becomes "ord<N>"; other DLLs stay unnamed.
+std::string ordinal_name(const std::string& dll, std::uint32_t ordinal) {
+    const std::string key = lower(dll);
+    for (const OrdinalTable& table : kOrdinalTables) {
+        if (key != table.dll) continue;
+        for (std::size_t i = 0; i < table.count; ++i) {
+            if (table.names[i].ordinal == ordinal) return table.names[i].name;
+        }
+        return "ord" + std::to_string(ordinal);
+    }
+    return {};
+}
+
 class Parser {
 public:
     Parser(ByteView data, const Limits& limits, PeInfo& info) : d_(data), lim_(limits), info_(info) {}
@@ -396,6 +420,8 @@ void Parser::import_thunks(const std::string& dll, std::uint64_t lookup_rva, std
         if (*value & ordinal_flag) {
             imp.by_ordinal = true;
             imp.ordinal = static_cast<std::uint32_t>(*value & 0xFFFF);
+            imp.name = ordinal_name(dll, imp.ordinal);
+            imp.name_from_ordinal = !imp.name.empty();
         } else {
             const std::uint64_t hint_rva = *value & 0x7FFFFFFFull;
             auto o = off(hint_rva);

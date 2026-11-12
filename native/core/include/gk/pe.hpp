@@ -52,7 +52,8 @@ struct Section {
 
 struct Import {
     std::string dll;                // as stored (case preserved)
-    std::string name;               // empty for ordinal imports
+    std::string name;               // empty for ordinal imports of unknown DLLs
+    bool name_from_ordinal = false; // name resolved from the well-known ordinal table (WS2_32, OLEAUT32...)
     std::uint32_t ordinal = 0;      // valid when by_ordinal
     std::uint16_t hint = 0;
     bool by_ordinal = false;

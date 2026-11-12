@@ -277,6 +277,33 @@ def test_structural_anomalies(native):
     assert native.parse_pe(b"")["valid"] is False
 
 
+def test_ordinal_imports_are_named_like_pefile(native):
+    """WS2_32/WSOCK32/OLEAUT32 imported by ordinal get their real names (pefile ordlookup table)."""
+    import ordlookup
+
+    buf = _minimal_pe(dirs={1: (0x1100, 40)})
+    # One section maps RVA 0x1000-0x11FF to file 0x200-0x3FF. Descriptor at RVA 0x1100, DLL name at 0x1140,
+    # lookup table at 0x1160 and IAT at 0x1180 (PE32+ thunks, high bit = import by ordinal).
+    struct.pack_into("<IIIII", buf, 0x300, 0x1160, 0, 0, 0x1140, 0x1180)
+    buf[0x340:0x34B] = b"WS2_32.dll\0"
+    for i, ordinal in enumerate((4, 23, 999)):
+        struct.pack_into("<Q", buf, 0x360 + 8 * i, 0x8000000000000000 | ordinal)
+        struct.pack_into("<Q", buf, 0x380 + 8 * i, 0x8000000000000000 | ordinal)
+    imports = native.parse_pe(bytes(buf))["imports"]
+    expected = [ordlookup.ordLookup(b"ws2_32.dll", o).decode() for o in (4, 23, 999)]
+    assert [i["name"] for i in imports] == expected == ["connect", "socket", "ord999"]
+    assert all(i["name_from_ordinal"] and i["ordinal"] for i in imports)
+
+
+def test_ordinal_table_is_up_to_date():
+    import subprocess
+
+    root = Path(__file__).resolve().parents[2]
+    result = subprocess.run([sys.executable, str(root / "tools" / "core_gen_ordinals.py"), "--check"],
+                            capture_output=True, text=True)
+    assert result.returncode == 0, result.stderr
+
+
 def test_entropy_matches_reference(native):
     import math
     from collections import Counter

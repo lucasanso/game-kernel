@@ -63,6 +63,7 @@ json to_json(const pe::PeInfo& p) {
     for (const auto& i : p.imports) {
         imports.push_back(json{{"dll", i.dll},
                                {"name", i.name},
+                               {"name_from_ordinal", i.name_from_ordinal},
                                {"ordinal", i.by_ordinal ? json(i.ordinal) : json(nullptr)},
                                {"hint", i.hint},
                                {"delayed", i.delayed},
