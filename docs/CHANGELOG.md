@@ -11,6 +11,11 @@ Formato: [Keep a Changelog](https://keepachangelog.com/pt-BR/1.1.0/). Cada entra
   pytest (`tests/native/`); validação com AddressSanitizer e UBSan.
 - **(B)** `docs/PROGRESS_B.md` (auditoria e plano de refatoração híbrida), `docs/TESTING.md`.
 
+- **(B)** Relatórios forenses (JSON, HTML autocontido sem JavaScript, PDF) como serviço `reports.generate` do
+  processo auxiliar: 15 seções, relatório individual de cracks, redação de dados pessoais, banco somente leitura
+  (`gamekernel/core/report_engine.py`, `report_html.py`, `report_pdf.py`, `sysinfo.py`).
+- **(B)** Teste ponta a ponta C++ → Python: o cliente Qt gera um relatório real pelo processo auxiliar.
+
 ### Alterado
 - **(B)** Escopo do Agente B ajustado à arquitetura híbrida: a quarentena passa ao núcleo C++ (Agente A); interface
   Qt 6 C++ com dono a confirmar.

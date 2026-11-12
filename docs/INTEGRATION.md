@@ -123,7 +123,26 @@ prefixo do *logger*. O stderr do auxiliar também vai para o log (`helper.stderr
 | `system.ping` | teste de vida (`{"echo": …}`) | `gamekernel/ipc/helper.py` |
 | `system.info` | versão, protocolo, Python, `netguard`, métodos | `gamekernel/ipc/helper.py` |
 | `system.shutdown` | encerra após responder | `gamekernel/ipc/helper.py` |
-| `reports.*` | ver `docs/INTEGRATION.md` §10 (adicionado na etapa B3) | `gamekernel/ipc/services/reports.py` |
+| `reports.generate` | gera o relatório forense de uma varredura (ver abaixo) | `gamekernel/ipc/services/reports.py` |
+| `reports.formats` | formatos disponíveis (`pdf` só se o reportlab estiver presente) e pasta padrão | `gamekernel/ipc/services/reports.py` |
+
+### `reports.generate`
+
+Parâmetros (qualquer parâmetro desconhecido é rejeitado com `invalid_params`; `details.field` indica o campo):
+
+| Campo | Tipo | Padrão | Observação |
+|---|---|---|---|
+| `scan_id` | inteiro > 0 | — (obrigatório) | id da tabela `scans` |
+| `formats` | lista de `json`, `html`, `pdf` | `["html","json"]` | |
+| `output_dir` | caminho absoluto, pasta existente | `<dados>/reports` | os arquivos são gravados de forma atômica |
+| `include_clean` | bool | `false` | lista também os arquivos sem indicadores (limite de 20 000) |
+| `redact_username` | bool | `settings.reports.redact_username` (true) | troca o segmento do usuário nos caminhos por `<usuário>` |
+| `include_hostname` | bool | `settings.reports.include_hostname` (false) | |
+| `db_path` | caminho absoluto | `<dados>/gamekernel.db` | aberto **somente para leitura** (`PRAGMA query_only`); nunca é criado |
+
+Eventos: `progress` com `data.stage` ∈ `load`, `json`, `html`, `pdf`.
+Resultado: `{"scan_id", "files": [{"format","path","size","sha256"}], "counts": {…}, "max_risk": {…}, "warnings": […]}`.
+Erros: `invalid_params`, `not_found` (banco ou varredura), `io_error`, `cancelled`, `timeout`.
 
 ## 9. Componentes
 

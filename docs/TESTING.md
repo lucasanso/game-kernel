@@ -45,6 +45,7 @@ GK_PYTHON=$(which python3) GK_REPO=$PWD ./build/native-ipc-asan/gk_ipc_tests
 |---|---|---|
 | `tests/foundation/` | fundação (modelos, banco, configurações, Ed25519, netguard) | A |
 | `tests/ipc/` | protocolo gk-ipc e processo auxiliar real com falhas provocadas (`fault_helper.py`) | B |
+| `tests/reports/` | relatórios: conteúdo, cracks, privacidade, escape, PDF, serviço no auxiliar (`sample_scan.py` grava uma varredura realista) | B |
 | `tests/native/` | *drivers* pytest que compilam e executam os testes C++ do B | B |
 | `native/ipc/tests/` | testes QtTest do cliente C++ (executados contra os auxiliares Python reais) | B |
 

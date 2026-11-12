@@ -4,7 +4,9 @@
 #include "gk/ipc/helper_client.hpp"
 #include "gk/ipc/protocol.hpp"
 
+#include <QCryptographicHash>
 #include <QElapsedTimer>
+#include <QFile>
 #include <QJsonArray>
 #include <QJsonDocument>
 #include <QSignalSpy>
@@ -281,6 +283,42 @@ private slots:
         QTRY_COMPARE(finished.count(), 1);
         QCOMPARE(finished.at(0).at(0).toInt(), 0);
         QCOMPARE(c.consecutiveFailures(), 0);
+    }
+
+    // Cross-language end-to-end: the C++ client asks the real Python helper for a forensic report
+    // of a scan prepared by pytest (tests/native/test_native_ipc.py) and checks the files it wrote.
+    void reportServiceEndToEnd() {
+        const QString db = qEnvironmentVariable("GK_REPORT_DB");
+        const QString out = qEnvironmentVariable("GK_REPORT_OUT");
+        const int scanId = qEnvironmentVariableIntValue("GK_REPORT_SCAN");
+        if (python_.isEmpty() || db.isEmpty() || out.isEmpty() || scanId <= 0) QSKIP("banco de exemplo não preparado");
+        HelperClient c(HelperConfig::forDevelopment(python_, repo_, dataDir_.path()));
+        QStringList stages;
+        connect(&c, &HelperClient::eventReceived, this, [&](qint64, const QString&, const QJsonObject& data) {
+            stages << data.value("stage").toString();
+        });
+        auto r = c.callBlocking("reports.generate",
+                                {{"scan_id", scanId}, {"formats", QJsonArray{"json", "html", "pdf"}},
+                                 {"db_path", db}, {"output_dir", out}},
+                                120000);
+        QVERIFY2(r.ok, qPrintable(r.error.code + ": " + r.error.message));
+        QCOMPARE(stages, (QStringList{"load", "json", "html", "pdf"}));
+        const QJsonArray files = r.value.toObject().value("files").toArray();
+        QCOMPARE(files.size(), 3);
+        for (const QJsonValue& v : files) {
+            const QJsonObject f = v.toObject();
+            QFile file(f.value("path").toString());
+            QVERIFY(file.open(QIODevice::ReadOnly));
+            const QByteArray data = file.readAll();
+            QCOMPARE(qint64(data.size()), qint64(f.value("size").toDouble()));
+            QCOMPARE(QString::fromLatin1(QCryptographicHash::hash(data, QCryptographicHash::Sha256).toHex()),
+                     f.value("sha256").toString());
+        }
+        QCOMPARE(r.value.toObject().value("max_risk").toObject().value("level").toString(), QStringLiteral("CRITICAL"));
+        // Invalid parameters are reported as a structured error, not a crash.
+        auto bad = c.callBlocking("reports.generate", {{"scan_id", "x"}});
+        QCOMPARE(bad.error.code, QStringLiteral("invalid_params"));
+        QCOMPARE(bad.error.details.value("field").toString(), QStringLiteral("scan_id"));
     }
 
     void realHelperEntryPoint() {

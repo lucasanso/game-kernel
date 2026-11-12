@@ -14,7 +14,7 @@ from ..helper import Service
 
 log = logging.getLogger(__name__)
 
-SERVICE_MODULES: tuple[str, ...] = ()
+SERVICE_MODULES: tuple[str, ...] = ("gamekernel.ipc.services.reports",)
 
 IMPORT_ERRORS: dict[str, str] = {}
 

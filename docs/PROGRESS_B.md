@@ -70,7 +70,7 @@ Definidos em [`docs/INTEGRATION.md`](INTEGRATION.md):
 |---|---|---|
 | B1 | Auditoria, classificação e contratos (este documento + `INTEGRATION.md`) | ✅ |
 | B2 | gk-ipc v1: auxiliar Python, cliente Python, **cliente C++/Qt**, testes cruzados controlados pelo pytest | ✅ |
-| B3 | Relatórios forenses (JSON, HTML autocontido, PDF) como serviço do auxiliar + `sysinfo` | ⏳ |
+| B3 | Relatórios forenses (JSON, HTML autocontido, PDF) como serviço do auxiliar + `sysinfo` | ✅ |
 | B4 | Atualização offline: formato `.gkpkg`, preparação e assinatura em Python, **verificação e instalação atômica em C++** (libsodium), testes de equivalência e adulteração | ⏳ |
 | B5 | Threat Intelligence: normalização e deduplicação de IOC, conflitos, preparação e *lint* de regras YARA, relatório de atualização | ⏳ |
 | B6 | Bindings pybind11 do núcleo C++ e testes de equivalência Python × C++ (depende das *headers* do A) | aguardando A |
@@ -114,6 +114,44 @@ Definidos em [`docs/INTEGRATION.md`](INTEGRATION.md):
    Agora o processo é "aposentado" (`retire()`) na hora.
 4. **C++**: uma falha emitida de forma síncrona dentro de `call()`, antes de o chamador receber o id, travava o
    `callBlocking`. Agora as falhas nunca são emitidas de forma síncrona (`failAllLater`).
+
+## B3 — Relatórios forenses ✅
+
+**Decisão de linguagem**: **Python**, executado no processo auxiliar. Motivos: o reportlab é maduro para PDF
+(tabelas, quebra de página, fontes Unicode), a lógica de relatório muda com frequência e não está no caminho
+crítico de desempenho, e o isolamento em processo separado impede que uma falha na geração derrube o app.
+
+**Implementado**
+* `gamekernel/core/sysinfo.py`: informações mínimas do computador (SO e build com aviso de fim de suporte do
+  Windows 10, arquitetura, CPU, núcleos, memória, fuso). **Nunca** coleta usuário, MAC, IP ou número de série;
+  o nome do computador só entra com opção explícita.
+* `gamekernel/core/report_engine.py`: modelo `gamekernel-report` v1 com as 15 seções exigidas, mais o
+  **relatório individual de cada crack** (tipo de modificação, assinatura, riscos potenciais, possibilidade de
+  falso positivo, recomendação). Lê o banco com `PRAGMA query_only` (nunca cria nem altera), aplica `Redactor`
+  (troca só segmentos de caminho inteiros) e grava de forma atômica, com SHA-256 de cada arquivo gerado.
+  Distingue localização física (arquivo/contêiner) da localização da evidência (seção, offset, RVA, linha,
+  trecho) e marca indicadores genéricos como "não é o código malicioso exato".
+* `gamekernel/core/report_html.py`: HTML autocontido, **sem JavaScript**, CSP `default-src 'none'`, tudo
+  escapado (testado com um arquivo chamado `<script>alert(1)</script>.dll`), tema claro/escuro e impressão.
+* `gamekernel/core/report_pdf.py`: PDF com reportlab e fonte Unicode (Segoe UI/Arial no Windows, DejaVu no
+  Linux); sem fonte Unicode, avisa que houve substituição de caracteres.
+* `gamekernel/ipc/services/reports.py`: serviços `reports.generate` (validação estrita de parâmetros, eventos
+  de progresso, cancelamento cooperativo) e `reports.formats`.
+
+**Testado**
+* `tests/reports/test_reports.py`: 26 testes (todas as seções, localização de evidência, membro de compactado →
+  arquivo físico, relatórios de crack, redação e opção de incluir dados, escape/CSP, PDF com várias páginas,
+  escrita atômica com hash, banco somente leitura, banco inexistente não é criado, parâmetros inválidos, serviço
+  via processo auxiliar real com progresso).
+* `native/ipc/tests/tst_ipc.cpp::reportServiceEndToEnd`: o **cliente C++** pede o relatório ao auxiliar Python
+  real e confere tamanho e SHA-256 de cada arquivo gerado.
+* Inspeção visual do HTML (Chromium) e do PDF (pdftoppm): layout correto, sem cortes.
+* ASan/UBSan: 35/35.
+
+**Resultado**: `pytest -q` → **96 passed**.
+
+**Arquivos do B adicionados em `gamekernel/core/`** (registrar no `WORK_SPLIT.md`): `report_engine.py`,
+`sysinfo.py` (já eram do B), `report_html.py` e `report_pdf.py` (novos).
 
 ---
 
