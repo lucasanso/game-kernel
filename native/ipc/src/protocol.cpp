@@ -11,7 +11,7 @@ namespace gk::ipc {
 namespace {
 
 const QRegularExpression& methodRe() {
-    static const QRegularExpression re(QStringLiteral("^[a-z][a-z0-9_]*(\\.[a-z][a-z0-9_]*)+$"));
+    static const QRegularExpression re(QStringLiteral("^[a-z][a-z0-9_]*(\\.[a-z][a-z0-9_]*)+\\z"));
     return re;
 }
 

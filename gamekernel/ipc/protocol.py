@@ -33,7 +33,7 @@ PROTOCOL_VERSION = 1
 DEFAULT_MAX_FRAME = 8 * 1024 * 1024
 HEADER = struct.Struct("<I")
 MAX_ID = 2**53 - 1                       # exactly representable in a JSON double (C++/JS safe)
-METHOD_RE = re.compile(r"^[a-z][a-z0-9_]*(\.[a-z][a-z0-9_]*)+$")
+METHOD_RE = re.compile(r"[a-z][a-z0-9_]*(\.[a-z][a-z0-9_]*)+")   # use fullmatch()
 LOG_LEVELS = ("DEBUG", "INFO", "WARNING", "ERROR", "CRITICAL")
 MESSAGE_TYPES = ("hello", "request", "cancel", "event", "response", "log")
 
@@ -161,7 +161,7 @@ def validate_message(message: dict[str, Any]) -> dict[str, Any]:
     if kind == "request":
         _require_id(message)
         method = message.get("method")
-        if not isinstance(method, str) or not METHOD_RE.match(method) or len(method) > 128:
+        if not isinstance(method, str) or not METHOD_RE.fullmatch(method) or len(method) > 128:
             raise ProtocolError(f"nome de método inválido: {method!r}")
         if not isinstance(message.get("params", {}), dict):
             raise ProtocolError("'params' precisa ser um objeto")

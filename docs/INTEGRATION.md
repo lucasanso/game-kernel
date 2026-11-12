@@ -178,4 +178,11 @@ const qint64 id = helper->call("reports.generate", {{"scan_id", scanId}, {"forma
   ida e volta `C++ → JSON → FileResult.from_dict → to_dict` e comparam campo a campo.
 * **Banco SQLite**: o esquema de `gamekernel/database/db.py` é contrato. Quem grava é o núcleo
   (C++). Os serviços Python o abrem **somente para leitura** (`PRAGMA query_only=ON`).
-* **Pacotes de atualização** (`.gkpkg`) e **IOC** (`gamekernel-ioc`): ver `docs/OFFLINE_UPDATES.md` (etapa B4).
+* **Pacotes de atualização** (`.gkpkg` v1), **conjunto ativo** (`gamekernel-signatures`) e **IOC**
+  (`gamekernel-ioc`): especificados em `docs/OFFLINE_UPDATES.md`. As implementações Python (referência e
+  publicador) e C++ (aplicativo) usam os **mesmos códigos de erro** (`not_a_package`, `unsupported_format`,
+  `invalid_header`, `truncated`, `no_trusted_keys`, `bad_signature`, `invalid_manifest`, `incompatible_app`,
+  `hash_mismatch`, `trailing_data`, `downgrade`, `validation_failed`, `busy`, `io_error`), e testes de
+  equivalência garantem a mesma decisão.
+* **Python orquestrando C++ por processo**: `gamekernel/ti/prepare.py` chama `gk-update validate` (JSON no stdout)
+  para que o publicador veja, antes de assinar, o veredito dos mesmos validadores que o aplicativo usa.

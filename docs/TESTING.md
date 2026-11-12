@@ -14,7 +14,7 @@ Pré-requisitos dos testes nativos: CMake ≥ 3.21, compilador C++20 (MSVC 2022,
 Qt 6.4+ (Core e Test), Ninja (opcional). No Ubuntu:
 
 ```bash
-sudo apt-get install -y cmake ninja-build g++ qt6-base-dev libgl-dev
+sudo apt-get install -y cmake ninja-build g++ qt6-base-dev libgl-dev libsodium-dev libyara-dev pkg-config
 ```
 
 Sem o toolchain, os testes nativos são **pulados com o motivo**. Na CI, `GK_NATIVE_REQUIRED=1` transforma o
@@ -26,6 +26,7 @@ Variáveis úteis:
 |---|---|
 | `GK_NATIVE_REQUIRED=1` | toolchain nativo ausente = falha (CI) |
 | `GK_NATIVE_CONFIG=Debug` | tipo de *build* dos testes nativos (padrão `Release`) |
+| `GK_NATIVE_SANITIZE=1` | compila variantes **ASan + UBSan** (`build/*-asan`) e roda a suíte inteira contra elas; códigos de saída 99/98 distinguem um erro de memória de uma rejeição legítima |
 
 Sanitizadores (Linux):
 
@@ -46,6 +47,8 @@ GK_PYTHON=$(which python3) GK_REPO=$PWD ./build/native-ipc-asan/gk_ipc_tests
 | `tests/foundation/` | fundação (modelos, banco, configurações, Ed25519, netguard) | A |
 | `tests/ipc/` | protocolo gk-ipc e processo auxiliar real com falhas provocadas (`fault_helper.py`) | B |
 | `tests/reports/` | relatórios: conteúdo, cracks, privacidade, escape, PDF, serviço no auxiliar (`sample_scan.py` grava uma varredura realista) | B |
+| `tests/updates/` | pacotes `.gkpkg`: construtor, **equivalência Python × C++**, adulterações, mutações aleatórias, instalador C++ | B |
+| `tests/ti/` | IOC, YARA (yara-python × libyara), ferramentas do publicador ponta a ponta | B |
 | `tests/native/` | *drivers* pytest que compilam e executam os testes C++ do B | B |
 | `native/ipc/tests/` | testes QtTest do cliente C++ (executados contra os auxiliares Python reais) | B |
 

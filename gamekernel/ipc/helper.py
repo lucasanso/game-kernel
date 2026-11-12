@@ -116,7 +116,7 @@ class HelperServer:
         for svc in self._builtin_services() + list(services):
             if svc.method in self._services:
                 raise ValueError(f"método duplicado: {svc.method}")
-            if not P.METHOD_RE.match(svc.method):
+            if not P.METHOD_RE.fullmatch(svc.method):
                 raise ValueError(f"nome de método inválido: {svc.method}")
             self._services[svc.method] = svc
 

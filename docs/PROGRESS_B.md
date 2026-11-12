@@ -71,8 +71,8 @@ Definidos em [`docs/INTEGRATION.md`](INTEGRATION.md):
 | B1 | Auditoria, classificação e contratos (este documento + `INTEGRATION.md`) | ✅ |
 | B2 | gk-ipc v1: auxiliar Python, cliente Python, **cliente C++/Qt**, testes cruzados controlados pelo pytest | ✅ |
 | B3 | Relatórios forenses (JSON, HTML autocontido, PDF) como serviço do auxiliar + `sysinfo` | ✅ |
-| B4 | Atualização offline: formato `.gkpkg`, preparação e assinatura em Python, **verificação e instalação atômica em C++** (libsodium), testes de equivalência e adulteração | ⏳ |
-| B5 | Threat Intelligence: normalização e deduplicação de IOC, conflitos, preparação e *lint* de regras YARA, relatório de atualização | ⏳ |
+| B4 | Atualização offline: formato `.gkpkg`, preparação e assinatura em Python, **verificação e instalação atômica em C++** (libsodium), testes de equivalência e adulteração | ✅ |
+| B5 | Threat Intelligence: normalização e deduplicação de IOC, conflitos, preparação e *lint* de regras YARA, relatório de atualização | ✅ |
 | B6 | Bindings pybind11 do núcleo C++ e testes de equivalência Python × C++ (depende das *headers* do A) | aguardando A |
 | B7 | Sandbox (orquestração no auxiliar + `monitor.ps1`) | ⏳ |
 | B8 | CI (Linux + Windows/MSVC), PyInstaller do auxiliar, CMake/`windeployqt`, Inno Setup, versão portátil | ⏳ |
@@ -153,6 +153,67 @@ crítico de desempenho, e o isolamento em processo separado impede que uma falha
 **Arquivos do B adicionados em `gamekernel/core/`** (registrar no `WORK_SPLIT.md`): `report_engine.py`,
 `sysinfo.py` (já eram do B), `report_html.py` e `report_pdf.py` (novos).
 
+## B4 — Atualização offline ✅ / B5 — Threat Intelligence ✅
+
+**Divisão por linguagem (diretriz §3.C)**: preparação, versões, manifestos, organização de assinaturas e
+relatório de atualização em **Python**; **verificação criptográfica e instalação no app em C++**.
+
+**Decisão de formato**: contêiner `.gkpkg` próprio em vez de ZIP. Não há *parser* de compactado, descompressão
+nem caminhos vindos de metadados, e a verificação é feita num único fluxo, sem TOCTOU. Especificação em `docs/OFFLINE_UPDATES.md`.
+
+**Implementado**
+* `gamekernel/updates/package.py`: formato, construção e assinatura (publicador) e **verificador de referência**
+  com códigos de erro estáveis.
+* `native/updates/` (**C++20, Qt Core, libsodium, libyara**):
+  * `verifyPackage`: Ed25519 (libsodium) sobre cabeçalho e manifesto, validação do manifesto e SHA-256 de cada
+    arquivo em fluxo, entregando os bytes ao *sink* de extração enquanto calcula o hash;
+  * validadores: **YARA compilado de verdade** (libyara, `include` recusado, um *namespace* por arquivo, variáveis
+    externas), ClamAV (cabeçalho e MD5 do CVD, estrutura das bases de texto), IOC (formato, conflitos);
+  * `Installer`: trava entre processos (`QLockFile`), área temporária, proteção contra *downgrade*, manutenção
+    dos componentes não substituídos, troca atômica `active`/`previous`, rollback, recuperação após queda de
+    energia e histórico em `install-history.jsonl`;
+  * CLI `gk-update` (`verify`, `install`, `rollback`, `status`, `validate`), com saída JSON.
+* `gamekernel/ti/` (Threat Intelligence, Python): `ioc.py` (leitura de JSON/CSV/listas, normalização que recusa
+  MD5/SHA-1, deduplicação com maior severidade e fontes combinadas, conflitos good×bad, saída determinística,
+  validador idêntico ao C++), `yara_prep.py` (compilação com as mesmas restrições do C++ e *lint* de metadados
+  explicáveis), `prepare.py` (bloqueio antes da assinatura, inclusive rodando os **validadores C++** quando
+  disponíveis, e relatório de atualização com diferenças entre pacotes).
+* Ferramentas: `tools/gk_keygen.py`, `tools/make_update_package.py`, `tools/ti_build_ioc.py`.
+
+**Problemas encontrados e corrigidos durante a implementação**
+1. `$` em regex aceita quebra de linha final, em Python e no PCRE: trocado por `fullmatch`/`\z` nos dois
+   lados, inclusive no protocolo IPC.
+2. O Qt não distingue `1` de `1.0` em JSON, e o Python sim: definida a mesma regra de "inteiro" nos dois lados.
+3. Nomes de dispositivo do Windows (`CON.yar`, `nul.json`) agora são recusados no manifesto (Python e C++).
+4. O `yara.Rule` do yara-python não expõe o *namespace*; a coleta de regras passou a ser por arquivo.
+5. Sob ASan, a saída padrão (1) se confundia com "pacote rejeitado": no modo instrumentado, os códigos agora são 99/98.
+
+**Testado** (`tests/updates/`, `tests/ti/`)
+* **Equivalência Python × C++** (35): pacote válido; 14 adulterações (*payload*, manifesto, assinatura, *magic*,
+  versão do formato, truncamentos, dados extras, tamanhos inválidos); chave não confiável e ausência de chaves;
+  `min_app_version`; **27 manifestos assinados porém inválidos** (*path traversal*, caminho absoluto, `\`,
+  extensão, nomes reservados, `\n`, componentes, tamanhos negativos, fracionários, booleanos ou gigantes,
+  SHA maiúsculo, versões, campos ausentes, duplicatas); JSON quebrado ou `NaN`; arquivo de tamanho zero;
+  **60 mutações aleatórias** (todas rejeitadas, com o mesmo código nos dois lados).
+* Instalador C++ (15): layout e manifesto ativo; pacote parcial que mantém componentes; *downgrade* e mesma
+  versão recusados, e aceitos com confirmação; **6 conteúdos inválidos nunca ativados** (YARA com erro, `include`,
+  variável indefinida, IOC em conflito, hash maiúsculo, base ClamAV malformada); CVD com MD5 errado; pacote
+  adulterado; rollback e rollback do rollback; **recuperação após queda entre as trocas de pasta**; trava de instalação concorrente.
+* TI (30): normalização, aliases, deduplicação e conflitos, leitores, determinismo, **16 casos de equivalência do
+  validador IOC Python × C++**, **9 conjuntos YARA com a mesma decisão em yara-python × libyara**, *lint* de metadados.
+* Ferramentas do publicador (5): gerar chave → preparar → assinar → verificar → **instalar com o instalador
+  C++** → segundo pacote com relatório de diferenças; recusa de componentes inválidos; `ti_build_ioc.py`.
+* `GK_NATIVE_SANITIZE=1`: a mesma suíte (92 testes) com `gk-update` e o cliente IPC instrumentados com ASan/UBSan, sem erros.
+
+**Resultado**: `pytest -q` → **193 passed**.
+
+**Pendente nesta área**
+* Importação **direta** de CVD oficial avulso (sem `.gkpkg`): exige a verificação RSA da Cisco Talos via `sigtool`,
+  binário cuja localização e integridade são do Agente A (`core/tools.py`, `core/integrity.py`). Dentro de um
+  `.gkpkg`, a autenticidade já vem da assinatura do publicador e o MD5 do CVD é conferido.
+* **Contrato a combinar com o A**: as variáveis externas YARA (`filename`, `filepath`, `extension`, `filetype`)
+  devem ser as mesmas do motor; o A pode substituir o validador com `Installer::setValidator("yara", …)`.
+
 ---
 
 ## Pendências e decisões que dependem do usuário
@@ -167,7 +228,7 @@ crítico de desempenho, e o isolamento em processo separado impede que uma falha
   `native/analysis/**`, `native/quarantine/**`, `native/sysopt/**`, `native/perf/**`; B é dono de `native/ipc/**`,
   `native/updates/**`, `native/bindings/**`. Cada subprojeto do B compila sozinho e entra na raiz por `add_subdirectory()`.
 * **P5 — Arquivos da fundação.** `docs/WORK_SPLIT.md`, `docs/ARCHITECTURE.md`, `requirements*.txt` e `pyproject.toml`
-  precisam refletir a arquitetura híbrida (dependências novas: pybind11 no desenvolvimento, libsodium e Qt 6
-  no nativo). **Não os alterei**: são congelados e precisam de acordo entre os agentes.
+  precisam refletir a arquitetura híbrida (dependências novas: pybind11 no desenvolvimento; Qt 6, libsodium e
+  libyara no nativo). **Não os alterei**: são congelados e precisam de acordo entre os agentes.
 * **P6 — `signatures/keys/`** (chave pública de *release*) não tem dono. A chave privada nunca é versionada;
   o *build* copia a chave pública do publicador.

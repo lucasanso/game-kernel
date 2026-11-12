@@ -26,17 +26,30 @@ def _unavailable(reason: str):
     pytest.skip(reason)
 
 
+SANITIZER_FLAGS = "-fsanitize=address,undefined -fno-omit-frame-pointer -fno-sanitize-recover=undefined"
+
+
 def build_project(name: str, source: Path, target: str, extra_args: list[str] | None = None) -> Path:
+    """Configure/build ``target``. ``GK_NATIVE_SANITIZE=1`` builds a separate ASan+UBSan variant
+    (GCC/Clang), so the whole Python-driven suite exercises instrumented C++ code."""
     cmake = shutil.which("cmake")
     if not cmake:
         _unavailable("cmake não encontrado")
+    extra_args = list(extra_args or [])
+    config = os.environ.get("GK_NATIVE_CONFIG", "Release")
+    if os.environ.get("GK_NATIVE_SANITIZE") == "1" and sys.platform != "win32":
+        name += "-asan"
+        config = "Debug"
+        extra_args.append(f"-DCMAKE_CXX_FLAGS={SANITIZER_FLAGS}")
+        # Distinct exit codes: a sanitizer report must never look like a legitimate rejection (exit 1).
+        os.environ.setdefault("ASAN_OPTIONS", "exitcode=99:detect_leaks=1")
+        os.environ.setdefault("UBSAN_OPTIONS", "halt_on_error=1:exitcode=98:print_stacktrace=1")
     build_dir = BUILD_ROOT / name
     generator = ["-G", "Ninja"] if shutil.which("ninja") else []
-    config = os.environ.get("GK_NATIVE_CONFIG", "Release")
     if not (build_dir / "CMakeCache.txt").exists():
         proc = subprocess.run(
             [cmake, "-S", str(source), "-B", str(build_dir), f"-DCMAKE_BUILD_TYPE={config}", *generator,
-             *(extra_args or [])],
+             *extra_args],
             capture_output=True, text=True,
         )
         if proc.returncode != 0:
