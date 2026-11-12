@@ -15,6 +15,7 @@
         "lzma",
         "zstd"
       ]
-    }
+    },
+    "sqlite3"
   ]
 }

@@ -57,3 +57,23 @@ enquadramento e envelope do processo auxiliar Python, sem um segundo protocolo.
 * `tests/native/test_yara.py` — equivalência com yara-python, isolamento, `include`, concorrência.
 * `tests/native/test_archive.py` — equivalência com zipfile/tarfile, bombas, limites, nomes perigosos, fuzzing.
 * Sanitizers: preset `linux-asan`; `GK_SLOWDOWN_FACTOR` ajusta os limites de tempo; `GK_FUZZ_ITERATIONS`.
+
+## 6. Regras de uso
+
+* **Um único SQLite por processo.** `gk_native.CoreDatabase` (C++) e `gamekernel.database.Database` (Python) usam
+  cópias diferentes da biblioteca SQLite; usá-las no mesmo processo quebra os locks POSIX entre elas (o fechamento de
+  uma conexão de uma cópia libera os locks da outra e pode apagar o arquivo WAL). No produto isso não ocorre (o app
+  usa só o C++; o Python roda no processo auxiliar). Nos testes, o lado C++ roda em outro processo
+  (`tests/native/test_core_db.py`).
+* `gk-scanworker` recebe caminhos absolutos de regras (`--rules`, `--indicators`) e informa no `hello` quantas regras
+  carregou; o orquestrador registra aviso quando os indicadores não carregam.
+
+## 7. Orquestrador e CLI
+
+* `cpp/scan` (`gk::scan::Scanner`, Qt Core): enumeração → cache por caminho/tamanho/mtime e por SHA-256 + impressão
+  dos motores → `gk-scanworker` × N supervisionados pelo cliente gk-ipc (`cpp/ipc`: Job Object, prazo, reinício) →
+  ClamAV em lotes (`clamscan --file-list`, vários `--database`, cache por SHA-256 + identidade dos bancos) →
+  reputação local (IOCs + marcações do usuário) → contexto de pasta e risco → SQLite.
+* Falha ou travamento do worker: o arquivo recebe `status=error/partial` com o motivo e a varredura continua.
+* `gk-cli scan <alvos> [--quick] [--json saída] [--data-dir dir] [--workers n] [--no-cache]` — códigos de saída:
+  0 nada suspeito · 3 ameaças/suspeitos/PUA · 2 erro · 4 cancelada (Ctrl+C).

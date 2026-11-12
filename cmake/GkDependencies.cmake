@@ -44,3 +44,7 @@ endif()
 # ---- libarchive -------------------------------------------------------------------------------
 find_package(LibArchive 3.6 REQUIRED)
 add_library(gk::archive ALIAS LibArchive::LibArchive)
+
+# ---- SQLite 3 -----------------------------------------------------------------------------------
+find_package(SQLite3 REQUIRED)
+add_library(gk::sqlite ALIAS SQLite::SQLite3)

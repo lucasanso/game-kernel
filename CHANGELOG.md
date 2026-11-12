@@ -3,6 +3,13 @@
 ## Agente A — Core e Segurança
 
 ### [não lançado]
+- M8: varredura ponta a ponta. `gk-scanworker` (processo isolado, servidor gk-ipc v1, cancelamento, membros de
+  compactados como eventos); orquestrador Qt `gk::scan::Scanner` supervisionando N workers pelo cliente gk-ipc
+  (Job Object, prazo, reinício), cache por caminho/mtime e por SHA-256 + impressão das regras, ClamAV em lotes com
+  `--file-list` e vários bancos, reputação local (IOCs JSON + marcações do usuário), contexto e risco, gravação no
+  SQLite pelo C++ com o mesmo esquema do Python (cadeia de auditoria compatível), resumo com limitações e avisos;
+  `gk-cli` com códigos de saída. EICAR detectado por três mecanismos independentes (YARA, ClamAV, IOC).
+  Testes ponta a ponta incluem worker que trava/cai e cancelamento por Ctrl+C.
 - M7: motor de risco e módulo de cracks em C++ (`gk::risk`): reconhecimento de componentes por pasta a partir de
   `signatures/data/game_components.json` (21 famílias: emuladores Steam/Epic/EA/Ubisoft, desbloqueadores de DLC,
   Online-Fix, Steamless, ReShade, ENB, ASI Loader, Special K, DXVK, BepInEx, MelonLoader, Script Hook V, script

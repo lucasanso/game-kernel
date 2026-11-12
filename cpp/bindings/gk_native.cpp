@@ -9,6 +9,7 @@
 
 #include "gk/analysis.hpp"
 #include "gk/archive.hpp"
+#include "gk/db.hpp"
 #include "gk/error.hpp"
 #include "gk/filetype.hpp"
 #include "gk/file_view.hpp"
@@ -452,6 +453,14 @@ PYBIND11_MODULE(gk_native, m) {
         },
         py::arg("results"), py::arg("components"), py::arg("catalog"));
     m.def("glob_match", &gk::risk::glob_match);
+
+    py::class_<gk::db::Database>(m, "CoreDatabase")
+        .def_static("open", [](const std::filesystem::path& p) { return gk::db::Database::open(p); })
+        .def("append_audit", &gk::db::Database::append_audit, py::arg("action"), py::arg("detail"), py::arg("actor") = "core")
+        .def("mark_interrupted_scans", &gk::db::Database::mark_interrupted_scans)
+        .def_property_readonly("recovered_from", [](const gk::db::Database& d) {
+            return d.recovered_from() ? py::object(py::str(d.recovered_from()->string())) : py::object(py::none());
+        });
     m.def("network_literals", [](const py::bytes& data) {
         std::string storage;
         std::vector<std::string> out;

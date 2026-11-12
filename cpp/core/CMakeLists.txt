@@ -1,4 +1,8 @@
 configure_file(include/gk/version.hpp.in ${CMAKE_CURRENT_BINARY_DIR}/generated/gk/version.hpp @ONLY)
+# The SQLite schema is a contract shared with Python (contracts/schema.sql): embed it, never copy it.
+file(READ ${PROJECT_SOURCE_DIR}/contracts/schema.sql GK_SCHEMA_SQL)
+configure_file(schema.hpp.in ${CMAKE_CURRENT_BINARY_DIR}/generated/gk/schema.hpp @ONLY)
+set_property(DIRECTORY APPEND PROPERTY CMAKE_CONFIGURE_DEPENDS ${PROJECT_SOURCE_DIR}/contracts/schema.sql)
 
 add_library(gk_core STATIC
   src/file_view.cpp
@@ -15,9 +19,13 @@ add_library(gk_core STATIC
   src/text_analysis.cpp
   src/analysis.cpp
   src/risk.cpp
+  src/db.cpp
+  src/enumerate.cpp
+  src/reputation.cpp
+  src/clamav.cpp
 )
 target_include_directories(gk_core PUBLIC
   ${CMAKE_CURRENT_SOURCE_DIR}/include
   ${CMAKE_CURRENT_BINARY_DIR}/generated)
-target_link_libraries(gk_core PUBLIC gk::json PRIVATE gk::sodium gk::yara gk::archive)
+target_link_libraries(gk_core PUBLIC gk::json PRIVATE gk::sodium gk::yara gk::archive gk::sqlite)
 gk_apply_options(gk_core)

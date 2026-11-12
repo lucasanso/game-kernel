@@ -14,9 +14,8 @@ Legenda de estado: ✅ integrado e testado · 🔄 em migração · 🐍 mantido
 | YARA (compilação isolada por arquivo, `include` bloqueado, externals, limites, cancelamento, scanner por chamada — thread-safe) | `yara_engine.hpp/.cpp` | ✅ M3 (equivalência com yara-python: regras, namespaces, tags, metadados, offsets e trechos) | `engines/yara_engine.py` (oráculo) |
 | Compactados (libarchive em memória; ZIP/7z/RAR/RAR5/ISO/CAB/TAR/CPIO/LHA + gz/bz2/xz/zstd/lz4; SFX; limites anti-bomba com orçamento compartilhado entre níveis; nomes perigosos, links, criptografia) | `archive.hpp/.cpp` | ✅ M5 (equivalência com zipfile/tarfile; fuzzing sob ASan) | py7zr, rarfile, pycdlib |
 | Camada de evidências: regras estruturais PE, nomes enganosos, correlação de capacidades (indicadores × imports), scripts (linhas, `-EncodedCommand`, Base64, ofuscação), atalhos LNK/URL, IP:porta, membros de compactados | `analysis.hpp`, `model.hpp`, `pe_rules.cpp`, `capabilities.cpp`, `text_analysis.cpp`, `analysis.cpp` | ✅ M6 (contrato JSON idêntico ao `models.py`; corpus benigno ≤ LOW; ASan) | — |
-| ClamAV / reputação local | `clamav.cpp`, `reputation.cpp` | ⏳ M6b | — |
 | Contexto de pasta (cracks, desbloqueadores, mods, repacks — banco `signatures/data/game_components.json`) e motor de risco (mitigação só de traços esperados, classificação, estado de crack, explicação, recomendações do `contracts/threat_catalog.json`) | `risk.hpp`, `risk.cpp` | ✅ M7 | — |
-| Orquestrador, worker, IPC, banco, CLI | `scanner.cpp`, `ipc.cpp`, `db.cpp`, `cpp/worker`, `cpp/cli` | ⏳ M8 | `core/scan_api.py` |
+| Orquestrador (`cpp/scan`), processo isolado `gk-scanworker` (servidor gk-ipc v1), banco SQLite C++ (`db.cpp`, esquema embutido de `contracts/schema.sql`), enumeração, reputação local (IOCs), ClamAV em lote, `gk-cli` | `cpp/scan`, `cpp/worker`, `cpp/cli`, `db.cpp`, `enumerate.cpp`, `reputation.cpp`, `clamav.cpp` | ✅ M8 (ponta a ponta, cache, falha/travamento do worker, cancelamento) | `core/scan_api.py` |
 | Quarentena | `quarantine.cpp` | ⏳ M9 | — |
 | Integridade da instalação | `integrity.cpp` | ⏳ M10 | `core/integrity.py` (verificação) |
 | Tempo real | `win/realtime.cpp` | ⏳ M11 | — |

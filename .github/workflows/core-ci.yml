@@ -18,7 +18,7 @@ jobs:
     steps:
       - uses: actions/checkout@v5
       - name: System dependencies
-        run: sudo apt-get update && sudo apt-get install -y ninja-build libsodium-dev nlohmann-json3-dev libyara-dev libarchive-dev mingw-w64 binutils-mingw-w64
+        run: sudo apt-get update && sudo apt-get install -y ninja-build libsodium-dev nlohmann-json3-dev libyara-dev libarchive-dev libsqlite3-dev qt6-base-dev clamav mingw-w64 binutils-mingw-w64
       - uses: actions/setup-python@v6
         with:
           python-version: "3.13"
@@ -31,7 +31,9 @@ jobs:
       - name: Tests
         env:
           GK_REQUIRE_NATIVE: "1"
+          GK_REQUIRE_CLI: "1"
           GK_NATIVE_DIR: build/linux-release/cpp/bindings
+          QT_QPA_PLATFORM: offscreen
         run: python -m pytest -q tests/foundation tests/native
       - name: Build and test with AddressSanitizer + UBSan
         run: |
