@@ -53,6 +53,7 @@ jobs:
       GK_NATIVE_REQUIRED: "1"
       QT_QPA_PLATFORM: offscreen
       VCPKG_DEFAULT_TRIPLET: x64-windows
+      VCPKG_DEFAULT_BINARY_CACHE: ${{ github.workspace }}\.vcpkg-cache
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v5
@@ -60,6 +61,18 @@ jobs:
           python-version: "3.13"
           cache: pip
           cache-dependency-path: requirements-dev.txt
+      - name: Sintaxe do monitor da sandbox (Windows PowerShell 5.1 e PowerShell 7)
+        shell: powershell
+        run: |
+          foreach ($exe in @('powershell.exe', 'pwsh.exe')) {
+            & $exe -NoProfile -Command {
+              $errors = $null; $tokens = $null
+              [System.Management.Automation.Language.Parser]::ParseFile("$PWD\gamekernel\sandbox\monitor.ps1", [ref]$tokens, [ref]$errors) | Out-Null
+              if ($errors) { $errors | ForEach-Object { Write-Error $_.ToString() }; exit 1 }
+              Write-Output "monitor.ps1: sem erros de sintaxe ($($PSVersionTable.PSVersion))"
+            }
+            if ($LASTEXITCODE -ne 0) { exit 1 }
+          }
       - name: Dependências Python
         run: python -m pip install -r requirements-dev.txt aqtinstall==3.3.0
       - name: Qt (MSVC 2022, 64 bits)
@@ -67,16 +80,29 @@ jobs:
         run: |
           python -m aqt install-qt windows desktop $env:QT_VERSION win64_msvc2022_64 -O C:\Qt
           "C:\Qt\$env:QT_VERSION\msvc2022_64\bin" | Out-File -FilePath $env:GITHUB_PATH -Append -Encoding utf8
-      - name: Cache do vcpkg
-        uses: actions/cache@v4
+      - name: Restaurar cache binário do vcpkg
+        id: vcpkg-cache
+        uses: actions/cache/restore@v4
         with:
-          path: ${{ env.LOCALAPPDATA }}\vcpkg\archives
-          key: vcpkg-${{ runner.os }}-libsodium-yara-v1
-      - name: libsodium e libyara (vcpkg)
+          path: .vcpkg-cache
+          key: vcpkg-${{ runner.os }}-libsodium-yara-v2
+      - name: libsodium e libyara (vcpkg, modo clássico)
+        id: vcpkg
         shell: pwsh
+        # Outside the repository: the root vcpkg.json (Agent A's manifest) would switch vcpkg to
+        # manifest mode, where "vcpkg install <ports>" is not accepted.
+        working-directory: ${{ runner.temp }}
         run: |
+          New-Item -ItemType Directory -Force -Path $env:VCPKG_DEFAULT_BINARY_CACHE | Out-Null
           & "$env:VCPKG_INSTALLATION_ROOT\vcpkg.exe" install libsodium yara --triplet x64-windows
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
           "$env:VCPKG_INSTALLATION_ROOT\installed\x64-windows\bin" | Out-File -FilePath $env:GITHUB_PATH -Append -Encoding utf8
+      - name: Salvar cache binário do vcpkg (mesmo que passos seguintes falhem)
+        if: steps.vcpkg.outcome == 'success' && steps.vcpkg-cache.outputs.cache-hit != 'true'
+        uses: actions/cache/save@v4
+        with:
+          path: .vcpkg-cache
+          key: vcpkg-${{ runner.os }}-libsodium-yara-v2
       - name: Testes (Python + C++ MSVC controlados pelo pytest)
         shell: pwsh
         run: |

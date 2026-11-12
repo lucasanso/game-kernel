@@ -249,8 +249,10 @@ private slots:
         QVERIFY(c.callBlocking("system.ping").ok);
     }
 
+    // Linux: RLIMIT_AS set between fork and exec. Windows: Job Object ProcessMemoryLimit assigned at
+    // creation (PROC_THREAD_ATTRIBUTE_JOB_LIST). Either way the helper — never the host — runs out of memory.
     void memoryLimitIsEnforced() {
-#if defined(Q_OS_LINUX)
+#if defined(Q_OS_LINUX) || defined(Q_OS_WIN)
         if (python_.isEmpty()) QSKIP("GK_PYTHON não definido");
         HelperConfig cfg = faultConfig();
         cfg.memoryLimitBytes = qint64(512) * 1024 * 1024;
@@ -261,7 +263,7 @@ private slots:
         QVERIFY(r.error.reason == "internal_error" || r.error.reason == "helper_crashed");
         QVERIFY(c.callBlocking("system.ping").ok);
 #else
-        QSKIP("limite por RLIMIT_AS testado apenas no Linux; no Windows é um Job Object");
+        QSKIP("limite de memória implementado para Linux (RLIMIT_AS) e Windows (Job Object)");
 #endif
     }
 
