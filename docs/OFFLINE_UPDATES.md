@@ -136,10 +136,10 @@ administrativo encadeado por hash (`audit_log`) é gravado pelo aplicativo a par
 |---|---|---|
 | Contrato do formato | — | `contracts/update_package.md` |
 | Formato, construção e assinatura, verificador de referência | Python | `gamekernel/updates/package.py` |
-| Preparação (YARA, IOC, ClamAV) e relatório de atualização | Python | `gamekernel/ti/prepare.py`, `gamekernel/ti/ioc.py`, `gamekernel/ti/yara_prep.py` |
+| Preparação (YARA, IOC, ClamAV) e relatório de atualização | Python | `gamekernel/updates/prepare.py`, `gamekernel/intel/ioc.py`, `gamekernel/rules/prepare.py` |
 | Ferramentas do publicador | Python | `tools/gk_keygen.py`, `tools/make_update_package.py`, `tools/ti_build_ioc.py` |
-| **Verificação criptográfica e instalação no aplicativo** | **C++ (libsodium, libyara, Qt Core)** | `native/updates/` (`gk::updates::verifyPackage`, `Installer`, validadores) — implementação única (WORK_SPLIT rev. 3) |
-| CLI de administração e testes | C++ | `native/updates/tools/gk_update_cli.cpp` (`gk-update`) |
+| **Verificação criptográfica e instalação no aplicativo** | **C++ (libsodium, libyara, Qt Core)** | `cpp/updates/` (`gk::updates::verifyPackage`, `Installer`, validadores): implementação única, escrita pelo B e mantida pelo A desde a `WORK_SPLIT.md` rev. 4; usada pela Central de Atualização Offline da interface (`cpp/app`) |
+| CLI de administração e testes | C++ | `cpp/updates/tools/gk_update_cli.cpp` (`gk-update`) |
 
 Recuperação após queda de energia: se a energia cair entre as trocas de pasta, a próxima instalação ou
 reversão (ou `Installer::recoverInterrupted()` na inicialização) restaura o conjunto anterior e remove os temporários.

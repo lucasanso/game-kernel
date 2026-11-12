@@ -78,20 +78,20 @@ Gerenciamento: **vcpkg (manifesto `vcpkg.json`) no Windows**, pacotes do sistema
 ## 5. Layout do repositório
 
 ```
-CMakeLists.txt, CMakePresets.json, vcpkg.json, cmake/   build raiz (inclui todos os subprojetos nativos)
-native/core/       gk_core — núcleo C++ sem Qt (A)
-native/bindings/   gk_native — módulo pybind11 (A)
-native/ipc/        gk_ipc — cliente gk-ipc v1 em C++/Qt (B)
-native/updates/    gk_updates + gk-update — verificação e instalação de pacotes (B)
-native/worker, native/cli, native/quarantine, native/realtime, native/perf, native/sysopt, native/bridge   (A, próximos passos)
-native/app/        interface Qt 6 C++ (B, pendência P2)
-contracts/         schema.sql e contratos de dados
-gamekernel/        Python: fundação, auxiliar gk-ipc, relatórios, sandbox, TI, preparação de pacotes
-signatures/        regras YARA, indicadores gerados, IOCs, chaves públicas
-tools/             automação (core_* do A; demais do B)
-tests/             suíte pytest de ambos os agentes
-installer/         empacotamento Windows (B)
-docs/              documentação
+CMakeLists.txt, CMakePresets.json, vcpkg.json, cmake/   build raiz de toda a parte C++ (A)
+cpp/core/       gk_core — núcleo sem Qt: hash, tipo real, PE, YARA, compactados e próximos motores (A)
+cpp/bindings/   gk_native — módulo pybind11 do núcleo (A)
+cpp/ipc/        gk_ipc — cliente gk-ipc v1 em C++/Qt (escrito pelo B, mantido pelo A)
+cpp/updates/    gk_updates + gk-update — verificação Ed25519 e instalação atômica de pacotes (escrito pelo B, mantido pelo A)
+cpp/worker, cpp/cli, cpp/quarantine, cpp/realtime, cpp/perf, cpp/sysopt, cpp/bridge   (A, próximos passos)
+cpp/app/        interface Qt 6 C++ (B)
+contracts/      schema.sql, update_package.md, helper_methods.md
+gamekernel/     Python: fundação (A); helper, reports, sandbox, intel, rules, updates (B)
+signatures/     regras YARA, indicadores gerados, IOCs, chaves públicas
+tools/          automação (core_* do A; demais do B)
+tests/          foundation, native, corpus_pe (A); helper, integration, corpus (B)
+installer/      empacotamento Windows (B)
+docs/           documentação
 ```
 
 ## 6. Dados e diretórios (inalterado)

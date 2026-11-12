@@ -4,7 +4,7 @@ name: core-ci
 on:
   push:
     branches: ["main", "claude/**"]
-    paths: ["native/core/**", "native/bindings/**", "cmake/**", "CMakeLists.txt", "CMakePresets.json", "vcpkg.json", "tests/**", "gamekernel/**",
+    paths: ["cpp/**", "cmake/**", "CMakeLists.txt", "CMakePresets.json", "vcpkg.json", "tests/**", "gamekernel/**",
             "contracts/**", ".github/workflows/core-ci.yml"]
   pull_request:
   workflow_dispatch:
@@ -18,7 +18,7 @@ jobs:
     steps:
       - uses: actions/checkout@v5
       - name: System dependencies
-        run: sudo apt-get update && sudo apt-get install -y ninja-build libsodium-dev nlohmann-json3-dev libyara-dev mingw-w64 binutils-mingw-w64
+        run: sudo apt-get update && sudo apt-get install -y ninja-build libsodium-dev nlohmann-json3-dev libyara-dev libarchive-dev mingw-w64 binutils-mingw-w64
       - uses: actions/setup-python@v6
         with:
           python-version: "3.13"
@@ -31,7 +31,7 @@ jobs:
       - name: Tests
         env:
           GK_REQUIRE_NATIVE: "1"
-          GK_NATIVE_DIR: build/linux-release/native/bindings
+          GK_NATIVE_DIR: build/linux-release/cpp/bindings
         run: python -m pytest -q tests/foundation tests/native
       - name: Build and test with AddressSanitizer + UBSan
         run: |
@@ -39,7 +39,7 @@ jobs:
           cmake --build --preset linux-asan
           LD_PRELOAD="$(gcc -print-file-name=libasan.so):$(gcc -print-file-name=libubsan.so)" \
           ASAN_OPTIONS=detect_leaks=0:abort_on_error=1 UBSAN_OPTIONS=halt_on_error=1:print_stacktrace=1 \
-          GK_SLOWDOWN_FACTOR=20 GK_FUZZ_ITERATIONS=2000 GK_REQUIRE_NATIVE=1 GK_NATIVE_DIR=build/linux-asan/native/bindings \
+          GK_SLOWDOWN_FACTOR=20 GK_FUZZ_ITERATIONS=2000 GK_REQUIRE_NATIVE=1 GK_NATIVE_DIR=build/linux-asan/cpp/bindings \
           python -m pytest -q tests/native
 
   windows:
@@ -61,5 +61,11 @@ jobs:
       - name: Tests
         env:
           GK_REQUIRE_NATIVE: "1"
-          GK_NATIVE_DIR: build/windows-release/native/bindings/Release
-        run: python -m pytest -q tests/foundation tests/native
+          GK_NATIVE_DIR: build/windows-release/cpp/bindings/Release
+        shell: pwsh
+        run: |
+          python -m pip install pycdlib==1.22.0
+          python -m pytest -q tests/foundation tests/native
+          $code = $LASTEXITCODE
+          Write-Host "pytest exit code: $code"
+          exit $code

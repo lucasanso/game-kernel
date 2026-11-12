@@ -5,18 +5,18 @@ repacks, mods e launchers, explica **o que** foi encontrado, **onde** (arquivo e
 é suspeito e **o que fazer**, sem nunca enviar nada para a internet.
 
 > **Estado: em desenvolvimento.** Ainda não há instalador. A interface (Qt 6 C++) já tem as páginas de atualização
-> offline, análise comportamental e privacidade; as páginas de varredura chegam com os serviços do núcleo. Abaixo está o que existe
-> e foi testado. O progresso detalhado está em `docs/PROGRESS_A.md` (núcleo) e `docs/PROGRESS_B.md`
+> offline, análise comportamental e privacidade; as páginas de varredura chegam com os serviços do núcleo
+> (`cpp/bridge`). Abaixo está o que existe e foi testado. O progresso detalhado está em `docs/PROGRESS_A.md` (núcleo) e `docs/PROGRESS_B.md`
 > (integração, ferramentas, interface e distribuição).
 
 ## Arquitetura (híbrida C++20 / Python)
 
 | Camada | Tecnologia | Dono |
 |---|---|---|
-| Interface desktop (`native/app`) | Qt 6, C++ | Agente B (em construção) |
-| Serviços para a interface (`native/bridge`) | Qt 6, C++ | Agente A |
-| Núcleo de análise, quarentena, tempo real, monitor de desempenho (`native/core`) | C++20, libyara, libarchive, libsodium, WinAPI | Agente A |
-| Cliente do processo auxiliar e atualização offline (`native/ipc`, `native/updates`) | Qt 6 Core, C++, libsodium | Agente B |
+| Interface desktop (`cpp/app`) | Qt 6, C++ | Agente B (em construção) |
+| Serviços para a interface (`cpp/bridge`) | Qt 6, C++ | Agente A |
+| Núcleo de análise, quarentena, tempo real, monitor de desempenho (`cpp/core`) | C++20, libyara, libarchive, libsodium, WinAPI | Agente A |
+| Cliente do processo auxiliar e atualização offline (`cpp/ipc`, `cpp/updates`) | Qt 6 Core, C++, libsodium | Agente A (escritos pelo B) |
 | Processo auxiliar `gk-helper` (relatórios, sandbox) | Python 3, isolado em processo próprio | Agente B |
 | Preparação de atualizações, inteligência de ameaças, testes | Python 3 | Agente B |
 
@@ -25,12 +25,17 @@ Detalhes: `docs/ARCHITECTURE.md`, `docs/INTEGRATION.md`, `docs/CORE_API.md`, `do
 
 ## O que já funciona (testado)
 
-* **Núcleo (A)**: SHA-256/MD5, tipo real de arquivo, parser PE para entrada hostil, motor YARA (libyara) e
-  compactados em memória com limites anti-bomba (libarchive), em C++, com equivalência testada contra
-  referências Python (hashlib, pefile, yara-python) e *fuzzing* sob ASan/UBSan. Detalhes em `docs/PROGRESS_A.md`.
+* **Núcleo (A)**: SHA-256/MD5, tipo real de arquivo, parser PE para entrada hostil, motor YARA (libyara),
+  compactados em memória com limites anti-bomba (libarchive), camada de evidências (estrutura, nomes enganosos,
+  capacidades, scripts, atalhos) e motor de risco com contexto de cracks e mods, em C++, com equivalência testada
+  contra referências Python e *fuzzing* sob ASan/UBSan. Detalhes em `docs/PROGRESS_A.md`.
 * **Integração (B)**: processo auxiliar Python supervisionado. Uma falha, travamento ou estouro de memória do Python
-  não derruba o aplicativo (prazo, cancelamento, reinício, Job Object). O cliente C++/Qt (`native/ipc`) é testado
+  não derruba o aplicativo (prazo, cancelamento, reinício, Job Object). O cliente C++/Qt (`cpp/ipc`) é testado
   contra o auxiliar real no Linux e no Windows (MSVC).
+* **Interface (B)**: aplicativo Qt 6 C++ (`cpp/app`) com tema escuro, menu lateral e notificações internas. Já tem a
+  Central de Atualização Offline (importar, conferir publicador e chave, instalar, reverter, chaves confiáveis), a
+  análise comportamental (disponibilidade real da sandbox, confirmação, progresso, evidências) e Privacidade e rede
+  (autoteste que tenta DNS e conexão de saída e comprova o bloqueio). Sem telas ou botões sem função.
 * **Relatórios forenses (B)**: JSON, HTML autocontido (sem JavaScript) e PDF, com as 15 seções exigidas e um relatório
   individual por crack; nome de usuário e nome do computador omitidos por padrão.
 * **Atualização offline (B)**: pacotes `.gkpkg` assinados com Ed25519, verificação em C++ (libsodium) e instalação

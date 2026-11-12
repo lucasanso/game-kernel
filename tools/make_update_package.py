@@ -50,7 +50,7 @@ def cmd_build(args: argparse.Namespace) -> int:
     if not components:
         print("erro: informe ao menos um componente (--yara, --ioc, --clamav)", file=sys.stderr)
         return 2
-    from gamekernel.ti import prepare
+    from gamekernel.updates import prepare
 
     prep = prepare.check_components(components)
     if not prep.ok:

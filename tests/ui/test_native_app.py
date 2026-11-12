@@ -1,7 +1,7 @@
-"""Desktop application (native/app, Qt 6 C++): QtTest suite driven by pytest.
+"""Desktop application (cpp/app, Qt 6 C++): QtTest suite driven by pytest.
 
 Real signed packages and a trusted key are produced with the Python publisher code, the C++ UI
-installs/rolls them back through native/updates, and helper-backed pages talk to the real Python
+installs/rolls them back through cpp/updates, and helper-backed pages talk to the real Python
 helper. Screenshots of every page are written to build/native-app/screenshots for inspection.
 """
 
@@ -15,7 +15,7 @@ from cryptography.hazmat.primitives import serialization
 from cryptography.hazmat.primitives.asymmetric.ed25519 import Ed25519PrivateKey
 
 from gamekernel.updates import package as pkg
-from tests.native.native_build import BUILD_ROOT, ROOT, build_project, run_qtest
+from tests.integration.native_build import BUILD_ROOT, ROOT, build_project, run_qtest
 
 YARA_RULE = '''rule GK_UI_Test
 {
@@ -44,7 +44,7 @@ def _components(base, tag: str) -> dict:
 
 
 def test_desktop_application(isolated_data_dir, tmp_path):
-    exe = build_project("native-app", ROOT / "native" / "app", "gk_app_tests")
+    exe = build_project("native-app", ROOT / "cpp" / "app", "gk_app_tests")
     private = Ed25519PrivateKey.generate()
     key = tmp_path / "release.pub"
     key.write_bytes(private.public_key().public_bytes(serialization.Encoding.PEM,

@@ -1,0 +1,435 @@
+{
+  "categories": {
+    "backdoor": {
+      "can_do": "Executar comandos remotos, instalar componentes, manter acesso persistente.",
+      "data_at_risk": "Todo o sistema.",
+      "detection": "Shell reverso (cmd.exe com pipes + socket), escuta em portas, regras YARA.",
+      "label": "Backdoor",
+      "limitations": "Backdoors discretos podem usar canais legítimos e não ter assinatura.",
+      "recommendations": [
+        "Não execute o arquivo.",
+        "Coloque o arquivo em quarentena (ação reversível) ou exclua-o após confirmar.",
+        "Se já foi executado: desconecte a rede, faça uma verificação completa com o Microsoft Defender (incluindo a verificação offline) e troque senhas a partir de outro dispositivo confiável."
+      ],
+      "summary": "Abre uma porta de entrada oculta para o atacante."
+    },
+    "cookie_stealer": {
+      "can_do": "Acessar contas (Discord, Steam, Google) usando sessões roubadas, mesmo com 2FA.",
+      "data_at_risk": "Cookies de navegador, tokens do Discord, sessões de launchers.",
+      "detection": "Referências a bancos de cookies, ao leveldb do Discord, ao padrão de token cifrado e a canais de exfiltração.",
+      "label": "Ladrão de cookies/sessões",
+      "limitations": "Sessões roubadas continuam válidas até serem encerradas; a detecção estática pode falhar em código cifrado.",
+      "recommendations": [
+        "Não execute o arquivo.",
+        "Coloque o arquivo em quarentena (ação reversível) ou exclua-o após confirmar.",
+        "Se já foi executado: desconecte a rede, faça uma verificação completa com o Microsoft Defender (incluindo a verificação offline) e troque senhas a partir de outro dispositivo confiável.",
+        "Encerre todas as sessões ativas nas contas e troque as senhas."
+      ],
+      "summary": "Rouba cookies e tokens para sequestrar contas sem precisar da senha."
+    },
+    "crack_component": {
+      "can_do": "Por si só: permitir executar o jogo sem DRM. Pode ser usado como veículo de malware.",
+      "data_at_risk": "Nenhum por si só.",
+      "detection": "Arquivos de configuração e strings de grupos/emuladores, DLLs de API substituídas sem assinatura.",
+      "label": "Componente de crack",
+      "limitations": "Reconhecer um crack NÃO garante que ele seja seguro: a análise de ameaças continua sendo aplicada.",
+      "recommendations": [
+        "Prefira cracks cujo hash você possa comparar com fontes confiáveis."
+      ],
+      "summary": "Arquivo usado para contornar DRM (emulador de Steam/Epic/Ubisoft, exe modificado, patch)."
+    },
+    "credential_access": {
+      "can_do": "Ler a memória do LSASS, o SAM, cofres de credenciais ou senhas de Wi-Fi.",
+      "data_at_risk": "Senhas do Windows, hashes, credenciais de rede.",
+      "detection": "Ferramentas de dump (mimikatz), acesso a lsass, reg save SAM, netsh wlan show profile key=clear.",
+      "label": "Acesso a credenciais",
+      "limitations": "Ferramentas administrativas legítimas podem acessar credenciais com autorização.",
+      "recommendations": [
+        "Não execute o arquivo.",
+        "Coloque o arquivo em quarentena (ação reversível) ou exclua-o após confirmar.",
+        "Se já foi executado: desconecte a rede, faça uma verificação completa com o Microsoft Defender (incluindo a verificação offline) e troque senhas a partir de outro dispositivo confiável."
+      ],
+      "summary": "Tentativa de ler senhas ou segredos do sistema."
+    },
+    "cryptominer": {
+      "can_do": "Consumir recursos, aquecer o hardware, reduzir desempenho e vida útil.",
+      "data_at_risk": "Recursos de hardware e energia; às vezes acompanhado de outros malwares.",
+      "detection": "Strings de pools e protocolo stratum, parâmetros do XMRig, drivers WinRing0 e regras YARA.",
+      "label": "Minerador de criptomoedas",
+      "limitations": "Mineradores podem baixar a configuração em tempo de execução, sem strings estáticas.",
+      "recommendations": [
+        "Não execute o arquivo.",
+        "Coloque o arquivo em quarentena (ação reversível) ou exclua-o após confirmar.",
+        "Se já foi executado: desconecte a rede, faça uma verificação completa com o Microsoft Defender (incluindo a verificação offline) e troque senhas a partir de outro dispositivo confiável."
+      ],
+      "summary": "Usa a CPU/GPU do computador para minerar criptomoedas para terceiros."
+    },
+    "defense_evasion": {
+      "can_do": "Abrir caminho para que outros malwares rodem sem detecção.",
+      "data_at_risk": "Todo o sistema.",
+      "detection": "Set-/Add-MpPreference (exclusões, desativar monitoramento), netsh advfirewall off, encerramento de processos de antivírus, alterações de políticas do Defender.",
+      "label": "Desativação de proteções",
+      "limitations": "Muitos guias de cracks pedem para desativar o antivírus — isso NÃO torna o pedido seguro.",
+      "recommendations": [
+        "Não execute o arquivo.",
+        "Coloque o arquivo em quarentena (ação reversível) ou exclua-o após confirmar.",
+        "Se já foi executado: desconecte a rede, faça uma verificação completa com o Microsoft Defender (incluindo a verificação offline) e troque senhas a partir de outro dispositivo confiável.",
+        "Verifique se o Defender está ativo e sem exclusões desconhecidas."
+      ],
+      "summary": "Tentativa de desativar o antivírus, o firewall ou adicionar exclusões."
+    },
+    "dll_hijacking": {
+      "can_do": "Executar código dentro do processo do jogo a cada inicialização.",
+      "data_at_risk": "Tudo o que o processo do jogo acessa.",
+      "detection": "DLLs com nomes de bibliotecas do Windows na pasta do jogo, exportações encaminhadas (proxy), ausência de assinatura e capacidades perigosas no código.",
+      "label": "DLL hijacking / sideloading",
+      "limitations": "ReShade, ENB, ASI Loader, SpecialK, DXVK e muitos cracks usam exatamente esta técnica de forma legítima.",
+      "recommendations": [
+        "Verifique se a DLL pertence a um mod que você instalou conscientemente.",
+        "Se não reconhecer a DLL, coloque-a em quarentena e teste o jogo."
+      ],
+      "summary": "DLL com nome de biblioteca do sistema colocada ao lado do executável para ser carregada no lugar da original."
+    },
+    "downloader": {
+      "can_do": "Instalar malware atualizado do servidor do atacante.",
+      "data_at_risk": "Depende do que for baixado.",
+      "detection": "URLDownloadToFile, WebClient, certutil/bitsadmin/Invoke-WebRequest combinados com execução; URLs de hospedagens frequentemente abusadas.",
+      "label": "Downloader malicioso",
+      "limitations": "Launchers e atualizadores legítimos também baixam arquivos; o destino e a forma de execução diferenciam.",
+      "recommendations": [
+        "Não execute o arquivo.",
+        "Coloque o arquivo em quarentena (ação reversível) ou exclua-o após confirmar.",
+        "Se já foi executado: desconecte a rede, faça uma verificação completa com o Microsoft Defender (incluindo a verificação offline) e troque senhas a partir de outro dispositivo confiável."
+      ],
+      "summary": "Baixa e executa programas da internet."
+    },
+    "dropper": {
+      "can_do": "Instalar malware adicional sem o usuário perceber.",
+      "data_at_risk": "Depende da carga instalada.",
+      "detection": "Executáveis embutidos em recursos ou no overlay, combinados com gravação em pastas temporárias e execução.",
+      "label": "Dropper",
+      "limitations": "Instaladores legítimos também carregam executáveis embutidos.",
+      "recommendations": [
+        "Não execute o arquivo.",
+        "Coloque o arquivo em quarentena (ação reversível) ou exclua-o após confirmar.",
+        "Se já foi executado: desconecte a rede, faça uma verificação completa com o Microsoft Defender (incluindo a verificação offline) e troque senhas a partir de outro dispositivo confiável."
+      ],
+      "summary": "Carrega outro executável embutido e o grava/executa no sistema."
+    },
+    "generic_malware": {
+      "can_do": "Depende da família.",
+      "data_at_risk": "Depende da família.",
+      "detection": "Assinatura ClamAV ou hash de ameaça conhecido.",
+      "label": "Malware",
+      "limitations": "Assinaturas genéricas podem raramente gerar falsos positivos.",
+      "recommendations": [
+        "Não execute o arquivo.",
+        "Coloque o arquivo em quarentena (ação reversível) ou exclua-o após confirmar.",
+        "Se já foi executado: desconecte a rede, faça uma verificação completa com o Microsoft Defender (incluindo a verificação offline) e troque senhas a partir de outro dispositivo confiável."
+      ],
+      "summary": "Arquivo identificado por assinatura ou indicador local como malicioso."
+    },
+    "informational": {
+      "can_do": "—",
+      "data_at_risk": "—",
+      "detection": "Análise estática.",
+      "label": "Informação técnica",
+      "limitations": "Não representa risco por si só.",
+      "recommendations": [],
+      "summary": "Característica técnica registrada para contexto."
+    },
+    "keylogger": {
+      "can_do": "Capturar senhas, mensagens, dados bancários e enviá-los a terceiros.",
+      "data_at_risk": "Senhas, mensagens, números de cartão, frases de recuperação de carteiras.",
+      "detection": "Hook de teclado de baixo nível (SetWindowsHookEx + WH_KEYBOARD_LL) combinado com gravação em arquivo ou envio pela rede; regras YARA.",
+      "label": "Keylogger",
+      "limitations": "Jogos leem o teclado legitimamente (GetAsyncKeyState, Raw Input); por isso a leitura isolada do teclado nunca é tratada como keylogger.",
+      "recommendations": [
+        "Não execute o arquivo.",
+        "Coloque o arquivo em quarentena (ação reversível) ou exclua-o após confirmar.",
+        "Se já foi executado: desconecte a rede, faça uma verificação completa com o Microsoft Defender (incluindo a verificação offline) e troque senhas a partir de outro dispositivo confiável."
+      ],
+      "summary": "Componente que registra o que é digitado."
+    },
+    "loader": {
+      "can_do": "Descriptografar e executar uma carga maliciosa sem gravá-la em disco.",
+      "data_at_risk": "Depende da carga.",
+      "detection": "Poucas importações com resolução dinâmica de APIs, alocação executável, dados de alta entropia.",
+      "label": "Loader",
+      "limitations": "Protetores de DRM e empacotadores legítimos têm estrutura parecida.",
+      "recommendations": [
+        "Não execute o arquivo.",
+        "Coloque o arquivo em quarentena (ação reversível) ou exclua-o após confirmar.",
+        "Se já foi executado: desconecte a rede, faça uma verificação completa com o Microsoft Defender (incluindo a verificação offline) e troque senhas a partir de outro dispositivo confiável."
+      ],
+      "summary": "Carrega código adicional (geralmente cifrado) na memória."
+    },
+    "malicious_script": {
+      "can_do": "Baixar malware, desativar proteções, alterar o sistema, roubar dados.",
+      "data_at_risk": "Depende das ações do script.",
+      "detection": "Análise linha a linha com decodificação de -EncodedCommand e detecção de ofuscação.",
+      "label": "Script malicioso",
+      "limitations": "Ofuscação avançada pode esconder a intenção; scripts de instalação legítimos também alteram o sistema.",
+      "recommendations": [
+        "Não execute o arquivo.",
+        "Coloque o arquivo em quarentena (ação reversível) ou exclua-o após confirmar.",
+        "Se já foi executado: desconecte a rede, faça uma verificação completa com o Microsoft Defender (incluindo a verificação offline) e troque senhas a partir de outro dispositivo confiável."
+      ],
+      "summary": "Script (BAT, PowerShell, VBS, JS, HTA) que executa ações perigosas."
+    },
+    "mod_component": {
+      "can_do": "Alterar gráficos/comportamento do jogo.",
+      "data_at_risk": "Nenhum por si só.",
+      "detection": "Strings e estruturas características dos projetos.",
+      "label": "Componente de mod",
+      "limitations": "Cópias adulteradas de mods conhecidos existem; a análise de ameaças continua aplicada.",
+      "recommendations": [
+        "Baixe mods apenas das páginas oficiais dos projetos."
+      ],
+      "summary": "Ferramenta de modificação comum (ReShade, ENB, ASI Loader, SpecialK, DXVK)."
+    },
+    "network_communication": {
+      "can_do": "Enviar dados roubados ou receber comandos.",
+      "data_at_risk": "Qualquer dado coletado.",
+      "detection": "Webhooks do Discord, bots do Telegram, DNS dinâmico, sites de paste, .onion, IP:porta literais.",
+      "label": "Comunicação não autorizada",
+      "limitations": "Jogos e launchers usam a rede legitimamente; só destinos atípicos são sinalizados.",
+      "recommendations": [
+        "Não execute o arquivo.",
+        "Coloque o arquivo em quarentena (ação reversível) ou exclua-o após confirmar.",
+        "Se já foi executado: desconecte a rede, faça uma verificação completa com o Microsoft Defender (incluindo a verificação offline) e troque senhas a partir de outro dispositivo confiável."
+      ],
+      "summary": "Indícios de comunicação com servidores do atacante."
+    },
+    "obfuscation": {
+      "can_do": "Esconder a funcionalidade real do programa.",
+      "data_at_risk": "Indefinido — a ofuscação por si só não causa dano.",
+      "detection": "Entropia de seções, nomes de seções de empacotadores, importações mínimas, obfuscadores .NET.",
+      "label": "Executável ofuscado/empacotado",
+      "limitations": "DRM (Denuvo, VMProtect, Themida) e anti-cheats usam ofuscação legítima. Nunca é prova isolada de malware.",
+      "recommendations": [
+        "Trate como evidência insuficiente; avalie em conjunto com os demais achados."
+      ],
+      "summary": "Código comprimido, cifrado ou ofuscado para dificultar análise."
+    },
+    "password_stealer": {
+      "can_do": "Ler bancos de senhas do Chrome/Edge/Firefox, decifrá-los com DPAPI e enviar a um servidor.",
+      "data_at_risk": "Senhas salvas, cartões, carteiras de criptomoedas, contas Steam/Discord/Epic.",
+      "detection": "Referências aos arquivos de credenciais (Login Data, Local State, logins.json, key4.db) combinadas com CryptUnprotectData e canal de exfiltração (webhook, Telegram, HTTP).",
+      "label": "Ladrão de senhas (stealer)",
+      "limitations": "Stealers empacotados (PyInstaller cifrado, .NET ofuscado) podem esconder essas strings.",
+      "recommendations": [
+        "Não execute o arquivo.",
+        "Coloque o arquivo em quarentena (ação reversível) ou exclua-o após confirmar.",
+        "Se já foi executado: desconecte a rede, faça uma verificação completa com o Microsoft Defender (incluindo a verificação offline) e troque senhas a partir de outro dispositivo confiável.",
+        "Troque todas as senhas salvas no navegador e ative autenticação em dois fatores."
+      ],
+      "summary": "Malware que extrai senhas salvas em navegadores, clientes de jogos e carteiras."
+    },
+    "persistence": {
+      "can_do": "Iniciar automaticamente com o Windows (Run, tarefas agendadas, serviços, WMI).",
+      "data_at_risk": "Permite que qualquer outra ameaça continue ativa.",
+      "detection": "Chaves Run/RunOnce, schtasks, serviços, pasta Inicializar, assinaturas WMI, Winlogon, IFEO.",
+      "label": "Persistência maliciosa",
+      "limitations": "Launchers e atualizadores legítimos usam inicialização automática.",
+      "recommendations": [
+        "Não execute o arquivo.",
+        "Coloque o arquivo em quarentena (ação reversível) ou exclua-o após confirmar.",
+        "Se já foi executado: desconecte a rede, faça uma verificação completa com o Microsoft Defender (incluindo a verificação offline) e troque senhas a partir de outro dispositivo confiável.",
+        "Revise a inicialização no Gerenciador de Tarefas e no Agendador de Tarefas."
+      ],
+      "summary": "Mecanismo para se manter ativo após reinicializações ou após fechar o jogo."
+    },
+    "process_injection": {
+      "can_do": "Esconder atividade maliciosa em processos confiáveis, roubar dados de navegadores.",
+      "data_at_risk": "Dados de qualquer processo atingido.",
+      "detection": "Conjuntos de APIs de injeção (VirtualAllocEx + WriteProcessMemory + CreateRemoteThread; process hollowing com SetThreadContext/ResumeThread; APC).",
+      "label": "Injeção de processos",
+      "limitations": "Trainers, overlays, mod loaders, anti-cheats e alguns cracks injetam código legitimamente.",
+      "recommendations": [
+        "Avalie se o arquivo é um trainer/mod que você instalou; caso contrário, quarentena."
+      ],
+      "summary": "Técnica para executar código dentro de outro processo."
+    },
+    "pua": {
+      "can_do": "Exibir anúncios, alterar configurações, conter riscos de segurança.",
+      "data_at_risk": "Varia.",
+      "detection": "Assinaturas PUA do ClamAV e regras YARA de ferramentas.",
+      "label": "Potencialmente indesejado (PUA)",
+      "limitations": "Keygens e patchers são classificados como PUA por natureza, mesmo sem carga maliciosa.",
+      "recommendations": [
+        "Avalie se o componente é realmente necessário."
+      ],
+      "summary": "Software que não é necessariamente malicioso, mas pode ser indesejado (keygens, patchers, adware)."
+    },
+    "ransomware": {
+      "can_do": "Cifrar documentos, fotos e saves; apagar cópias de sombra para impedir recuperação.",
+      "data_at_risk": "Todos os arquivos acessíveis, inclusive unidades externas e de rede.",
+      "detection": "Exclusão de cópias de sombra (vssadmin/wbadmin/bcdedit), notas de resgate, combinação de criptografia com enumeração em massa de arquivos; na sandbox, alteração de arquivos-isca.",
+      "label": "Ransomware",
+      "limitations": "Ransomware novo e empacotado pode não exibir strings; a sandbox detecta o comportamento apenas se ele ocorrer durante o tempo de observação.",
+      "recommendations": [
+        "Não execute o arquivo.",
+        "Coloque o arquivo em quarentena (ação reversível) ou exclua-o após confirmar.",
+        "Se já foi executado: desconecte a rede, faça uma verificação completa com o Microsoft Defender (incluindo a verificação offline) e troque senhas a partir de outro dispositivo confiável.",
+        "Mantenha backups offline; não pague resgate."
+      ],
+      "summary": "Malware que cifra arquivos e exige resgate."
+    },
+    "rat": {
+      "can_do": "Controlar o computador, capturar tela/webcam/teclado, transferir arquivos e executar comandos.",
+      "data_at_risk": "Arquivos pessoais, senhas, sessões, webcam e microfone.",
+      "detection": "Regras YARA de RATs conhecidos (Quasar, njRAT, Remcos…), indicadores de configuração de C2, shell reverso e persistência combinados.",
+      "label": "Remote Access Trojan (RAT)",
+      "limitations": "RATs customizados sem indicadores públicos podem passar despercebidos na análise estática.",
+      "recommendations": [
+        "Não execute o arquivo.",
+        "Coloque o arquivo em quarentena (ação reversível) ou exclua-o após confirmar.",
+        "Se já foi executado: desconecte a rede, faça uma verificação completa com o Microsoft Defender (incluindo a verificação offline) e troque senhas a partir de outro dispositivo confiável.",
+        "Verifique contas importantes quanto a acessos desconhecidos."
+      ],
+      "summary": "Ferramenta de controle remoto instalada sem consentimento."
+    },
+    "rootkit": {
+      "can_do": "Esconder malware, desativar antivírus, ler memória de qualquer processo.",
+      "data_at_risk": "Todo o sistema, inclusive credenciais em memória.",
+      "detection": "Drivers sem assinatura válida, drivers conhecidos por serem abusados (BYOVD), APIs de kernel de manipulação de memória física e callbacks.",
+      "label": "Rootkit / driver suspeito",
+      "limitations": "Anti-cheats (EasyAntiCheat, BattlEye, Vanguard) usam drivers legítimos com APIs semelhantes; a assinatura digital é o principal diferenciador. Rootkits já ativos não são vistos por análise de arquivos.",
+      "recommendations": [
+        "Não execute o arquivo.",
+        "Coloque o arquivo em quarentena (ação reversível) ou exclua-o após confirmar.",
+        "Se já foi executado: desconecte a rede, faça uma verificação completa com o Microsoft Defender (incluindo a verificação offline) e troque senhas a partir de outro dispositivo confiável.",
+        "Use a verificação offline do Microsoft Defender para rootkits ativos."
+      ],
+      "summary": "Componente de kernel (driver .sys) capaz de ocultar processos, arquivos ou desativar proteções."
+    },
+    "spyware": {
+      "can_do": "Capturar tela, histórico, documentos e informações do sistema.",
+      "data_at_risk": "Documentos, histórico de navegação, capturas de tela, informações de hardware.",
+      "detection": "Combinação de captura de tela/área de transferência, enumeração de dados pessoais e exfiltração.",
+      "label": "Spyware",
+      "limitations": "Ferramentas legítimas (overlays, gravadores) usam APIs semelhantes.",
+      "recommendations": [
+        "Não execute o arquivo.",
+        "Coloque o arquivo em quarentena (ação reversível) ou exclua-o após confirmar.",
+        "Se já foi executado: desconecte a rede, faça uma verificação completa com o Microsoft Defender (incluindo a verificação offline) e troque senhas a partir de outro dispositivo confiável."
+      ],
+      "summary": "Software que coleta informações do usuário sem consentimento."
+    },
+    "stealth": {
+      "can_do": "Rodar escondido, com nomes de processos do sistema, ou com atributos ocultos.",
+      "data_at_risk": "Dificulta a identificação de outras ameaças.",
+      "detection": "Nomes de processos do sistema fora do System32, nomes parecidos (typosquatting), janelas ocultas, attrib +h +s, extensões duplas.",
+      "label": "Ocultação de execução",
+      "limitations": "Alguns utilitários legítimos rodam sem janela.",
+      "recommendations": [
+        "Não execute o arquivo.",
+        "Coloque o arquivo em quarentena (ação reversível) ou exclua-o após confirmar.",
+        "Se já foi executado: desconecte a rede, faça uma verificação completa com o Microsoft Defender (incluindo a verificação offline) e troque senhas a partir de outro dispositivo confiável."
+      ],
+      "summary": "Componentes que tentam esconder sua execução ou se passar por processos do Windows."
+    },
+    "structural_anomaly": {
+      "can_do": "Pode quebrar analisadores ou esconder dados.",
+      "data_at_risk": "Indefinido.",
+      "detection": "Validação do formato PE e de compactados.",
+      "label": "Anomalia estrutural",
+      "limitations": "Arquivos corrompidos por download incompleto geram as mesmas anomalias.",
+      "recommendations": [
+        "Verifique a integridade do download (hash/SFV)."
+      ],
+      "summary": "Estrutura de arquivo incomum ou corrompida."
+    },
+    "system_modification": {
+      "can_do": "Alterar o arquivo hosts, substituir arquivos do System32, desativar UAC ou alterar políticas.",
+      "data_at_risk": "Integridade e segurança do sistema.",
+      "detection": "Comandos e chaves de registro sensíveis em scripts, arquivos .reg e executáveis.",
+      "label": "Modificação suspeita do Windows",
+      "limitations": "Cracks às vezes bloqueiam servidores de ativação pelo arquivo hosts — é uma alteração real do sistema, mesmo sem ser malware.",
+      "recommendations": [
+        "Revise o que será alterado antes de executar; faça um ponto de restauração."
+      ],
+      "summary": "Alterações em arquivos ou configurações do sistema."
+    },
+    "test_file": {
+      "can_do": "Nada — serve apenas para validar a detecção.",
+      "data_at_risk": "Nenhum.",
+      "detection": "Assinatura, hash e regra YARA dedicadas.",
+      "label": "Arquivo de teste antivírus",
+      "limitations": "—",
+      "recommendations": [
+        "Nenhuma ação necessária além de remover o arquivo de teste."
+      ],
+      "summary": "Arquivo padrão (EICAR) usado para testar antivírus. É inofensivo."
+    },
+    "trojan": {
+      "can_do": "Instalar outros malwares, roubar dados, abrir acesso remoto ou danificar arquivos.",
+      "data_at_risk": "Qualquer dado do usuário, dependendo da carga maliciosa.",
+      "detection": "Assinaturas ClamAV, regras YARA de famílias, hashes locais e correlação de capacidades.",
+      "label": "Trojan",
+      "limitations": "Trojans novos ou ofuscados podem não ter assinatura; a heurística aponta capacidades, não intenção.",
+      "recommendations": [
+        "Não execute o arquivo.",
+        "Coloque o arquivo em quarentena (ação reversível) ou exclua-o após confirmar.",
+        "Se já foi executado: desconecte a rede, faça uma verificação completa com o Microsoft Defender (incluindo a verificação offline) e troque senhas a partir de outro dispositivo confiável."
+      ],
+      "summary": "Programa que se apresenta como legítimo (jogo, crack, instalador) mas executa ações ocultas."
+    }
+  },
+  "classifications": {
+    "inconclusive": "Resultado inconclusivo",
+    "known_legit": "Arquivo legítimo conhecido",
+    "malware": "Malware detectado",
+    "modified": "Arquivo modificado",
+    "pua": "Potencialmente indesejado",
+    "suspicious": "Arquivo suspeito",
+    "unknown": "Arquivo desconhecido"
+  },
+  "crack_status": {
+    "insufficient": "Crack com evidências insuficientes",
+    "malware": "Crack com detecção de malware",
+    "modified_no_threat": "Arquivo modificado sem ameaça confirmada",
+    "none": "—",
+    "recognized_clean": "Crack reconhecido e sem evidência de ameaça",
+    "suspicious": "Crack com comportamento suspeito",
+    "unknown": "Crack desconhecido"
+  },
+  "evidence_sources": {
+    "behavioral": "Evidência comportamental",
+    "context": "Contexto de jogo/crack",
+    "heuristic": "Suspeita heurística",
+    "reputation": "Reputação local",
+    "signature": "Detecção confirmada por assinatura",
+    "static": "Evidência estática",
+    "yara": "Detecção por regra YARA"
+  },
+  "format": "gamekernel-threat-catalog",
+  "risk_levels": {
+    "CRITICAL": {
+      "label": "Crítico",
+      "meaning": "Evidência forte de ameaça capaz de comprometer o sistema ou informações pessoais."
+    },
+    "HIGH": {
+      "label": "Alto",
+      "meaning": "Indicadores fortes de comportamento potencialmente malicioso."
+    },
+    "INFO": {
+      "label": "Informativo",
+      "meaning": "Informação técnica relevante, sem evidência suficiente de risco."
+    },
+    "LOW": {
+      "label": "Baixo",
+      "meaning": "Anomalia ou característica que merece atenção, mas não é prova de ameaça."
+    },
+    "MEDIUM": {
+      "label": "Médio",
+      "meaning": "Comportamento suspeito que exige investigação adicional."
+    },
+    "NONE": {
+      "label": "Nenhum",
+      "meaning": "Nenhum indicador de risco foi encontrado pelos mecanismos executados."
+    }
+  },
+  "version": 1
+}

@@ -16,20 +16,21 @@ include(GkCompilerOptions)
 include(GkDependencies)
 
 # ---- Agent A: Qt-free core and its Python bindings --------------------------------------------
-add_subdirectory(native/core)
+add_subdirectory(cpp/core)
 if(GK_BUILD_BINDINGS)
-  add_subdirectory(native/bindings)
+  add_subdirectory(cpp/bindings)
 endif()
 
-# ---- Agent B: Qt-based integration components (gk-ipc client, offline updates) ----------------
-# Each subproject is also buildable on its own (tests/native/native_build.py).
+# ---- Qt-based components: gk-ipc client and offline update verification/installation ----------
+# (written by Agent B, owned by Agent A since WORK_SPLIT rev. 4). Each one is also buildable on its own
+# (tests/integration/native_build.py).
 option(GK_BUILD_QT_COMPONENTS "Build the Qt-based subprojects when Qt 6 is available" ON)
 if(GK_BUILD_QT_COMPONENTS)
   find_package(Qt6 6.4 QUIET COMPONENTS Core)
   if(Qt6_FOUND)
-    add_subdirectory(native/ipc)
-    add_subdirectory(native/updates)
+    add_subdirectory(cpp/ipc)
+    add_subdirectory(cpp/updates)
   else()
-    message(STATUS "Qt 6 não encontrado: native/ipc e native/updates não entram neste build")
+    message(STATUS "Qt 6 não encontrado: cpp/ipc e cpp/updates não entram neste build")
   endif()
 endif()

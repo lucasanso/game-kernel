@@ -26,7 +26,7 @@ estática) ficam em `docs/THREAT_COVERAGE.md` (Agente A) quando o motor estiver 
   são evidências, nunca garantia.
 * Detecção de injeção em processos: limitada sem o Sysmon (Sysinternals), que o usuário pode fornecer
   (`sandbox.sysmon_path`). O Game Kernel não o redistribui.
-* O monitor (`gamekernel/engines/sandbox/monitor.ps1`) é testado estaticamente e tem a sintaxe verificada na CI Windows;
+* O monitor (`gamekernel/sandbox/monitor.ps1`) é testado estaticamente e tem a sintaxe verificada na CI Windows;
   a execução real exige o Windows Sandbox.
 
 ## Atualização offline

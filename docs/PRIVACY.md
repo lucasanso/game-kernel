@@ -7,7 +7,7 @@ Esta página descreve o comportamento dos componentes já implementados e é atu
 * Não há telemetria, anúncios, rastreamento, conta, cadastro nem consulta online de hashes ou arquivos.
 * **Processos Python** (auxiliar `gk-helper`, ferramentas): `gamekernel/netguard.py` instala um *audit hook* antes
   de qualquer outro *import* e bloqueia conexões, DNS, `urllib`/`http`/`ftp`/`smtp` e `webbrowser`, além de
-  limpar variáveis de *proxy*. Os testes confirmam o bloqueio dentro do auxiliar (`tests/ipc`).
+  limpar variáveis de *proxy*. Os testes confirmam o bloqueio dentro do auxiliar (`tests/helper`).
 * **Processos C++**: não vinculam bibliotecas de rede (verificação de *imports* no núcleo, Agente A). O canal entre o
   aplicativo e o auxiliar usa **pipes anônimos**, não *sockets*.
 * **Atualizações**: só por arquivo local `.gkpkg` assinado; nada é baixado.

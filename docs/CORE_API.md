@@ -35,7 +35,7 @@ na aplicação, através da camada de serviços Qt.
 | `archive_walk(b, limites)`, `archive_recognised(b)`, `libarchive_version()` | compactados |
 
 Exceções: `gk::Error` → `gk_native.GkError` com `args = (código, mensagem)`. O GIL é liberado em toda
-operação longa. Localização do módulo nos testes: `GK_NATIVE_DIR` ou `build/<preset>/native/bindings`
+operação longa. Localização do módulo nos testes: `GK_NATIVE_DIR` ou `build/<preset>/cpp/bindings`
 (`tests/conftest.py`); `GK_REQUIRE_NATIVE=1` transforma ausência em falha (CI).
 
 ## 3. Contratos de dados

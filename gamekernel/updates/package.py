@@ -1,6 +1,6 @@
 """``.gkpkg`` v1 — signed offline update packages (publisher side + reference verifier).
 
-The *installation* inside the application is done by the C++ core (``native/updates``); this
+The *installation* inside the application is done by the C++ core (``cpp/updates``); this
 module builds and signs packages (publisher tools) and contains an independent reference
 verifier used by ``tools/make_update_package.py verify`` and by the equivalence tests that
 compare the Python and C++ implementations.
