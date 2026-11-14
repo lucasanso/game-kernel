@@ -18,8 +18,9 @@ find_package(nlohmann_json 3.11 CONFIG REQUIRED)
 add_library(gk::json ALIAS nlohmann_json::nlohmann_json)
 
 # ---- libyara ----------------------------------------------------------------------------------
-# vcpkg exports the static library with its dependencies (OpenSSL::Crypto, Crypt32, Ws2_32 — the latter only
-# for byte-order helpers) as unofficial::libyara::libyara.
+# Windows (vcpkg): built from the overlay port vcpkg/overlay-ports/yara — static, without OpenSSL (CryptoAPI for
+# the hash module), exported as unofficial::libyara::libyara. The official port links OpenSSL, whose socket/HTTP
+# code then lands in our binaries (tests/native/test_offline_imports.py would fail).
 find_package(unofficial-libyara CONFIG QUIET)
 if(TARGET unofficial::libyara::libyara)
   add_library(gk::yara ALIAS unofficial::libyara::libyara)

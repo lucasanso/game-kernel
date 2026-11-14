@@ -6,9 +6,10 @@
 //   gk-cli quarantine restore <id> [--to PATH] [--overwrite]
 //   gk-cli quarantine delete <id>
 //   gk-cli quarantine verify [--json out.json]
+//   gk-cli integrity [--install-dir DIR] [--json out.json]
 //
 // Exit codes: 0 ok / nothing suspicious · 3 threats/suspicious/PUA found · 2 error · 4 cancelled ·
-//             5 damaged quarantine items found by `verify`.
+//             5 damaged quarantine items found by `verify` · 6 installation integrity not confirmed.
 #include <QCommandLineParser>
 #include <QCoreApplication>
 #include <QDir>
@@ -24,6 +25,7 @@
 
 #include "gk/db.hpp"
 #include "gk/error.hpp"
+#include "gk/integrity.hpp"
 #include "gk/quarantine.hpp"
 #include "gk/scan/scanner.hpp"
 #include "gk/text.hpp"
@@ -158,6 +160,39 @@ int run_quarantine(const QStringList& positional, const QString& data, const Qua
     }
 }
 
+// Re-hashes every file listed in the signed manifest. Exit 0 only when the installation is confirmed.
+int run_integrity(const QString& installDir, const QString& jsonOut) {
+    QTextStream out(stdout);
+    QTextStream err(stderr);
+    try {
+        const auto root = native_path(installDir);
+        gk::integrity::Verifier verifier(root, gk::integrity::load_trusted_keys({root / "signatures" / "keys"}));
+        const auto r = verifier.check_installation();
+        out << QString::fromStdString(r.detail) << "\n";
+        for (const auto& f : r.modified) out << "  modificado: " << QString::fromStdString(f) << "\n";
+        for (const auto& f : r.missing) out << "  ausente: " << QString::fromStdString(f) << "\n";
+        if (!jsonOut.isEmpty()) {
+            QJsonArray modified, missing;
+            for (const auto& f : r.modified) modified.append(QString::fromStdString(f));
+            for (const auto& f : r.missing) missing.append(QString::fromStdString(f));
+            QJsonObject o{{QStringLiteral("ok"), r.ok},
+                          {QStringLiteral("manifest_present"), r.manifest_present},
+                          {QStringLiteral("signature_valid"),
+                           r.signature_valid ? QJsonValue(*r.signature_valid) : QJsonValue(QJsonValue::Null)},
+                          {QStringLiteral("signer_key_id"), QString::fromStdString(r.signer_key_id)},
+                          {QStringLiteral("verified"), static_cast<qint64>(r.verified)},
+                          {QStringLiteral("modified"), modified},
+                          {QStringLiteral("missing"), missing},
+                          {QStringLiteral("detail"), QString::fromStdString(r.detail)}};
+            if (!write_json(jsonOut, o, err)) return 2;
+        }
+        return r.ok ? 0 : 6;
+    } catch (const std::exception& e) {
+        err << "erro: " << QString::fromUtf8(e.what()) << "\n";
+        return 2;
+    }
+}
+
 }  // namespace
 
 int main(int argc, char** argv) {
@@ -168,7 +203,7 @@ int main(int argc, char** argv) {
     parser.setApplicationDescription(QStringLiteral("Game Kernel — análise offline sem interface gráfica"));
     parser.addHelpOption();
     parser.addVersionOption();
-    parser.addPositionalArgument(QStringLiteral("command"), QStringLiteral("scan | quarantine"));
+    parser.addPositionalArgument(QStringLiteral("command"), QStringLiteral("scan | quarantine | integrity"));
     parser.addPositionalArgument(QStringLiteral("targets"), QStringLiteral("Pastas e/ou arquivos"), QStringLiteral("[alvos...]"));
     QCommandLineOption quick(QStringLiteral("quick"), QStringLiteral("Análise rápida"));
     QCommandLineOption json(QStringLiteral("json"), QStringLiteral("Gravar resultado JSON"), QStringLiteral("arquivo"));
@@ -186,10 +221,19 @@ int main(int argc, char** argv) {
                                  QStringLiteral("quarantine add: recusar se o arquivo mudou desde a análise"), QStringLiteral("hash"));
     QCommandLineOption reason(QStringLiteral("reason"), QStringLiteral("quarantine add: motivo"), QStringLiteral("texto"));
     QCommandLineOption all(QStringLiteral("all"), QStringLiteral("quarantine list: incluir restaurados e apagados"));
-    parser.addOptions({quick, json, dataDir, workers, noCache, quiet, worker, fileTimeout, to, overwrite, expectSha, reason, all});
+    QCommandLineOption installDir(QStringLiteral("install-dir"), QStringLiteral("integrity: pasta da instalação"),
+                                  QStringLiteral("dir"));
+    parser.addOptions({quick, json, dataDir, workers, noCache, quiet, worker, fileTimeout, to, overwrite, expectSha, reason, all,
+                       installDir});
     parser.process(app);
     const QStringList positional = parser.positionalArguments();
     const QString data = parser.isSet(dataDir) ? parser.value(dataDir) : default_data_dir();
+    if (positional.value(0) == QStringLiteral("integrity")) {
+        const QString root = parser.isSet(installDir)
+                                 ? QFileInfo(parser.value(installDir)).absoluteFilePath()
+                                 : gk::scan::Config::defaults(QCoreApplication::applicationDirPath(), data).installDir;
+        return run_integrity(root, parser.value(json));
+    }
     if (positional.value(0) == QStringLiteral("quarantine")) {
         QDir().mkpath(data);
         QuarantineOptions opt;

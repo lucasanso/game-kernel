@@ -80,3 +80,11 @@ Política: **uma assinatura válida nunca reduz o risco** de outras evidências 
 revogação não pode ser consultada offline); ela aparece como informação e na explicação. Nomes vindos de
 certificados são texto hostil: são decodificados e têm caracteres de controle e de direção (RLO etc.)
 neutralizados antes de exibidos.
+
+### Módulos YARA disponíveis no produto
+
+A libyara do produto (Windows) é compilada pelo overlay `vcpkg/overlay-ports/yara` **sem OpenSSL** e sem o
+leitor de memória de processos. O módulo `hash` e `pe.imphash()` funcionam (CryptoAPI do Windows); os campos de
+assinatura do módulo `pe` (`pe.signatures`, `pe.is_signed`, `pe.number_of_signatures`) não existem e regras que os
+usam são **recusadas em todas as plataformas** com a mesma mensagem (pacotes de atualização incluídos) — use as
+evidências `PE.Signature.*` do núcleo.
