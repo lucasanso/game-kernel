@@ -1,12 +1,14 @@
 """Product distribution (tools/make_distribution.py, installer/gamekernel.iss).
 
 Two layers:
-* assembly rules, run everywhere with stand-in binaries: layout, integrity manifest, refusal of private keys,
-  networking DLLs, conflicting DLLs and stray portable flags, portable ZIP;
+* assembly rules, run everywhere with stand-in binaries: layout, signed integrity manifest (Agent A's M10
+  format, verified with Agent A's own checker), refusal of private keys, networking DLLs, conflicting DLLs and
+  stray portable flags, portable ZIP;
 * the *installed product* (CI on Windows sets GK_INSTALLED_DIR after a silent install, and again for the
-  extracted portable ZIP): manifest intact, no networking import in any shipped binary, the installed frozen
-  helper loads every service, and the installed gk-cli finds an EICAR file generated here with the bundled
-  signatures, after which the installed helper writes the forensic report from that same database.
+  extracted portable ZIP): `gk-cli integrity` confirms the installation, no networking import in any shipped
+  binary, the installed frozen helper loads every service, and the installed gk-cli finds an EICAR file
+  generated here with the bundled signatures, after which the installed helper writes the forensic report
+  from that same database.
 """
 
 from __future__ import annotations
@@ -22,6 +24,8 @@ import pytest
 from cryptography.hazmat.primitives import serialization
 from cryptography.hazmat.primitives.asymmetric.ed25519 import Ed25519PrivateKey
 
+from gamekernel import app_paths, crypto_utils
+from gamekernel.core import integrity
 from tools import make_distribution as MD
 
 ROOT = Path(__file__).resolve().parents[2]
@@ -49,52 +53,91 @@ def parts(tmp_path):
     _component(helper / "_internal", "base_library.zip", b"zip")
     crt = tmp_path / "crt"
     _component(crt, "vcruntime140.dll", b"crt")
-    return {"app": app, "bins": [cli, worker, update], "helper": helper, "crt": crt, "tmp": tmp_path}
+    return {"app": app, "bins": [cli, worker, update], "helper": helper, "crt": crt, "tmp": tmp_path,
+            "key": Ed25519PrivateKey.generate()}
 
 
-def _plan(parts, **kw) -> MD.Plan:
+def _plan(parts, signed: bool = True, **kw) -> MD.Plan:
     return MD.Plan(out=parts["tmp"] / "dist" / "GameKernel", app=parts["app"], bins=parts["bins"],
-                   helper=parts["helper"], crt_dir=parts["crt"], deploy_qt=False, **kw)
+                   helper=parts["helper"], crt_dir=parts["crt"], deploy_qt=False,
+                   signer=parts["key"] if signed else None, **kw)
 
 
-def test_layout_and_manifest(parts):
+def _agent_a_check(out: Path, monkeypatch) -> integrity.IntegrityReport:
+    """Agent A's Python checker, trusting the keys shipped in ``out`` (as the installed product does)."""
+    monkeypatch.setattr(app_paths, "trusted_keys_dir", lambda: out / "signatures" / "keys")
+    integrity.clear_caches()
+    return integrity.check_installation(out)
+
+
+def test_layout_and_signed_manifest(parts, monkeypatch):
     summary = MD.build(_plan(parts))
     out = Path(summary["folder"])
-    assert summary["version"] == MD.product_version()
+    assert summary["version"] == MD.product_version() and summary["signed"] is True
+    assert summary["key_id"] == crypto_utils.key_id(parts["key"].public_key())
     for rel in (f"GameKernel{EXE}", f"gk-cli{EXE}", f"gk-scanworker{EXE}", f"gk-update{EXE}", "libsodium.dll",
                 "vcruntime140.dll", f"helper/gk-helper{EXE}", "helper/_internal/base_library.zip",
                 "signatures/internal/indicators.yar", "signatures/data/game_components.json",
-                "signatures/yara/gk_test_files.yar", "contracts/threat_catalog.json", "docs/USAGE.md", "docs/PRIVACY.md", "docs/LIMITATIONS.md"):
+                "signatures/yara/gk_test_files.yar", "contracts/threat_catalog.json", "docs/USAGE.md",
+                "docs/PRIVACY.md", "docs/LIMITATIONS.md", MD.RELEASE_PUB, integrity.MANIFEST_NAME,
+                integrity.SIGNATURE_NAME):
         assert (out / rel).is_file(), rel
-    assert not (out / "portable.flag").exists() and not (out / "signatures" / "keys").exists()
-    assert MD.verify_manifest(out) == []
-    lines = (out / MD.MANIFEST).read_text(encoding="utf-8").splitlines()
-    assert len(lines) == summary["files"] and all("\\" not in line for line in lines)
+    assert not (out / "portable.flag").exists()
+    manifest = json.loads((out / integrity.MANIFEST_NAME).read_text(encoding="utf-8"))
+    assert manifest["format"] == "gamekernel-integrity" and manifest["version"] == summary["version"]
+    assert f"gk-scanworker{EXE}" in manifest["files"] and MD.RELEASE_PUB in manifest["files"]
+    assert len(manifest["files"]) == summary["files"]
+    assert MD.manifest_problems(out) == []
+    report = _agent_a_check(out, monkeypatch)
+    assert report.ok and report.signature_valid is True and report.signer_key_id == summary["key_id"]
 
 
-def test_manifest_detects_tampering_missing_and_extra_files(parts):
+def test_tampering_is_detected_by_both_checkers(parts, monkeypatch):
     out = Path(MD.build(_plan(parts))["folder"])
     (out / f"gk-cli{EXE}").write_bytes(b"patched")
     (out / "docs" / "PRIVACY.md").unlink()
     (out / "intruso.dll").write_bytes(b"x")
-    (out / "unins000.exe").write_bytes(b"uninstaller")
-    problems = MD.verify_manifest(out, ignore=("unins000.exe",))
-    assert problems == ["ausente: docs/PRIVACY.md", f"alterado: gk-cli{EXE}", "não previsto: intruso.dll"]
+    assert MD.manifest_problems(out) == ["ausente: docs/PRIVACY.md", f"alterado: gk-cli{EXE}",
+                                         "não previsto: intruso.dll"]
+    report = _agent_a_check(out, monkeypatch)
+    assert not report.ok and report.modified == [f"gk-cli{EXE}"] and report.missing == ["docs/PRIVACY.md"]
 
 
-def test_release_key_is_checked(parts):
-    private = Ed25519PrivateKey.generate()
-    pub = parts["tmp"] / "release.pub"
-    pub.write_bytes(private.public_key().public_bytes(serialization.Encoding.PEM,
-                                                      serialization.PublicFormat.SubjectPublicKeyInfo))
-    out = Path(MD.build(_plan(parts, release_key=pub))["folder"])
-    assert (out / "signatures" / "keys" / "release.pub").read_bytes() == pub.read_bytes()
+def test_manifest_signed_by_another_key_is_rejected(parts, monkeypatch):
+    out = Path(MD.build(_plan(parts))["folder"])
+    raw = (out / integrity.MANIFEST_NAME).read_bytes()
+    (out / integrity.SIGNATURE_NAME).write_bytes(crypto_utils.sign(Ed25519PrivateKey.generate(), raw))
+    assert MD.manifest_problems(out) == ["assinatura do manifesto não confere com as chaves distribuídas"]
+    report = _agent_a_check(out, monkeypatch)
+    assert not report.ok and report.signature_valid is False
 
-    leaked = parts["tmp"] / "leaked.pub"
-    leaked.write_bytes(private.private_bytes(serialization.Encoding.PEM, serialization.PrivateFormat.PKCS8,
-                                             serialization.NoEncryption()))
-    with pytest.raises(MD.DistributionError, match="PRIVADA"):
-        MD.build(_plan(parts, release_key=leaked))
+
+def test_unsigned_local_build(parts, monkeypatch):
+    out = Path(MD.build(_plan(parts, signed=False))["folder"])
+    assert (out / integrity.MANIFEST_NAME).is_file() and not (out / integrity.SIGNATURE_NAME).exists()
+    assert not (out / MD.RELEASE_PUB).exists() and MD.manifest_problems(out) == []
+    report = _agent_a_check(out, monkeypatch)
+    assert report.ok and report.signature_valid is None and "sem assinatura" in report.detail
+
+
+def test_signing_key_loading(parts, tmp_path):
+    pem = parts["key"].private_bytes(serialization.Encoding.PEM, serialization.PrivateFormat.PKCS8,
+                                     serialization.NoEncryption())
+    (tmp_path / "release.key").write_bytes(pem)
+    loaded = MD.load_signing_key(tmp_path / "release.key", None)
+    assert crypto_utils.key_id(loaded.public_key()) == crypto_utils.key_id(parts["key"].public_key())
+    (tmp_path / "release.pub").write_bytes(parts["key"].public_key().public_bytes(
+        serialization.Encoding.PEM, serialization.PublicFormat.SubjectPublicKeyInfo))
+    with pytest.raises(MD.DistributionError, match="chave privada"):
+        MD.load_signing_key(tmp_path / "release.pub", None)       # a public key cannot sign
+
+
+def test_private_key_material_is_refused(parts):
+    leaked = parts["key"].private_bytes(serialization.Encoding.PEM, serialization.PrivateFormat.PKCS8,
+                                        serialization.NoEncryption())
+    (parts["helper"] / "_internal" / "chave.pem").write_bytes(leaked)
+    with pytest.raises(MD.DistributionError, match="chave privada"):
+        MD.build(_plan(parts))
 
 
 @pytest.mark.parametrize("dll", ["Qt6Network.dll", "winhttp.dll"])
@@ -125,28 +168,31 @@ def test_unrelated_output_folder_is_never_deleted(parts):
     assert (out / "importante.txt").exists()
 
 
-def test_portable_zip(parts):
+def test_portable_zip(parts, monkeypatch):
     out = Path(MD.build(_plan(parts))["folder"])
     zip_path = parts["tmp"] / "GameKernel-portable.zip"
     entries = MD.make_portable_zip(out, zip_path)
     with zipfile.ZipFile(zip_path) as zf:
         names = zf.namelist()
         assert len(names) == entries and "GameKernel/portable.flag" in names
-        assert f"GameKernel/GameKernel{EXE}" in names and "GameKernel/MANIFEST.sha256" in names
+        assert f"GameKernel/GameKernel{EXE}" in names and f"GameKernel/{integrity.MANIFEST_NAME}" in names
         extracted = parts["tmp"] / "portable"
         zf.extractall(extracted)
-    # the portable flag is outside the manifest; the program folder stays verifiable
-    assert MD.verify_manifest(extracted / "GameKernel", ignore=("portable.flag",)) == []
+    # portable.flag is not a shipped program file: the extracted folder still checks out (data/ is excluded too)
+    (extracted / "GameKernel" / "data").mkdir()
+    (extracted / "GameKernel" / "data" / "settings.json").write_text("{}")
+    assert _agent_a_check(extracted / "GameKernel", monkeypatch).ok
     (out / f"gk-cli{EXE}").write_bytes(b"patched")
     with pytest.raises(MD.DistributionError, match="manifesto"):
         MD.make_portable_zip(out, zip_path)
 
 
-def test_cli_verify_and_version(parts, capsys):
-    out = Path(MD.build(_plan(parts))["folder"])
-    assert MD.main(["--verify", str(out)]) == 0
-    (out / "docs" / "USAGE.md").write_text("alterado")
-    assert MD.main(["--verify", str(out)]) == 1
+def test_cli_requires_an_explicit_signing_choice(parts, capsys):
+    common = ["--app", str(parts["app"]), *sum((["--bin", str(b)] for b in parts["bins"]), []),
+              "--out", str(parts["tmp"] / "cli-out")]
+    with pytest.raises(SystemExit):
+        MD.main(common)                                   # neither --key nor --unsigned
+    assert "--unsigned" in capsys.readouterr().err
     assert MD.main(["--print-version"]) == 0
     assert capsys.readouterr().out.strip().splitlines()[-1] == MD.product_version()
 
@@ -172,8 +218,17 @@ def _installed() -> Path:
 
 
 @installed
-def test_installed_files_match_the_manifest():
-    assert MD.verify_manifest(_installed(), ignore=("unins000.exe", "unins000.dat", "unins000.msg", "portable.flag", "data")) == []
+def test_installed_product_integrity_is_confirmed_by_the_core(tmp_path):
+    """The product's own checker (gk-cli integrity, gk::integrity) over the installed folder."""
+    out = tmp_path / "integrity.json"
+    proc = subprocess.run([str(_installed() / f"gk-cli{EXE}"), "integrity", "--install-dir", str(_installed()),
+                           "--json", str(out)], capture_output=True, text=True, encoding="utf-8", errors="replace",
+                          timeout=600)
+    report = json.loads(out.read_text(encoding="utf-8"))
+    assert proc.returncode == 0 and report["ok"] and report["manifest_present"], (proc.stdout, report)
+    if os.environ.get("GK_EXPECT_SIGNED") == "1":
+        shipped = crypto_utils.load_public_key((_installed() / MD.RELEASE_PUB).read_bytes())
+        assert report["signature_valid"] is True and report["signer_key_id"] == crypto_utils.key_id(shipped)
 
 
 @installed
@@ -204,6 +259,7 @@ def test_installed_scan_and_report_end_to_end(tmp_path):
                           encoding="utf-8", errors="replace", timeout=600)
     assert proc.returncode == 3, proc.stderr                       # threat found by the installed core
     scan = json.loads(report_json.read_text(encoding="utf-8"))
+    assert not any("integridade" in w.lower() for w in scan["summary"].get("warnings", [])), scan["summary"]
     results = {r["name"]: r for r in scan["results"]}
     assert results["leia_eicar.com"]["classification"] == "malware"
     assert "yara" in {e["source"] for e in results["leia_eicar.com"]["evidences"]}   # bundled rules were found

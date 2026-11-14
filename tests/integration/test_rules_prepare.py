@@ -14,8 +14,10 @@ RULESETS = {
     "syntax_error": {"a.yar": "rule x { condition: }"},
     "include": {"a.yar": 'include "other.yar"\nrule x { condition: true }'},
     "undefined_identifier": {"a.yar": "rule x { condition: nope_var > 1 }"},
-    "external_vars": {"a.yar": 'rule x { condition: extension == ".exe" and filepath != "" }'},
-    "pe_module": {"a.yar": 'import "pe"\nrule x { condition: pe.number_of_sections > 0 }'},
+    "external_vars": {"a.yar": 'rule x { meta: category = "test_file" severity = "INFO" '
+                               'condition: extension == ".exe" and filepath != "" }'},
+    "pe_module": {"a.yar": 'import "pe"\nrule x { meta: category = "test_file" severity = "INFO" '
+                           'condition: pe.number_of_sections > 0 }'},
     "empty_file": {"a.yar": "// sem regras\n"},
     "wrong_extension": {"a.txt": YARA_RULE},
 }
@@ -40,12 +42,50 @@ def test_metadata_lint(tmp_path):
                                     'author = "a" condition: false }\n', encoding="utf-8")
     rep = yara_prep.check_rules_dir(tmp_path)
     assert not rep.ok and any("categoria desconhecida" in e for e in rep.errors)
-    assert any("meta ausente" in w for w in rep.warnings)
+    # category/severity are mandatory (the core refuses rules without them); description/author only warn
+    assert any("bare: meta obrigatória ausente: category, severity" in e for e in rep.errors)
+    assert any("meta ausente: description, author" in w for w in rep.warnings)
     strict = yara_prep.check_rules_dir(tmp_path, strict_meta=True)
-    assert any("meta ausente" in e for e in strict.errors)
+    assert any("meta ausente: description, author" in e for e in strict.errors)
 
 
 def test_complete_metadata_has_no_warnings(tmp_path):
     (tmp_path / "a.yar").write_text(YARA_RULE, encoding="utf-8")
     rep = yara_prep.check_rules_dir(tmp_path)
     assert rep.ok and rep.warnings == [] and rep.rules[0]["category"] == "test_file"
+
+
+# The publisher gate versus the core's validator (gk::yara::validate_rules_dir, the one the app will use
+# before activating a package, WORK_SPLIT rev. 4 §3): the gate must never accept what the core refuses.
+_META = 'meta: category = "test_file" severity = "INFO"'
+CORE_POLICY = {
+    # name: (rules, expected decision of both, or None when only the gate refuses — gate stricter, safe)
+    "complete": ({"a.yar": f'rule a {{ {_META} strings: $a = "x" condition: $a }}'}, True),
+    "missing_category_severity": ({"a.yar": 'rule a { strings: $a = "x" condition: $a }'}, False),
+    "pe_is_signed": ({"a.yar": f'import "pe"\nrule a {{ {_META} condition: pe.is_signed }}'}, False),
+    "pe_signatures_spaced": ({"a.yar": f'import "pe"\nrule a {{ {_META} condition: pe . number_of_signatures > 0 }}'},
+                             False),
+    "pe_signatures_in_comment": ({"a.yar": f'// pe.signatures\nrule a {{ {_META} condition: false }}'}, False),
+    "pe_other_fields_ok": ({"a.yar": f'import "pe"\nrule a {{ {_META} condition: pe.number_of_sections > 0 }}'}, True),
+    "include": ({"a.yar": f'include "x.yar"\nrule a {{ {_META} condition: false }}'}, False),
+    "externals": ({"a.yar": f'rule a {{ {_META} condition: extension == ".exe" }}'}, True),
+    "unknown_category": ({"a.yar": 'rule a { meta: category = "virus" severity = "INFO" condition: false }'}, None),
+    "invalid_severity": ({"a.yar": 'rule a { meta: category = "test_file" severity = "extreme" condition: false }'},
+                         None),
+    "no_rules": ({"a.yar": "// nada\n"}, None),
+}
+
+
+@pytest.mark.parametrize("name", sorted(CORE_POLICY))
+def test_publisher_gate_is_never_more_permissive_than_the_core(native, tmp_path, name):
+    rules, expected = CORE_POLICY[name]
+    for fname, text in rules.items():
+        (tmp_path / fname).write_text(text, encoding="utf-8")
+    gate = yara_prep.check_rules_dir(tmp_path)
+    core = native.yara_validate_dir(str(tmp_path))
+    if gate.ok:
+        assert core["ok"], (name, core["errors"])
+    if expected is None:
+        assert not gate.ok, name                       # stricter than the core (proposed to Agent A)
+    else:
+        assert gate.ok is expected and core["ok"] is expected, (name, gate.errors, core["errors"])

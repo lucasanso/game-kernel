@@ -1,31 +1,40 @@
 #!/usr/bin/env python3
-"""Assemble the Game Kernel product folder, its integrity manifest and the portable ZIP.
+"""Assemble the Game Kernel product folder, sign its integrity manifest and build the portable ZIP.
 
 The folder is what the Windows installer (installer/gamekernel.iss) copies to Program Files and what the
 portable ZIP contains:
 
     GameKernel.exe, Qt runtime (windeployqt), gk-cli.exe, gk-scanworker.exe, gk-update.exe, MSVC runtime
-    helper/                 frozen gk-helper (PyInstaller one-folder)
-    signatures/             bundled YARA, indicators, IOC, ClamAV and component data (+ keys/release.pub)
-    contracts/              threat_catalog.json (explanations and recommendations of the risk engine)
-    docs/                   USAGE, PRIVACY, LIMITATIONS
-    MANIFEST.sha256         SHA-256 of every other file (sha256sum format)
+    helper/                    frozen gk-helper (PyInstaller one-folder)
+    signatures/                bundled YARA, indicators, IOC, ClamAV, component data and keys/release.pub
+    contracts/                 threat_catalog.json (explanations and recommendations of the risk engine)
+    docs/                      USAGE, PRIVACY, LIMITATIONS
+    integrity_manifest.json    SHA-256 and size of every shipped file (Agent A's gk::integrity format, M10),
+    integrity_manifest.sig     signed with the release key; the core refuses to launch a modified or unlisted
+                               bundled binary, and `gk-cli integrity` re-checks the whole installation
+
+The manifest is produced with Agent A's code (gamekernel.core.integrity, the same as
+tools/build_integrity_manifest.py) as the very last step, and the public half of the signing key is shipped in
+signatures/keys/release.pub, so the two can never disagree.
 
 Safety checks (the build fails instead of shipping something wrong): required files present, no private key
-material, no networking DLL, no conflicting DLLs with the same name, no portable.flag in the installed folder.
-The portable ZIP is the same folder plus ``portable.flag`` (data then lives in ``<folder>/data``).
+material, no networking DLL, no conflicting DLLs with the same name, no portable.flag in the installed folder,
+manifest consistent with the folder before the ZIP is written. The portable ZIP is the same folder plus
+``portable.flag`` (data then lives in ``<folder>/data``, which the manifest excludes).
 
 Usage (Windows CI, see .github/workflows/ci.yml):
     python tools/make_distribution.py --app <GameKernel.exe> --bin <gk-cli.exe> --bin <gk-scanworker.exe> \
         --bin <gk-update.exe> --helper dist/gk-helper --crt-dir <Microsoft.VC143.CRT> \
+        --key <release private key> [--password-env VAR | --no-password] \
         --out dist/GameKernel --portable-zip dist/GameKernel-<versão>-portable.zip
+    (--unsigned instead of --key only for local builds: the application then reports an unsigned manifest)
     python tools/make_distribution.py --print-version
-    python tools/make_distribution.py --verify <installed folder>
 """
 
 from __future__ import annotations
 
 import argparse
+import getpass
 import hashlib
 import json
 import os
@@ -38,12 +47,21 @@ from dataclasses import dataclass, field
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
-MANIFEST = "MANIFEST.sha256"
+if str(ROOT) not in sys.path:
+    sys.path.insert(0, str(ROOT))
+
+from cryptography.hazmat.primitives import serialization  # noqa: E402
+from cryptography.hazmat.primitives.asymmetric.ed25519 import Ed25519PrivateKey  # noqa: E402
+
+from gamekernel import crypto_utils  # noqa: E402
+from gamekernel.core.integrity import MANIFEST_NAME, SIGNATURE_NAME, build_manifest, manifest_bytes  # noqa: E402
+
 SIGNATURE_DIRS = ("yara", "internal", "ioc", "clamav", "data")
 # Data files the core loads at run time from its resource folder (cpp/scan Config): missing ones degrade
 # the analysis, so they are copied and required explicitly.
 RESOURCE_FILES = ("contracts/threat_catalog.json",)
 DOCS = ("USAGE.md", "PRIVACY.md", "LIMITATIONS.md")
+RELEASE_PUB = "signatures/keys/release.pub"
 # DLLs whose only purpose is network I/O; the product is offline by construction (docs/SECURITY.md).
 NETWORK_DLLS = {"wininet.dll", "winhttp.dll", "urlmon.dll", "mswsock.dll", "wsock32.dll", "dnsapi.dll",
                 "httpapi.dll", "websocket.dll", "webio.dll", "qt6network.dll", "qt6websockets.dll",
@@ -73,7 +91,7 @@ def product_version() -> str:
     return match.group(1)
 
 
-def sha256_file(path: Path) -> str:
+def _sha256(path: Path) -> str:
     digest = hashlib.sha256()
     with path.open("rb") as fh:
         for chunk in iter(lambda: fh.read(1 << 20), b""):
@@ -81,54 +99,11 @@ def sha256_file(path: Path) -> str:
     return digest.hexdigest()
 
 
-def _relative_files(folder: Path) -> list[str]:
-    return sorted(p.relative_to(folder).as_posix() for p in folder.rglob("*") if p.is_file())
-
-
-def write_manifest(folder: Path) -> int:
-    lines = [f"{sha256_file(folder / rel)}  {rel}" for rel in _relative_files(folder) if rel != MANIFEST]
-    (folder / MANIFEST).write_text("\n".join(lines) + "\n", encoding="utf-8", newline="\n")
-    return len(lines)
-
-
-def verify_manifest(folder: Path, ignore: tuple[str, ...] = ()) -> list[str]:
-    """Problems found (empty = intact). ``ignore`` lists top-level names created after installation
-    (e.g. the uninstaller files or the portable data folder)."""
-    manifest = folder / MANIFEST
-    if not manifest.is_file():
-        return [f"{MANIFEST} ausente"]
-    expected: dict[str, str] = {}
-    for line in manifest.read_text(encoding="utf-8").splitlines():
-        digest, _, rel = line.partition("  ")
-        if not re.fullmatch(r"[0-9a-f]{64}", digest) or not rel:
-            return [f"linha inválida no manifesto: {line!r}"]
-        expected[rel] = digest
-    problems = []
-    present = {rel for rel in _relative_files(folder)
-               if rel != MANIFEST and rel.split("/", 1)[0] not in ignore}
-    for rel, digest in sorted(expected.items()):
-        if rel not in present:
-            problems.append(f"ausente: {rel}")
-        elif sha256_file(folder / rel) != digest:
-            problems.append(f"alterado: {rel}")
-    problems += [f"não previsto: {rel}" for rel in sorted(present - expected.keys())]
-    return problems
-
-
-def _load_public_key(path: Path) -> bytes:
-    data = path.read_bytes()
-    if b"PRIVATE KEY" in data:
-        raise DistributionError(f"{path.name} contém uma chave PRIVADA; só a pública vai no produto")
-    from cryptography.hazmat.primitives.asymmetric.ed25519 import Ed25519PublicKey
-    from cryptography.hazmat.primitives.serialization import load_pem_public_key
-
+def load_signing_key(path: Path, password: bytes | None) -> Ed25519PrivateKey:
     try:
-        key = load_pem_public_key(data)
-    except ValueError as exc:
-        raise DistributionError(f"{path.name} não é uma chave pública PEM válida: {exc}") from None
-    if not isinstance(key, Ed25519PublicKey):
-        raise DistributionError(f"{path.name} não é uma chave Ed25519 (formato .gkpkg exige Ed25519)")
-    return data
+        return crypto_utils.load_private_key(path.read_bytes(), password)
+    except (ValueError, TypeError) as exc:
+        raise DistributionError(f"{path.name} não é uma chave privada Ed25519 utilizável: {exc}") from None
 
 
 @dataclass
@@ -138,10 +113,10 @@ class Plan:
     bins: list[Path] = field(default_factory=list)
     helper: Path | None = None
     crt_dir: Path | None = None
-    release_key: Path | None = None
+    signer: Ed25519PrivateKey | None = None   # None = unsigned manifest (local builds only)
     windeployqt: str | None = None
     require_core: bool = True
-    deploy_qt: bool = True          # False only in tests that use stand-in binaries
+    deploy_qt: bool = True                    # False only in tests that use stand-in binaries
 
 
 def _copy_binary_with_dlls(binary: Path, out: Path, origin: dict[str, str]) -> None:
@@ -156,7 +131,7 @@ def _copy_binary_with_dlls(binary: Path, out: Path, origin: dict[str, str]) -> N
         if name.lower() in NETWORK_DLLS:
             raise DistributionError(f"DLL de rede ao lado de {binary.name}: {name}")
         if dest.exists():
-            if sha256_file(dest) != sha256_file(src):
+            if _sha256(dest) != _sha256(src):
                 raise DistributionError(f"conflito: {name} de {src.parent} difere da copiada de {origin[name]}")
             continue
         shutil.copy2(src, dest)
@@ -164,9 +139,9 @@ def _copy_binary_with_dlls(binary: Path, out: Path, origin: dict[str, str]) -> N
 
 
 def _deploy_qt(exe: Path, windeployqt: str | None) -> None:
-    tool = windeployqt or shutil.which("windeployqt") or shutil.which("windeployqt6")
     if sys.platform != "win32":
         return                                     # the product is Windows-only; Linux builds are for tests
+    tool = windeployqt or shutil.which("windeployqt") or shutil.which("windeployqt6")
     if not tool:
         raise DistributionError("windeployqt não encontrado (Qt 6 no PATH ou --windeployqt)")
     proc = subprocess.run([tool, "--release", "--no-translations", "--no-system-d3d-compiler", "--no-opengl-sw",
@@ -178,7 +153,7 @@ def _deploy_qt(exe: Path, windeployqt: str | None) -> None:
 
 def _prepare_out(out: Path) -> None:
     if out.exists():
-        if any(out.iterdir()) and not (out / MANIFEST).exists():
+        if any(out.iterdir()) and not (out / MANIFEST_NAME).exists():
             raise DistributionError(f"{out} não está vazia e não é uma distribuição anterior; nada foi apagado")
         shutil.rmtree(out)
     out.mkdir(parents=True)
@@ -207,6 +182,38 @@ def _check(out: Path, plan: Plan) -> None:
             raise DistributionError(f"chave privada na distribuição: {path.relative_to(out)}")
 
 
+def sign_installation(out: Path, version: str, signer: Ed25519PrivateKey | None) -> int:
+    """Write (and sign) the integrity manifest with Agent A's code; the last step of the assembly."""
+    raw = manifest_bytes(build_manifest(out, version))
+    (out / MANIFEST_NAME).write_bytes(raw)
+    if signer is not None:
+        (out / SIGNATURE_NAME).write_bytes(crypto_utils.sign(signer, raw))
+    return len(json.loads(raw)["files"])
+
+
+def manifest_problems(out: Path) -> list[str]:
+    """Consistency of the folder with its manifest (before zipping, and in tests): same files, sizes and
+    hashes as a fresh manifest, and a signature that verifies with the key shipped in the folder."""
+    path = out / MANIFEST_NAME
+    if not path.is_file():
+        return [f"{MANIFEST_NAME} ausente"]
+    raw = path.read_bytes()
+    stored = json.loads(raw).get("files", {})
+    fresh = build_manifest(out, "")["files"]
+    problems = [f"ausente: {rel}" for rel in sorted(stored.keys() - fresh.keys())]
+    problems += [f"alterado: {rel}" for rel in sorted(stored.keys() & fresh.keys()) if stored[rel] != fresh[rel]]
+    problems += [f"não previsto: {rel}" for rel in sorted(fresh.keys() - stored.keys())]
+    sig = out / SIGNATURE_NAME
+    if sig.is_file():
+        keys = {}
+        for pub in sorted((out / "signatures" / "keys").glob("*.pub")):
+            key = crypto_utils.load_public_key(pub.read_bytes())
+            keys[crypto_utils.key_id(key)] = key
+        if crypto_utils.verify(raw, sig.read_bytes(), keys) is None:
+            problems.append("assinatura do manifesto não confere com as chaves distribuídas")
+    return problems
+
+
 def build(plan: Plan) -> dict:
     out = plan.out
     _prepare_out(out)
@@ -233,28 +240,33 @@ def build(plan: Plan) -> dict:
     for rel in RESOURCE_FILES:
         (out / rel).parent.mkdir(parents=True, exist_ok=True)
         shutil.copy2(ROOT / rel, out / rel)
-    if plan.release_key is not None:
-        keys = out / "signatures" / "keys"
-        keys.mkdir(parents=True)
-        (keys / "release.pub").write_bytes(_load_public_key(plan.release_key))
+    key_id = None
+    if plan.signer is not None:
+        public = plan.signer.public_key()
+        (out / RELEASE_PUB).parent.mkdir(parents=True, exist_ok=True)
+        (out / RELEASE_PUB).write_bytes(public.public_bytes(serialization.Encoding.PEM,
+                                                            serialization.PublicFormat.SubjectPublicKeyInfo))
+        key_id = crypto_utils.key_id(public)
     (out / "docs").mkdir()
     for doc in DOCS:
         shutil.copy2(ROOT / "docs" / doc, out / "docs" / doc)
     _check(out, plan)
-    count = write_manifest(out)
+    version = product_version()
+    count = sign_installation(out, version, plan.signer)
     size = sum(p.stat().st_size for p in out.rglob("*") if p.is_file())
-    return {"version": product_version(), "folder": str(out), "files": count, "bytes": size}
+    return {"version": version, "folder": str(out), "files": count, "bytes": size,
+            "signed": plan.signer is not None, "key_id": key_id}
 
 
 def make_portable_zip(folder: Path, zip_path: Path, top: str = "GameKernel") -> int:
     """ZIP of ``folder`` under ``top/`` plus ``top/portable.flag``; entries in a stable order."""
-    problems = verify_manifest(folder)
+    problems = manifest_problems(folder)
     if problems:
         raise DistributionError("a pasta não confere com o manifesto: " + "; ".join(problems[:5]))
     zip_path.parent.mkdir(parents=True, exist_ok=True)
     tmp = zip_path.with_suffix(zip_path.suffix + ".tmp")
+    rels = sorted(p.relative_to(folder).as_posix() for p in folder.rglob("*") if p.is_file())
     with zipfile.ZipFile(tmp, "w", compression=zipfile.ZIP_DEFLATED, compresslevel=9) as zf:
-        rels = _relative_files(folder)
         for rel in rels:
             zf.write(folder / rel, f"{top}/{rel}")
         zf.writestr(f"{top}/portable.flag", PORTABLE_FLAG_TEXT)
@@ -269,31 +281,36 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--bin", type=Path, action="append", default=[], help="gk-cli, gk-scanworker, gk-update")
     parser.add_argument("--helper", type=Path, help="pasta do gk-helper congelado (dist/gk-helper)")
     parser.add_argument("--crt-dir", type=Path, help="pasta Microsoft.VC143.CRT (implantação local do runtime MSVC)")
-    parser.add_argument("--release-key", type=Path, help="chave pública Ed25519 de release (.pub)")
+    signing = parser.add_mutually_exclusive_group()
+    signing.add_argument("--key", type=Path, help="chave privada Ed25519 de release (assina o manifesto)")
+    signing.add_argument("--unsigned", action="store_true", help="manifesto sem assinatura (somente builds locais)")
+    parser.add_argument("--no-password", action="store_true", help="chave privada sem senha (CI com chave efêmera)")
+    parser.add_argument("--password-env", help="lê a senha da chave desta variável de ambiente")
     parser.add_argument("--windeployqt", help="caminho do windeployqt")
     parser.add_argument("--allow-missing-core", action="store_true",
                         help="diagnóstico: aceitar distribuição sem gk-cli/gk-scanworker/gk-update")
     parser.add_argument("--out", type=Path, default=ROOT / "dist" / "GameKernel")
     parser.add_argument("--portable-zip", type=Path)
     parser.add_argument("--print-version", action="store_true")
-    parser.add_argument("--verify", type=Path, metavar="PASTA", help="conferir uma pasta instalada com o manifesto")
-    parser.add_argument("--ignore", action="append", default=[], help="com --verify: nome no topo a ignorar")
     args = parser.parse_args(argv)
     try:
         if args.print_version:
             print(product_version())
             return 0
-        if args.verify is not None:
-            problems = verify_manifest(args.verify, tuple(args.ignore))
-            for p in problems:
-                print(p, file=sys.stderr)
-            print("íntegra" if not problems else f"{len(problems)} problema(s)")
-            return 0 if not problems else 1
         if args.app is None:
             parser.error("--app é obrigatório para montar a distribuição")
+        if not args.key and not args.unsigned:
+            parser.error("escolha --key <chave de release> ou, só para builds locais, --unsigned")
+        signer = None
+        if args.key:
+            password = None
+            if args.password_env:
+                password = os.environ.get(args.password_env, "").encode("utf-8") or None
+            elif not args.no_password:
+                password = getpass.getpass("Senha da chave privada: ").encode("utf-8")
+            signer = load_signing_key(args.key, password)
         summary = build(Plan(out=args.out, app=args.app, bins=args.bin, helper=args.helper, crt_dir=args.crt_dir,
-                             release_key=args.release_key, windeployqt=args.windeployqt,
-                             require_core=not args.allow_missing_core))
+                             signer=signer, windeployqt=args.windeployqt, require_core=not args.allow_missing_core))
         if args.portable_zip is not None:
             summary["portable_zip"] = str(args.portable_zip)
             summary["portable_entries"] = make_portable_zip(args.out, args.portable_zip)

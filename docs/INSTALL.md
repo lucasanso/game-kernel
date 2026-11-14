@@ -43,11 +43,15 @@ assinaturas instaladas e a **quarentena** (arquivos seus, criptografados).
 
 ## Conferir a integridade
 
-A pasta do programa traz `MANIFEST.sha256` com o SHA-256 de cada arquivo. Para conferir uma instalação:
+A pasta do programa traz `integrity_manifest.json` (SHA-256 e tamanho de cada arquivo), assinado pela chave de
+*release* (`integrity_manifest.sig`; a chave pública fica em `signatures\keys`). O programa se recusa a executar um
+componente alterado ou fora da lista. Para conferir a instalação inteira:
 
-```bash
-python tools/make_distribution.py --verify "C:\Program Files\Game Kernel" --ignore unins000.exe --ignore unins000.dat
+```bat
+"C:\Program Files\Game Kernel\gk-cli.exe" integrity --install-dir "C:\Program Files\Game Kernel"
 ```
+
+O código de saída é `0` quando tudo confere e `6` quando algo foi alterado ou falta.
 
 ## Atualizar e desinstalar
 

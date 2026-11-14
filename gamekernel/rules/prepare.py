@@ -5,10 +5,18 @@ Compilation uses yara-python with the same constraints as the C++ installer
 variables ``filename``, ``filepath``, ``extension``, ``filetype`` defined as strings.
 Metadata lint makes every rule explainable in the UI and reports (spec: show the rule
 responsible for a detection, its category and the false-positive possibility).
+
+This publisher gate must never be *more permissive* than the core's validator
+(``gk::yara::validate_rules_dir``, which the app uses before activating a package): a package signed here
+and refused by the product would be useless. So, as in the core, ``category`` and ``severity`` are mandatory
+and the signature fields of the ``pe`` module are refused (the product's libyara is built without OpenSSL;
+Authenticode is verified by the core and exposed as ``PE.Signature.*`` evidences). The gate is stricter than
+the core in a few points (known category and severity values, at least one rule), which is safe.
 """
 
 from __future__ import annotations
 
+import re
 from dataclasses import dataclass, field
 from pathlib import Path
 
@@ -16,6 +24,10 @@ from ..core.models import RiskLevel, ThreatCategory
 
 EXTERNALS = {"filename": "", "filepath": "", "extension": "", "filetype": ""}
 REQUIRED_META = ("description", "category", "severity", "author")
+CORE_REQUIRED_META = ("category", "severity")          # refused by the core when missing: always an error
+# Same conservative text check as the core (comments included): pe.<field> with optional blanks around the dot.
+PE_SIGNATURE_FIELD_RE = re.compile(r"(?<![A-Za-z0-9_])pe[ \t]*\.[ \t]*(signatures|is_signed|number_of_signatures)"
+                                   r"(?![A-Za-z0-9_])")
 RECOMMENDED_META = ("fp_note", "reference_date")
 SEVERITIES = {lvl.name for lvl in RiskLevel if lvl != RiskLevel.NONE}
 CATEGORIES = {c.value for c in ThreatCategory}
@@ -63,6 +75,11 @@ def check_rules_dir(directory: str | Path, strict_meta: bool = False) -> YaraRep
         except UnicodeDecodeError:
             report.errors.append(f"{path.name}: não está em UTF-8")
             continue
+        unsupported = PE_SIGNATURE_FIELD_RE.search(text)
+        if unsupported:
+            report.errors.append(f"{path.name}: pe.{unsupported.group(1)} não é suportado (o Game Kernel verifica "
+                                 "assinaturas Authenticode no núcleo; use as evidências PE.Signature.*)")
+            continue
         sources[path.stem] = text
         try:
             per_file.append((path.stem, yara.compile(source=text, includes=False, externals=EXTERNALS)))
@@ -94,7 +111,10 @@ def _lint_rule(report: YaraReport, namespace: str, rule, seen: dict[str, str], s
              "category": meta.get("category"), "severity": meta.get("severity")}
     report.rules.append(entry)
     where = f"{namespace}:{rule.identifier}"
-    missing = [k for k in REQUIRED_META if not meta.get(k)]
+    missing_core = [k for k in CORE_REQUIRED_META if not meta.get(k)]
+    if missing_core:
+        report.errors.append(f"{where}: meta obrigatória ausente: {', '.join(missing_core)}")
+    missing = [k for k in REQUIRED_META if k not in CORE_REQUIRED_META and not meta.get(k)]
     if missing:
         (report.errors if strict_meta else report.warnings).append(f"{where}: meta ausente: {', '.join(missing)}")
     if meta.get("category") and meta["category"] not in CATEGORIES:

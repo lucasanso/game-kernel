@@ -1,13 +1,14 @@
 # Progresso — Agente B (Agente 2: Python, integração e ferramentas)
 
 Branch: `claude/stoic-mayer-r46kuo`. Divisão vigente: **`docs/WORK_SPLIT.md` rev. 4** (convergência final: layout da
-rev. 2 e árvore C++ única em `cpp/`). Esta branch contém a branch do A até `02c6570` (M8 varredura ponta a ponta,
-M4 Authenticode, M9 quarentena e auditoria de *imports* de rede).
+rev. 2 e árvore C++ única em `cpp/`). Esta branch contém a branch do A até `398a4d1` (M8 varredura, M4 Authenticode,
+M9 quarentena, M10 integridade da instalação, *hardening* do `gk-scanworker`, libyara sem OpenSSL e as anotações de
+passagem para o B).
 
 ## Estado atual (2026-11-14)
 
 * `pytest -q` na árvore mesclada, com o `gk_native`, o `gk-cli` e o `gk-scanworker` do A compilados
-  (`cmake --preset linux-debug`): **472 passed, 34 skipped, nenhuma falha**. Os pulados dependem de plataforma ou de
+  (`cmake --preset linux-debug`): **525 passed, 39 skipped, nenhuma falha**. Os pulados dependem de plataforma ou de
   ferramenta ausente aqui: WinVerifyTrust e DLLs do Windows, mingw-w64 e osslsigncode (corpus PE e amostras
   assinadas), recursos PE do `GameKernel.exe` e o auxiliar congelado, que rodam na CI Windows.
 * Suítes do B com ASan/UBSan (`GK_NATIVE_SANITIZE=1`): `tests/helper` + `tests/integration` → **211 passed**.
@@ -126,8 +127,9 @@ válido e em dia com o SVG e, no Windows, ícone e `VERSIONINFO` lidos do `GameK
 ## B10 — Distribuição
 
 * `tools/make_distribution.py`: pasta do produto (interface + `windeployqt`, `gk-cli`, `gk-scanworker`, `gk-update`,
-  `gk-helper` congelado, assinaturas, `contracts/threat_catalog.json`, runtime MSVC local, guias), `MANIFEST.sha256`
-  e ZIP portátil com `portable.flag`. Recusa chave privada, DLL de rede, DLLs homônimas diferentes, `portable.flag`
+  `gk-helper` congelado, assinaturas, `contracts/threat_catalog.json`, runtime MSVC local, guias), o **manifesto de
+  integridade assinado do núcleo** (M10 do A, gerado com o código do A como último passo, chave pública em
+  `signatures/keys/release.pub`) e o ZIP portátil com `portable.flag`. Recusa chave privada, DLL de rede, DLLs homônimas diferentes, `portable.flag`
   na pasta instalada e apagar uma pasta de saída que não seja uma distribuição anterior.
 * `installer/gamekernel.iss`: Inno Setup em pt-BR, instalação por máquina ou por usuário, sem rede, ícone e versão
   únicos; a desinstalação **não apaga** `%LOCALAPPDATA%\GameKernel` (quarentena) e avisa onde os dados ficaram.
@@ -135,8 +137,9 @@ válido e em dia com o SVG e, no Windows, ícone e `VERSIONINFO` lidos do `GameK
   mesmas dependências estáticas), monta, gera o instalador, instala em silêncio, testa o produto instalado, desinstala
   (conferindo que os dados ficam) e testa a versão portátil extraída.
 * `tests/integration/test_distribution.py`: regras de montagem em qualquer plataforma; com `GK_INSTALLED_DIR`,
-  testes de ponta a ponta do produto instalado (manifesto, *imports* de rede de todos os binários, EICAR achado pelo
-  `gk-cli` instalado, relatório pelo `gk-helper` instalado a partir do mesmo banco). Ensaio local no Linux com os
+  testes de ponta a ponta do produto instalado (`gk-cli integrity` confirma a instalação e a assinatura, *imports*
+  de rede de todos os binários, EICAR achado pelo `gk-cli` instalado sem aviso de integridade, relatório pelo
+  `gk-helper` instalado a partir do mesmo banco). Ensaio local no Linux com os
   binários reais: pasta montada e ZIP portátil extraído passam nos testes de ponta a ponta.
 * `docs/INSTALL.md` e `docs/USAGE.md` descrevem só o que existe (varredura e quarentena pela linha de comando até a
   interface ganhar essas páginas).
@@ -144,6 +147,17 @@ válido e em dia com o SVG e, no Windows, ícone e `VERSIONINFO` lidos do `GameK
 Defeitos encontrados e corrigidos pelo caminho (todos do B): o `gk-helper.exe` congelado não tinha os métodos
 `sandbox.*` nem o `monitor.ps1`, e o `system.info` não mostrava serviços que falharam ao carregar (agora mostra
 `unavailable_services`); a distribuição não levava o `contracts/threat_catalog.json`.
+
+## Resposta às anotações de passagem do A (`WORK_SPLIT.md` §6, `398a4d1`)
+
+| Anotação do A | O que o B fez |
+|---|---|
+| Relatórios: helper `_signature()` com "presente, não verificada" | Aceito; coberto por `test_signature_status_wording` |
+| Dependências: sai `signify`, entra `asn1crypto` (oráculo) | Aceito |
+| CI Windows: libyara do *overlay* `vcpkg/overlay-ports/yara` | `ci.yml` (job `windows`) instala a libyara com `--overlay-ports`; o job `windows-package` usa o *preset* do A, que já aponta o *overlay* |
+| Empacotamento: rodar o manifesto de integridade e distribuir a chave pública | Feito na montagem com o código do A (`gamekernel.core.integrity`), como último passo. Meu `MANIFEST.sha256` (sem assinatura) foi **removido** para não duplicar o M10. A CI assina com uma chave efêmera (a de *release* nunca chega à CI) e exige `gk-cli integrity` verde com assinatura válida no produto instalado e no portátil |
+| APIs para as telas (quarentena, integridade, assinaturas) | Anotado. Pela rev. 4 a interface consome o `cpp/bridge`; enquanto ele não existe, a interface usa `cpp/ipc` e `cpp/updates` diretamente. Se o A preferir, ligo o `cpp/app` ao `gk_core` já agora para as páginas de Quarentena e Integridade (pede o `add_subdirectory(cpp/app)` na raiz, pendência 3) |
+| Acordo: `cpp/updates` delegar a validação YARA ao núcleo | **De acordo.** Lado do B pronto: o validador do publicador (`gamekernel/rules/prepare.py`) passou a exigir `category`/`severity` e a recusar `pe.signatures`/`pe.is_signed`/`pe.number_of_signatures` com a mesma checagem e mensagem do núcleo, e `test_publisher_gate_is_never_more_permissive_than_the_core` compara com `gk_native.yara_validate_dir`. Proposta ao A: o núcleo também recusar categoria desconhecida, severidade fora da escala e componente YARA sem regras (o publicador já recusa; hoje o núcleo aceita) |
 
 ## Pendências
 
@@ -153,8 +167,9 @@ Defeitos encontrados e corrigidos pelo caminho (todos do B): o `gk-helper.exe` c
    disponíveis. O app já compila sozinho (`cmake -S cpp/app`).
 4. **Para o A — `gk_native` na CI do produto**: a `ci.yml` não compila o `gk_native`, então os testes do A aparecem
    como pulados nela (a `core-ci` os cobre). Se o A preferir uma CI única, incluo o *preset* do núcleo na `ci.yml`.
-5. **`signatures/keys/`** (B): a chave pública de *release* entra pela opção `--release-key` da montagem; a privada
-   nunca é versionada nem chega à CI. Os pacotes da CI saem sem chave embutida.
+5. **`signatures/keys/`** (B): a chave pública de *release* é derivada da chave que assina o manifesto (`--key`) e
+   gravada na montagem; a privada nunca é versionada nem chega à CI. Pacotes da CI usam uma chave efêmera e não são
+   para distribuição.
 6. **Para o A — falha do motor de risco não pode rebaixar o resultado**: sem `contracts/threat_catalog.json`, o
    `gk-cli` terminou a varredura como `completed` e classificou um EICAR com evidências YARA, de assinatura e de
    reputação como `unknown`/`NONE`, com apenas um *warning* ("Motor de risco: não foi possível abrir ..."). Uma

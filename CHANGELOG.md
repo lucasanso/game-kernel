@@ -70,8 +70,8 @@
   limitações, progresso, cancelamento, evidências) e Privacidade e rede (`system.info`, autoteste de rede, reinício
   do auxiliar). As páginas do núcleo entram com o `cpp/bridge` (A), sem telas provisórias.
 - Distribuição (B10): `tools/make_distribution.py` monta a pasta do produto (interface, `gk-cli`, `gk-scanworker`,
-  `gk-update`, `gk-helper` congelado, assinaturas, catálogo de ameaças, runtime MSVC, guias) com `MANIFEST.sha256`
-  e o ZIP portátil, recusando chave privada, DLL de rede e DLLs conflitantes; `installer/gamekernel.iss` (Inno
+  `gk-update`, `gk-helper` congelado, assinaturas, catálogo de ameaças, runtime MSVC, guias) com o manifesto de
+  integridade assinado do núcleo (M10 do A) e o ZIP portátil, recusando chave privada, DLL de rede e DLLs conflitantes; `installer/gamekernel.iss` (Inno
   Setup, pt-BR, por máquina ou por usuário, sem rede, desinstalação que preserva os dados e avisa onde estão);
   job `windows-package` na CI que instala em silêncio, testa o produto instalado de ponta a ponta, desinstala e
   testa a versão portátil; guias `docs/INSTALL.md` e `docs/USAGE.md`.

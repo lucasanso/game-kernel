@@ -85,8 +85,8 @@ jobs:
         uses: actions/cache/restore@v4
         with:
           path: .vcpkg-cache
-          key: vcpkg-${{ runner.os }}-libsodium-yara-v2
-      - name: libsodium e libyara (vcpkg, modo clássico)
+          key: vcpkg-${{ runner.os }}-libsodium-yara-v3-${{ hashFiles('vcpkg/overlay-ports/**') }}
+      - name: libsodium e libyara (vcpkg, modo clássico, libyara do overlay do produto)
         id: vcpkg
         shell: pwsh
         # Outside the repository: the root vcpkg.json (Agent A's manifest) would switch vcpkg to
@@ -94,7 +94,8 @@ jobs:
         working-directory: ${{ runner.temp }}
         run: |
           New-Item -ItemType Directory -Force -Path $env:VCPKG_DEFAULT_BINARY_CACHE | Out-Null
-          & "$env:VCPKG_INSTALLATION_ROOT\vcpkg.exe" install libsodium yara --triplet x64-windows
+          # Same libyara as the product (vcpkg/overlay-ports/yara: no OpenSSL, no process-memory reader).
+          & "$env:VCPKG_INSTALLATION_ROOT\vcpkg.exe" install libsodium yara --triplet x64-windows "--overlay-ports=$env:GITHUB_WORKSPACE\vcpkg\overlay-ports"
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
           "$env:VCPKG_INSTALLATION_ROOT\installed\x64-windows\bin" | Out-File -FilePath $env:GITHUB_PATH -Append -Encoding utf8
       - name: Salvar cache binário do vcpkg (mesmo que passos seguintes falhem)
@@ -102,7 +103,7 @@ jobs:
         uses: actions/cache/save@v4
         with:
           path: .vcpkg-cache
-          key: vcpkg-${{ runner.os }}-libsodium-yara-v2
+          key: vcpkg-${{ runner.os }}-libsodium-yara-v3-${{ hashFiles('vcpkg/overlay-ports/**') }}
       - name: Testes (Python + C++ MSVC controlados pelo pytest)
         shell: pwsh
         run: |
@@ -160,7 +161,7 @@ jobs:
         uses: actions/cache/restore@v4
         with:
           path: .vcpkg-cache-static
-          key: vcpkg-${{ runner.os }}-static-md-${{ hashFiles('vcpkg.json') }}
+          key: vcpkg-${{ runner.os }}-static-md-${{ hashFiles('vcpkg.json', 'vcpkg/overlay-ports/**') }}
       - name: Núcleo (gk-cli, gk-scanworker, gk-update) pelo preset windows-release, com Qt
         id: core
         shell: pwsh
@@ -176,7 +177,7 @@ jobs:
         uses: actions/cache/save@v4
         with:
           path: .vcpkg-cache-static
-          key: vcpkg-${{ runner.os }}-static-md-${{ hashFiles('vcpkg.json') }}
+          key: vcpkg-${{ runner.os }}-static-md-${{ hashFiles('vcpkg.json', 'vcpkg/overlay-ports/**') }}
       - name: Interface (cpp/app) com as mesmas dependências estáticas
         shell: pwsh
         run: |
@@ -189,9 +190,14 @@ jobs:
           exit $LASTEXITCODE
       - name: Auxiliar congelado (PyInstaller)
         run: pyinstaller installer/gk_helper.spec --noconfirm --distpath dist --workpath build/pyinstaller
-      - name: Montar a distribuição (pasta do produto, manifesto SHA-256, ZIP portátil)
+      - name: Montar a distribuição (pasta do produto, manifesto de integridade assinado, ZIP portátil)
         shell: pwsh
         run: |
+          # The release key never reaches CI: CI packages are signed with a throwaway key generated here, whose
+          # public half is shipped in signatures/keys (so the installed copy verifies itself) and whose private
+          # half is discarded with the runner. Not for distribution to users.
+          python tools/gk_keygen.py --out-dir "$env:RUNNER_TEMP\ci-key" --name ci-efemera --no-password
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
           $vswhere = "${env:ProgramFiles(x86)}\Microsoft Visual Studio\Installer\vswhere.exe"
           $crt = & $vswhere -latest -products * -find "VC\Redist\MSVC\*\x64\Microsoft.VC143.CRT" | Select-Object -Last 1
           if (-not $crt) { Write-Error "runtime MSVC (Microsoft.VC143.CRT) não encontrado"; exit 1 }
@@ -201,7 +207,8 @@ jobs:
             --bin build/windows-release/cpp/cli/Release/gk-cli.exe `
             --bin build/windows-release/cpp/worker/Release/gk-scanworker.exe `
             --bin build/windows-release/cpp/updates/Release/gk-update.exe `
-            --helper dist/gk-helper --crt-dir $crt --out dist/GameKernel --portable-zip "dist/GameKernel-$ver-portable.zip"
+            --helper dist/gk-helper --crt-dir $crt --key "$env:RUNNER_TEMP\ci-key\ci-efemera.key" --no-password `
+            --out dist/GameKernel --portable-zip "dist/GameKernel-$ver-portable.zip"
           exit $LASTEXITCODE
       - name: Instalador (Inno Setup)
         shell: pwsh
@@ -222,6 +229,7 @@ jobs:
                  -ArgumentList '/VERYSILENT', '/SUPPRESSMSGBOXES', '/NORESTART', '/CURRENTUSER', "/DIR=`"$target`"", "/LOG=`"$log`""
           if ($p.ExitCode -ne 0) { Get-Content $log -Tail 60; exit $p.ExitCode }
           $env:GK_INSTALLED_DIR = $target
+          $env:GK_EXPECT_SIGNED = "1"
           python -m pytest -q -rs tests/integration/test_distribution.py
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
           # User data (quarantine, history) must survive the uninstallation.
@@ -241,6 +249,7 @@ jobs:
           Expand-Archive -Path "dist\GameKernel-$env:GK_VERSION-portable.zip" -DestinationPath $dest
           if (-not (Test-Path "$dest\GameKernel\portable.flag")) { Write-Error "portable.flag ausente"; exit 1 }
           $env:GK_INSTALLED_DIR = "$dest\GameKernel"
+          $env:GK_EXPECT_SIGNED = "1"
           python -m pytest -q -rs tests/integration/test_distribution.py
           exit $LASTEXITCODE
       - name: Artefatos (instalador e versão portátil)

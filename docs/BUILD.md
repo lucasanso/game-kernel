@@ -85,13 +85,16 @@ Nenhum segredo é usado; a chave privada de *release* nunca chega à CI.
 3. Auxiliar: `pyinstaller installer/gk_helper.spec --distpath dist --workpath build/pyinstaller`.
 4. Pasta do produto, manifesto e ZIP portátil: `python tools/make_distribution.py --app … --bin gk-cli.exe
    --bin gk-scanworker.exe --bin gk-update.exe --helper dist/gk-helper --crt-dir <Microsoft.VC143.CRT>
-   [--release-key release.pub] --out dist/GameKernel --portable-zip dist/GameKernel-<versão>-portable.zip`.
-   A ferramenta roda o `windeployqt`, copia assinaturas, `contracts/threat_catalog.json` e os guias, grava
-   `MANIFEST.sha256` e **recusa** chave privada, DLL de rede, DLLs homônimas diferentes e `portable.flag` na pasta
-   instalada.
+   --key <chave privada de release> --out dist/GameKernel --portable-zip dist/GameKernel-<versão>-portable.zip`
+   (`--unsigned` no lugar de `--key` só em *builds* locais). A ferramenta roda o `windeployqt`, copia assinaturas,
+   `contracts/threat_catalog.json` e os guias, coloca a chave pública em `signatures/keys/release.pub` e, como último
+   passo, grava e assina o manifesto de integridade do núcleo (`integrity_manifest.json` + `.sig`, o mesmo código
+   de `tools/build_integrity_manifest.py`). Ela **recusa** chave privada, DLL de rede, DLLs homônimas diferentes e
+   `portable.flag` na pasta instalada, e confere o manifesto antes de gerar o ZIP.
 5. Instalador: `iscc /DAppVersion=<versão> /DSourceDir=<dist\GameKernel> /DOutputDir=dist installer\gamekernel.iss`.
 
-Builds sem `--release-key` (como os da CI) não trazem chave embutida: o usuário adiciona a chave do publicador na
-Central de Atualização Offline. O job `windows-package` da CI faz todos os passos, instala em silêncio, testa o
+A chave privada de *release* nunca chega à CI: os pacotes da CI são assinados com uma chave efêmera gerada no
+próprio job (a pública vai em `signatures/keys`, a privada some com a máquina) e servem para teste, não para
+distribuição. O job `windows-package` da CI faz todos os passos, instala em silêncio, testa o
 produto instalado e a versão portátil (`tests/integration/test_distribution.py` com `GK_INSTALLED_DIR`) e
 desinstala, conferindo que os dados do usuário ficam.
