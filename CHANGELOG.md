@@ -66,6 +66,14 @@
   comportamental (`sandbox.*`: disponibilidade com o motivo, ativação gravada em `settings.json`, confirmação com as
   limitações, progresso, cancelamento, evidências) e Privacidade e rede (`system.info`, autoteste de rede, reinício
   do auxiliar). As páginas do núcleo entram com o `cpp/bridge` (A), sem telas provisórias.
+- Distribuição (B10): `tools/make_distribution.py` monta a pasta do produto (interface, `gk-cli`, `gk-scanworker`,
+  `gk-update`, `gk-helper` congelado, assinaturas, catálogo de ameaças, runtime MSVC, guias) com `MANIFEST.sha256`
+  e o ZIP portátil, recusando chave privada, DLL de rede e DLLs conflitantes; `installer/gamekernel.iss` (Inno
+  Setup, pt-BR, por máquina ou por usuário, sem rede, desinstalação que preserva os dados e avisa onde estão);
+  job `windows-package` na CI que instala em silêncio, testa o produto instalado de ponta a ponta, desinstala e
+  testa a versão portátil; guias `docs/INSTALL.md` e `docs/USAGE.md`.
+- Auxiliar congelado: os serviços `sandbox.*` e o `monitor.ps1` não entravam no `gk-helper.exe`; o spec agora deriva
+  os *hidden imports* do `SERVICE_MODULES`, e o `system.info` lista `unavailable_services`.
 - Ícone e versão do executável: logotipo com fonte única em `assets/gamekernel.svg` (recurso Qt), `assets/gamekernel.ico`
   gerado por `tools/make_app_icon.py`, recurso Windows com ícone e `VERSIONINFO`; a versão vem do `project()` do CMake
   e é a mesma exibida na interface.

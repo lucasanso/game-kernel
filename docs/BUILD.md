@@ -71,5 +71,24 @@ No Windows, `cpp/app/resources/gamekernel.rc.in` vira o recurso com o ícone e o
 (aqtinstall), libsodium e yara (vcpkg), a suíte completa, o PyInstaller do auxiliar e o teste do auxiliar congelado.
 Nenhum segredo é usado; a chave privada de *release* nunca chega à CI.
 
-O instalador Windows (Inno Setup) e a versão portátil (etapa B10) são montados a partir do executável da interface
-(`cpp/app`), do `gk-helper` congelado e dos binários do núcleo.
+### Distribuição: instalador e versão portátil (Windows)
+
+1. Núcleo: `cmake --preset windows-release -DCMAKE_PREFIX_PATH=C:/Qt/6.8.3/msvc2022_64 -DGK_BUILD_BINDINGS=OFF` e
+   `cmake --build --preset windows-release --target gk-cli gk-scanworker gk-update` (com Qt, a raiz também compila
+   a varredura, a CLI e o `gk-update`).
+2. Interface com as mesmas dependências estáticas: `cmake -S cpp/app -B build/pkg-app` com o *toolchain* do vcpkg,
+   `-DVCPKG_TARGET_TRIPLET=x64-windows-static-md -DVCPKG_INSTALLED_DIR=<build/windows-release/vcpkg_installed>
+   -DVCPKG_MANIFEST_MODE=OFF -DGK_APP_BUILD_TESTS=OFF`, depois `--target GameKernel`.
+3. Auxiliar: `pyinstaller installer/gk_helper.spec --distpath dist --workpath build/pyinstaller`.
+4. Pasta do produto, manifesto e ZIP portátil: `python tools/make_distribution.py --app … --bin gk-cli.exe
+   --bin gk-scanworker.exe --bin gk-update.exe --helper dist/gk-helper --crt-dir <Microsoft.VC143.CRT>
+   [--release-key release.pub] --out dist/GameKernel --portable-zip dist/GameKernel-<versão>-portable.zip`.
+   A ferramenta roda o `windeployqt`, copia assinaturas, `contracts/threat_catalog.json` e os guias, grava
+   `MANIFEST.sha256` e **recusa** chave privada, DLL de rede, DLLs homônimas diferentes e `portable.flag` na pasta
+   instalada.
+5. Instalador: `iscc /DAppVersion=<versão> /DSourceDir=<dist\GameKernel> /DOutputDir=dist installer\gamekernel.iss`.
+
+Builds sem `--release-key` (como os da CI) não trazem chave embutida: o usuário adiciona a chave do publicador na
+Central de Atualização Offline. O job `windows-package` da CI faz todos os passos, instala em silêncio, testa o
+produto instalado e a versão portátil (`tests/integration/test_distribution.py` com `GK_INSTALLED_DIR`) e
+desinstala, conferindo que os dados do usuário ficam.

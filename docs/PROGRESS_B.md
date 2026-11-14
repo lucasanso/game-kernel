@@ -37,7 +37,7 @@ M4 Authenticode, M9 quarentena e auditoria de *imports* de rede).
 | B7 | Sandbox (Windows Sandbox sem rede) no auxiliar | ✅ (sem VM no Linux; `monitor.ps1` com sintaxe verificada na CI Windows) |
 | B8 | CI Linux + Windows/MSVC, auxiliar congelado | ✅ |
 | B9 | Interface Qt 6 C++ (`cpp/app`) | 🔄 parte 1 ✅ (esqueleto + 3 páginas com serviços reais); páginas do núcleo aguardam `cpp/bridge` (A, M13) |
-| B10 | Instalador (Inno Setup), versão portátil, docs de usuário (INSTALL, USAGE) | ⏳ depende do executável da interface e dos binários do núcleo |
+| B10 | Instalador (Inno Setup), versão portátil, docs de usuário (INSTALL, USAGE) | 🔄 implementado e testado localmente (Linux); validação do instalador real no job `windows-package` da CI |
 
 ## Mesclagem da rev. 4 (esta etapa)
 
@@ -123,6 +123,28 @@ Testes: `tests/ui/test_native_app.py` → `cpp/app/tests/tst_app.cpp` (11 casos)
 real, e capturas das três páginas em `build/native-app/screenshots/`; `tests/ui/test_app_resources.py`: `.ico`
 válido e em dia com o SVG e, no Windows, ícone e `VERSIONINFO` lidos do `GameKernel.exe` com pefile.
 
+## B10 — Distribuição
+
+* `tools/make_distribution.py`: pasta do produto (interface + `windeployqt`, `gk-cli`, `gk-scanworker`, `gk-update`,
+  `gk-helper` congelado, assinaturas, `contracts/threat_catalog.json`, runtime MSVC local, guias), `MANIFEST.sha256`
+  e ZIP portátil com `portable.flag`. Recusa chave privada, DLL de rede, DLLs homônimas diferentes, `portable.flag`
+  na pasta instalada e apagar uma pasta de saída que não seja uma distribuição anterior.
+* `installer/gamekernel.iss`: Inno Setup em pt-BR, instalação por máquina ou por usuário, sem rede, ícone e versão
+  únicos; a desinstalação **não apaga** `%LOCALAPPDATA%\GameKernel` (quarentena) e avisa onde os dados ficaram.
+* CI `windows-package`: compila o produto inteiro (núcleo pelo *preset* do A, agora com Qt, e a interface com as
+  mesmas dependências estáticas), monta, gera o instalador, instala em silêncio, testa o produto instalado, desinstala
+  (conferindo que os dados ficam) e testa a versão portátil extraída.
+* `tests/integration/test_distribution.py`: regras de montagem em qualquer plataforma; com `GK_INSTALLED_DIR`,
+  testes de ponta a ponta do produto instalado (manifesto, *imports* de rede de todos os binários, EICAR achado pelo
+  `gk-cli` instalado, relatório pelo `gk-helper` instalado a partir do mesmo banco). Ensaio local no Linux com os
+  binários reais: pasta montada e ZIP portátil extraído passam nos testes de ponta a ponta.
+* `docs/INSTALL.md` e `docs/USAGE.md` descrevem só o que existe (varredura e quarentena pela linha de comando até a
+  interface ganhar essas páginas).
+
+Defeitos encontrados e corrigidos pelo caminho (todos do B): o `gk-helper.exe` congelado não tinha os métodos
+`sandbox.*` nem o `monitor.ps1`, e o `system.info` não mostrava serviços que falharam ao carregar (agora mostra
+`unavailable_services`); a distribuição não levava o `contracts/threat_catalog.json`.
+
 ## Pendências
 
 1. **P1 — Nome do produto** (usuário): "Game Kernel" ou "OFFLINE GAME GUARD". Mantido *Game Kernel*.
@@ -131,4 +153,15 @@ válido e em dia com o SVG e, no Windows, ícone e `VERSIONINFO` lidos do `GameK
    disponíveis. O app já compila sozinho (`cmake -S cpp/app`).
 4. **Para o A — `gk_native` na CI do produto**: a `ci.yml` não compila o `gk_native`, então os testes do A aparecem
    como pulados nela (a `core-ci` os cobre). Se o A preferir uma CI única, incluo o *preset* do núcleo na `ci.yml`.
-5. **`signatures/keys/`** (B): a chave pública de *release* é copiada no *build*; a privada nunca é versionada.
+5. **`signatures/keys/`** (B): a chave pública de *release* entra pela opção `--release-key` da montagem; a privada
+   nunca é versionada nem chega à CI. Os pacotes da CI saem sem chave embutida.
+6. **Para o A — falha do motor de risco não pode rebaixar o resultado**: sem `contracts/threat_catalog.json`, o
+   `gk-cli` terminou a varredura como `completed` e classificou um EICAR com evidências YARA, de assinatura e de
+   reputação como `unknown`/`NONE`, com apenas um *warning* ("Motor de risco: não foi possível abrir ..."). Uma
+   falha interna da avaliação deveria dar `inconclusive` (ou falhar a varredura), nunca "desconhecido, sem risco".
+   (Achado pelo teste de ponta a ponta da distribuição; o lado do B já leva o catálogo.)
+7. **Para o A — `gk-cli` e a versão portátil**: o `default_data_dir()` do `gk-cli` ignora o `portable.flag`
+   (o `app_paths.py` e a interface respeitam). Na versão portátil, a CLI sem `--data-dir` grava em
+   `%LOCALAPPDATA%\GameKernel`, separada dos dados da interface.
+8. **Para o A — primeira compilação MSVC de `cpp/scan` e `cpp/cli`**: a `core-ci` Windows não instala Qt, então
+   essas partes (e `cpp/ipc`/`cpp/updates` com `/WX`) só passam a ser compiladas com MSVC no job `windows-package`.

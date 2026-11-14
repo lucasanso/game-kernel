@@ -127,3 +127,128 @@ jobs:
             build/native-updates/Release/gk-update.exe
             build/native-updates/Release/*.dll
           if-no-files-found: error
+
+  windows-package:
+    # The shipped product: core (Agent A's windows-release preset, now with Qt so gk-cli/gk-scanworker/gk-update
+    # are built), desktop UI with the same static dependencies, frozen helper, MSVC runtime, installer and
+    # portable ZIP. Then the installer is run silently and the *installed* copy is tested end to end
+    # (manifest, network imports of every shipped binary, EICAR found by the installed gk-cli, forensic report
+    # by the installed helper), uninstalled (user data must survive), and the portable ZIP is tested the same way.
+    name: Windows — instalador e versão portátil (produto instalado testado)
+    runs-on: windows-2022
+    timeout-minutes: 120
+    env:
+      QT_VERSION: "6.8.3"
+      QT_QPA_PLATFORM: offscreen
+      VCPKG_DEFAULT_BINARY_CACHE: ${{ github.workspace }}\.vcpkg-cache-static
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.13"
+          cache: pip
+          cache-dependency-path: requirements-dev.txt
+      - name: Dependências Python
+        run: python -m pip install -r requirements-dev.txt aqtinstall==3.3.0
+      - name: Qt (MSVC 2022, 64 bits)
+        shell: pwsh
+        run: |
+          python -m aqt install-qt windows desktop $env:QT_VERSION win64_msvc2022_64 -O C:\Qt
+          "C:\Qt\$env:QT_VERSION\msvc2022_64\bin" | Out-File -FilePath $env:GITHUB_PATH -Append -Encoding utf8
+      - name: Restaurar cache binário do vcpkg (dependências estáticas do núcleo)
+        id: vcpkg-cache
+        uses: actions/cache/restore@v4
+        with:
+          path: .vcpkg-cache-static
+          key: vcpkg-${{ runner.os }}-static-md-${{ hashFiles('vcpkg.json') }}
+      - name: Núcleo (gk-cli, gk-scanworker, gk-update) pelo preset windows-release, com Qt
+        id: core
+        shell: pwsh
+        run: |
+          New-Item -ItemType Directory -Force -Path $env:VCPKG_DEFAULT_BINARY_CACHE | Out-Null
+          $env:VCPKG_ROOT = $env:VCPKG_INSTALLATION_ROOT
+          cmake --preset windows-release -DCMAKE_PREFIX_PATH="C:/Qt/$env:QT_VERSION/msvc2022_64" -DGK_BUILD_BINDINGS=OFF
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          cmake --build --preset windows-release --target gk-cli gk-scanworker gk-update
+          exit $LASTEXITCODE
+      - name: Salvar cache binário do vcpkg (mesmo que passos seguintes falhem)
+        if: always() && steps.vcpkg-cache.outputs.cache-hit != 'true' && hashFiles('.vcpkg-cache-static/**') != ''
+        uses: actions/cache/save@v4
+        with:
+          path: .vcpkg-cache-static
+          key: vcpkg-${{ runner.os }}-static-md-${{ hashFiles('vcpkg.json') }}
+      - name: Interface (cpp/app) com as mesmas dependências estáticas
+        shell: pwsh
+        run: |
+          $vcpkg = $env:VCPKG_INSTALLATION_ROOT -replace '\\','/'
+          cmake -S cpp/app -B build/pkg-app "-DCMAKE_TOOLCHAIN_FILE=$vcpkg/scripts/buildsystems/vcpkg.cmake" `
+            -DVCPKG_TARGET_TRIPLET=x64-windows-static-md "-DVCPKG_INSTALLED_DIR=$PWD/build/windows-release/vcpkg_installed" `
+            -DVCPKG_MANIFEST_MODE=OFF "-DCMAKE_PREFIX_PATH=C:/Qt/$env:QT_VERSION/msvc2022_64" -DGK_APP_BUILD_TESTS=OFF
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          cmake --build build/pkg-app --config Release --target GameKernel
+          exit $LASTEXITCODE
+      - name: Auxiliar congelado (PyInstaller)
+        run: pyinstaller installer/gk_helper.spec --noconfirm --distpath dist --workpath build/pyinstaller
+      - name: Montar a distribuição (pasta do produto, manifesto SHA-256, ZIP portátil)
+        shell: pwsh
+        run: |
+          $vswhere = "${env:ProgramFiles(x86)}\Microsoft Visual Studio\Installer\vswhere.exe"
+          $crt = & $vswhere -latest -products * -find "VC\Redist\MSVC\*\x64\Microsoft.VC143.CRT" | Select-Object -Last 1
+          if (-not $crt) { Write-Error "runtime MSVC (Microsoft.VC143.CRT) não encontrado"; exit 1 }
+          $ver = python tools/make_distribution.py --print-version
+          "GK_VERSION=$ver" | Out-File -FilePath $env:GITHUB_ENV -Append -Encoding utf8
+          python tools/make_distribution.py --app build/pkg-app/Release/GameKernel.exe `
+            --bin build/windows-release/cpp/cli/Release/gk-cli.exe `
+            --bin build/windows-release/cpp/worker/Release/gk-scanworker.exe `
+            --bin build/windows-release/cpp/updates/Release/gk-update.exe `
+            --helper dist/gk-helper --crt-dir $crt --out dist/GameKernel --portable-zip "dist/GameKernel-$ver-portable.zip"
+          exit $LASTEXITCODE
+      - name: Instalador (Inno Setup)
+        shell: pwsh
+        run: |
+          $iscc = "${env:ProgramFiles(x86)}\Inno Setup 6\ISCC.exe"
+          if (-not (Test-Path $iscc)) {
+            choco install innosetup -y --no-progress
+            if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          }
+          & $iscc /Qp "/DAppVersion=$env:GK_VERSION" "/DSourceDir=$PWD\dist\GameKernel" "/DOutputDir=$PWD\dist" installer\gamekernel.iss
+          exit $LASTEXITCODE
+      - name: Instalação silenciosa, testes do produto instalado e desinstalação
+        shell: pwsh
+        run: |
+          $target = "$env:RUNNER_TEMP\GameKernel instalado"
+          $log = "$env:RUNNER_TEMP\instalacao.log"
+          $p = Start-Process -FilePath "dist\GameKernel-$env:GK_VERSION-setup.exe" -Wait -PassThru `
+                 -ArgumentList '/VERYSILENT', '/SUPPRESSMSGBOXES', '/NORESTART', '/CURRENTUSER', "/DIR=`"$target`"", "/LOG=`"$log`""
+          if ($p.ExitCode -ne 0) { Get-Content $log -Tail 60; exit $p.ExitCode }
+          $env:GK_INSTALLED_DIR = $target
+          python -m pytest -q -rs tests/integration/test_distribution.py
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          # User data (quarantine, history) must survive the uninstallation.
+          $data = "$env:LOCALAPPDATA\GameKernel"
+          New-Item -ItemType Directory -Force -Path "$data\quarantine" | Out-Null
+          Set-Content -Path "$data\quarantine\marcador.txt" -Value "dados do usuário"
+          Start-Process -FilePath "$target\unins000.exe" -Wait -ArgumentList '/VERYSILENT', '/SUPPRESSMSGBOXES', '/NORESTART'
+          # The uninstaller re-launches itself from %TEMP%; wait for it to finish removing the program.
+          for ($i = 0; $i -lt 120 -and (Test-Path "$target\GameKernel.exe"); $i++) { Start-Sleep -Seconds 1 }
+          if (Test-Path "$target\GameKernel.exe") { Write-Error "a desinstalação não removeu o programa"; exit 1 }
+          if (-not (Test-Path "$data\quarantine\marcador.txt")) { Write-Error "a desinstalação apagou dados do usuário"; exit 1 }
+          Write-Output "Desinstalação: programa removido, dados do usuário preservados."
+      - name: Versão portátil (extraída e testada)
+        shell: pwsh
+        run: |
+          $dest = "$env:RUNNER_TEMP\portatil"
+          Expand-Archive -Path "dist\GameKernel-$env:GK_VERSION-portable.zip" -DestinationPath $dest
+          if (-not (Test-Path "$dest\GameKernel\portable.flag")) { Write-Error "portable.flag ausente"; exit 1 }
+          $env:GK_INSTALLED_DIR = "$dest\GameKernel"
+          python -m pytest -q -rs tests/integration/test_distribution.py
+          exit $LASTEXITCODE
+      - name: Artefatos (instalador e versão portátil)
+        if: success() || failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: gamekernel-windows-instalador
+          path: |
+            dist/GameKernel-*-setup.exe
+            dist/GameKernel-*-portable.zip
+          if-no-files-found: warn

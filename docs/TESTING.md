@@ -37,6 +37,7 @@ O pytest também compila e executa os componentes C++ `cpp/ipc`, `cpp/updates` e
 | `tests/helper/` | envelope IPC e quadros; processo auxiliar **real** com falhas provocadas (`fault_helper.py`: exceção, *crash* duro, travamento, escrita no stdout, resultado gigante, rede); relatórios (conteúdo das 15 seções, cracks, redação de dados pessoais, escape/CSP, PDF, banco somente leitura); sandbox (recusa sem isolamento, `.wsb`, fluxo com duplo da VM, mapeamento de comportamento, `monitor.ps1` estático); auxiliar congelado (`GK_FROZEN_HELPER`) |
 | `tests/integration/` | **Python × C++**: pacotes `.gkpkg` (válidos, adulterações, 27 manifestos assinados porém inválidos, 60 mutações aleatórias, mesma decisão e mesmo código), instalador C++ (atômico, *downgrade*, validação, rollback, recuperação após queda de energia, trava), IOC e YARA (yara-python × libyara), ferramentas do publicador ponta a ponta, **cliente C++/Qt contra o auxiliar Python real** |
 | `tests/ui/` | interface Qt 6 C++ (`cpp/app`, `QT_QPA_PLATFORM=offscreen`): pacotes **reais** gerados pelo código do publicador e instalados pela interface (v1 → v2 → *downgrade* recusado → reversão), pacote inválido, recusa do usuário, publicador não confiável até a chave ser adicionada, chave embutida protegida, sandbox recusada sem isolamento, autoteste de rede no auxiliar real, navegação, notificações e capturas de tela (`build/native-app/screenshots/`); ícone `.ico` válido e em dia com o SVG; no Windows, ícone e `VERSIONINFO` lidos do `GameKernel.exe` com pefile |
+| `tests/integration/test_distribution.py` | distribuição: layout, manifesto SHA-256 (adulteração, falta, sobra), recusa de chave privada, DLL de rede e DLLs conflitantes, ZIP portátil, script do instalador sem rede e sem apagar dados; com `GK_INSTALLED_DIR` (CI Windows, depois da instalação silenciosa e de novo com o ZIP extraído): manifesto do produto instalado, nenhum *import* de rede em binário entregue, EICAR achado pelo `gk-cli` instalado e relatório gerado pelo `gk-helper` instalado a partir do mesmo banco |
 | `tests/corpus/` | dados de teste gerados (`sample_scan.py`: varredura realista gravada no banco) |
 
 Variáveis:
@@ -47,6 +48,7 @@ Variáveis:
 | `GK_NATIVE_SANITIZE=1` | compila variantes ASan + UBSan (`build/*-asan`) e roda a suíte contra elas; códigos de saída 99/98 separam erro de memória de rejeição legítima |
 | `GK_CMAKE_ARGS` | argumentos extras do CMake (ex.: *toolchain* do vcpkg e caminho do Qt no Windows) |
 | `GK_FROZEN_HELPER` | caminho do `gk-helper` congelado para o teste de fumaça |
+| `GK_INSTALLED_DIR` | pasta de um produto instalado ou portátil, para os testes de ponta a ponta da distribuição |
 
 Dependências de sistema (Linux): `cmake ninja-build g++ pkg-config qt6-base-dev libqt6svg6-dev libgl-dev libsodium-dev libyara-dev`.
 
