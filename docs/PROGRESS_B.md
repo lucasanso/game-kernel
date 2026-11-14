@@ -1,26 +1,30 @@
 # Progresso — Agente B (Agente 2: Python, integração e ferramentas)
 
 Branch: `claude/stoic-mayer-r46kuo`. Divisão vigente: **`docs/WORK_SPLIT.md` rev. 4** (convergência final: layout da
-rev. 2 e árvore C++ única em `cpp/`). Esta branch contém a branch do A até `5c234c8` (M7).
+rev. 2 e árvore C++ única em `cpp/`). Esta branch contém a branch do A até `02c6570` (M8 varredura ponta a ponta,
+M4 Authenticode, M9 quarentena e auditoria de *imports* de rede).
 
-## Estado atual (2026-11-12)
+## Estado atual (2026-11-14)
 
-* `pytest -q` na árvore mesclada, com o `gk_native` do A compilado (`cmake --preset linux-debug`):
-  **373 passed, 12 failed, 7 skipped**.
-  * Os 12 que falham são `tests/native/test_risk.py` (Agente A, M7): o arquivo `signatures/data/game_components.json`
-    nunca chegou ao repositório porque a regra `data/` do `.gitignore` também ignora `signatures/data/`. A CI do
-    próprio A (`core-ci`, execução 43322196479) falha da mesma forma. Ver pendência 3.
-  * Os pulados: 5 testes de corpus PE e 1 de análise (sem mingw-w64 neste ambiente), 1 que usa DLLs do Windows e o
-    teste do auxiliar congelado, que roda na CI.
-* Suítes do B: `tests/helper` + `tests/integration` + `tests/ui` → **207 passed, 1 skipped**; com ASan/UBSan
-  (`GK_NATIVE_SANITIZE=1`) → **206 passed** + interface **1 passed** (com `detect_leaks=0`, por causa das alocações
-  globais do Qt).
+* `pytest -q` na árvore mesclada, com o `gk_native`, o `gk-cli` e o `gk-scanworker` do A compilados
+  (`cmake --preset linux-debug`): **472 passed, 34 skipped, nenhuma falha**. Os pulados dependem de plataforma ou de
+  ferramenta ausente aqui: WinVerifyTrust e DLLs do Windows, mingw-w64 e osslsigncode (corpus PE e amostras
+  assinadas), recursos PE do `GameKernel.exe` e o auxiliar congelado, que rodam na CI Windows.
+* Suítes do B com ASan/UBSan (`GK_NATIVE_SANITIZE=1`): `tests/helper` + `tests/integration` → **211 passed**.
+* O A resolveu as duas falhas que eu tinha apontado: `signatures/data/game_components.json` (regra `/data/` no
+  `.gitignore`) e a violação de acesso do `gk_native` na saída do interpretador no Windows.
+* Mesclagem desta etapa: o A alterou `gamekernel/reports/render_html.py` e `render_pdf.py` (do B) para o novo estado de
+  assinatura "presente, não verificada" (assinatura em compactado ou cadeia impossível de montar *offline*); a
+  mudança está correta e ganhou teste do B (`test_signature_status_wording`). O `signify` saiu do
+  `requirements.txt` porque o Authenticode agora é verificado em C++.
+* Novo teste do B: `tests/ui/test_app_offline_imports.py` estende a auditoria de rede do A ao `GameKernel(.exe)` e,
+  no Windows, às DLLs que o `windeployqt` coloca ao lado dele (o que o instalador vai levar).
 * CI do produto (`.github/workflows/ci.yml`) depois da mesclagem da rev. 4 (`9e42cd9`, execução 43325532416):
   **Linux verde e Windows verde**. No Windows: 235 passed, inclusive a interface `cpp/app` compilada com MSVC,
   `windeployqt` e plugin `offscreen`, e o ícone e o `VERSIONINFO` lidos do `GameKernel.exe`; o `gk-helper.exe`
   congelado (a partir de `gamekernel/helper/entry.py`) passou no teste de fumaça, e o artefato
   `gamekernel-windows-componentes` foi publicado. Os testes do A aparecem como pulados nessa CI porque ela não
-  compila o `gk_native` (pendência 6).
+  compila o `gk_native` (pendência 4).
 
 | Etapa | Entrega | Estado |
 |---|---|---|
@@ -123,13 +127,8 @@ válido e em dia com o SVG e, no Windows, ícone e `VERSIONINFO` lidos do `GameK
 
 1. **P1 — Nome do produto** (usuário): "Game Kernel" ou "OFFLINE GAME GUARD". Mantido *Game Kernel*.
 2. **P2 — Interface com o B** (usuário): proposta dos dois agentes, sem objeção até agora.
-3. **Para o A — `signatures/data/game_components.json` fora do repositório**: a linha `data/` do `.gitignore`
-   (provavelmente para a pasta de dados do modo portátil) também casa com `signatures/data/`. Sugestão: trocar por
-   `/data/` e commitar o arquivo. Até lá, `tests/native/test_risk.py` falha em qualquer clone novo.
-4. **Para o A — `core-ci` Windows**: o pytest termina com `-1073741819` (`0xC0000005`, violação de acesso) depois dos
-   resultados, possivelmente na finalização do `gk_native`.
-5. **Para o A — `add_subdirectory(cpp/app)`** no `CMakeLists.txt` da raiz quando Qt 6 Widgets e Svg estiverem
+3. **Para o A — `add_subdirectory(cpp/app)`** no `CMakeLists.txt` da raiz quando Qt 6 Widgets e Svg estiverem
    disponíveis. O app já compila sozinho (`cmake -S cpp/app`).
-6. **Para o A — `gk_native` na CI do produto**: a `ci.yml` não compila o `gk_native`, então os testes do A aparecem
+4. **Para o A — `gk_native` na CI do produto**: a `ci.yml` não compila o `gk_native`, então os testes do A aparecem
    como pulados nela (a `core-ci` os cobre). Se o A preferir uma CI única, incluo o *preset* do núcleo na `ci.yml`.
-7. **`signatures/keys/`** (B): a chave pública de *release* é copiada no *build*; a privada nunca é versionada.
+5. **`signatures/keys/`** (B): a chave pública de *release* é copiada no *build*; a privada nunca é versionada.

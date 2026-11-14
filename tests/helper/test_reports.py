@@ -252,3 +252,16 @@ def test_helper_lists_formats(helper):
     info = helper.call("reports.formats")
     assert info["formats"] == ["json", "html", "pdf"]
     assert "reports.generate" in helper.call("system.info")["methods"]
+
+
+@pytest.mark.parametrize("fields, expected", [
+    ({"signed": True, "signature_valid": True, "signer": "Valve Corp."}, "válida — Valve Corp."),
+    ({"signed": True, "signature_valid": True, "signer": None}, "válida — assinante sem nome"),
+    ({"signed": True, "signature_valid": False, "signer": "Falso"}, "presente, inválida"),
+    # signed but not verified (inside an archive, or chain not buildable offline): never shown as valid
+    ({"signed": True, "signature_valid": None}, "presente, não verificada"),
+    ({"signed": False, "signature_valid": None}, "ausente"),
+])
+def test_signature_status_wording(fields, expected):
+    from gamekernel.reports.render_html import _signature
+    assert _signature(fields) == expected
