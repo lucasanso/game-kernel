@@ -50,7 +50,9 @@ auxiliar e pelo cliente `cpp/ipc`.
 Parâmetros desconhecidos são rejeitados (`invalid_params` com `data.fields`).
 
 ### `system.ping` → `{"pong": true, "echo": <params.echo>}`
-### `system.info` → `{"component", "version", "protocol", "python", "frozen", "pid", "netguard", "network_blocked_attempts", "methods": {nome: descrição}}`
+### `system.info` → `{"component", "version", "protocol", "python", "frozen", "pid", "netguard", "network_blocked_attempts", "methods": {nome: descrição}, "unavailable_services": {módulo: erro}}`
+`unavailable_services` lista os módulos de serviço que não puderam ser importados (por exemplo, esquecidos num
+*build* congelado); vazio quando tudo carregou. Os métodos desses módulos não aparecem em `methods`.
 ### `system.shutdown` → `{"stopping": true}`; o auxiliar encerra depois de responder.
 ### `system.network_selftest` → `{"ok", "dns", "connect", "netguard_installed", "blocked_attempts": [{"timestamp","event","target","origin"}]}`
 Tenta de verdade resolver um nome (DNS) e abrir uma conexão de saída dentro do auxiliar e confirma que as duas

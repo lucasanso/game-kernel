@@ -124,6 +124,9 @@ def check_availability() -> tuple[bool, str]:
     if sys.platform != "win32":
         return False, ("A análise comportamental usa o Windows Sandbox e só está disponível no Windows 10/11 "
                        "Pro, Enterprise ou Education. Nada foi executado.")
+    if not MONITOR_SCRIPT.is_file():
+        return False, ("Instalação incompleta: o monitor da análise comportamental (monitor.ps1) não foi encontrado. "
+                       "Reinstale o Game Kernel. Nada foi executado.")
     exe = sandbox_executable()
     if not exe.is_file():
         return False, ("O recurso 'Área Restrita do Windows' (Windows Sandbox) não está habilitado. Ative-o em "

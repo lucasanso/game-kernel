@@ -159,6 +159,8 @@ class HelperServer:
             "netguard": netguard.is_installed(),
             "network_blocked_attempts": len(netguard.blocked_attempts()),
             "methods": {name: svc.description for name, svc in sorted(self._services.items())},
+            # Service modules that failed to import (e.g. left out of a frozen build): never hidden.
+            "unavailable_services": _unavailable_services(),
         }
 
     def _network_selftest(self, params: dict[str, Any], ctx: RequestContext) -> dict[str, Any]:
@@ -318,6 +320,11 @@ def claim_stdio() -> tuple[BinaryIO, BinaryIO]:
     sys.stdin = open(os.devnull, encoding="utf-8")  # noqa: SIM115 - lives for the process
     sys.stdout = sys.stderr
     return os.fdopen(in_fd, "rb", buffering=0), os.fdopen(out_fd, "wb", buffering=0)
+
+
+def _unavailable_services() -> dict[str, str]:
+    services = sys.modules.get("gamekernel.helper.services")   # not imported by test helpers with own services
+    return dict(getattr(services, "IMPORT_ERRORS", {})) if services is not None else {}
 
 
 def default_services() -> list[Service]:

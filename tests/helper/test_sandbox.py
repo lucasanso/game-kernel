@@ -53,6 +53,18 @@ def test_unavailable_when_feature_missing(monkeypatch, tmp_path):
     assert SM.check_availability()[0] is True
 
 
+def test_unavailable_when_monitor_script_is_missing(monkeypatch, tmp_path):
+    """A broken installation (monitor.ps1 not shipped) is reported up front, not at analysis time."""
+    monkeypatch.setattr(SM.sys, "platform", "win32")
+    monkeypatch.setattr(SM, "MONITOR_SCRIPT", tmp_path / "monitor.ps1")
+    ok, reason = SM.check_availability()
+    assert not ok and "monitor.ps1" in reason and "Nada foi executado" in reason
+
+
+def test_monitor_script_ships_next_to_the_manager():
+    assert SM.MONITOR_SCRIPT.is_file() and SM.MONITOR_SCRIPT.parent == Path(SM.__file__).parent
+
+
 def test_wsb_disables_network_and_maps_input_read_only(tmp_path):
     job_in, job_out = tmp_path / "a&b<in>", tmp_path / "out"
     root = ET.fromstring(SM.build_wsb(job_in, job_out, 2048))

@@ -152,3 +152,25 @@ def test_network_selftest_proves_the_helper_is_offline(real_client):
     events = {a["event"] for a in result["blocked_attempts"]}
     assert {"socket.getaddrinfo", "socket.connect"} <= events
     assert real_client.call("system.info")["network_blocked_attempts"] >= 2
+
+
+def test_service_import_failure_is_reported_in_system_info(monkeypatch):
+    import io
+
+    from gamekernel.helper import services as S
+    from gamekernel.helper.server import HelperServer
+
+    monkeypatch.setattr(S, "SERVICE_MODULES", ("gamekernel.helper.services.no_such_service",))
+    monkeypatch.setattr(S, "IMPORT_ERRORS", {})
+    assert S.registry() == []
+    info = HelperServer(io.BytesIO(), io.BytesIO(), [])._info({}, None)
+    assert list(info["unavailable_services"]) == ["gamekernel.helper.services.no_such_service"]
+    assert "ModuleNotFoundError" in info["unavailable_services"]["gamekernel.helper.services.no_such_service"]
+
+
+def test_real_helper_loads_every_service_module(real_client):
+    from gamekernel.helper.services import registry
+
+    info = real_client.call("system.info")
+    assert info["unavailable_services"] == {}
+    assert {svc.method for svc in registry()} <= set(info["methods"])

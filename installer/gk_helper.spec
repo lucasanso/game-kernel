@@ -7,12 +7,17 @@
 # starts it with CREATE_NO_WINDOW, so no window ever appears. The user never runs it directly.
 # The result goes to <install>/helper/ (see installer/gamekernel.iss and docs/BUILD.md).
 import os
+import sys
 from pathlib import Path
 
 ROOT = Path(SPECPATH).resolve().parent
+sys.path.insert(0, str(ROOT))
+from gamekernel.helper.services import SERVICE_MODULES  # noqa: E402  (single list of service modules)
 
+# Service modules are imported by name at start-up, so PyInstaller cannot see them: list every one of them
+# from the registry itself (a module left out here would silently drop its methods from the frozen helper).
 hidden = [
-    "gamekernel.helper.services.reports",
+    *SERVICE_MODULES,
     "gamekernel.reports.render_html",
     "gamekernel.reports.render_pdf",
     "reportlab.graphics.barcode.common",   # loaded dynamically by reportlab
@@ -28,7 +33,8 @@ a = Analysis(
     [str(ROOT / "gamekernel" / "helper" / "entry.py")],
     pathex=[str(ROOT)],
     binaries=[],
-    datas=[],
+    # monitor.ps1 runs inside the Windows Sandbox VM; manager.py looks for it next to itself.
+    datas=[(str(ROOT / "gamekernel" / "sandbox" / "monitor.ps1"), "gamekernel/sandbox")],
     hiddenimports=hidden,
     excludes=excluded,
     noarchive=False,
