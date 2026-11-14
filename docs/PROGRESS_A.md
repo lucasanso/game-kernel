@@ -88,6 +88,17 @@
   `--overlay-ports=<repo>/vcpkg/overlay-ports` ao `vcpkg install` (e ao validador Python, se algum pacote de teste
   usar campos de assinatura do módulo `pe`).
 
+## M10 — integridade da instalação em C++ ✅
+* `gk/integrity.hpp`: chaves Ed25519 em PEM (mesmas regras do `cpp/updates`), manifesto assinado, verificação de
+  componente com cache (caminho, tamanho, mtime), relatório da instalação — mesmos estados e textos do
+  `core/integrity.py`.
+* Duas promessas da documentação que não existiam passaram a existir: `tools/build_integrity_manifest.py` (citado
+  no `integrity.py`) e a verificação de binários auxiliares antes de executá-los no orquestrador C++ (citada no
+  `SECURITY.md`). `gk-cli integrity`.
+* Testes: 17 em `test_integrity.py` (C++ × Python em cada estado: íntegro, modificado, ausente, manifesto editado,
+  chave não confiável, sem assinatura, sem manifesto, formato inválido; verificação de componente nos 6 estados;
+  instalação copiada em que um `gk-scanworker` modificado é recusado).
+
 ## Correções de CI (rodada atual)
 * `signatures/data/game_components.json` não estava versionado (padrão `data/` do `.gitignore`).
 * `gk_native` derrubava o Python na saída no Windows (objetos Python em `static`); teste de ciclo de vida.
@@ -95,8 +106,7 @@
   `localtime_s`/`localtime_r` e `text::path_utf8`.
 
 ## Próximo
-* M10 verificação de integridade em C++,
-  M11 tempo real (`ReadDirectoryChangesW`), M12 Performance Monitor / System Optimizer, M13 serviços Qt para a UI.
+* M11 tempo real (`ReadDirectoryChangesW`), M12 Performance Monitor / System Optimizer, M13 serviços Qt para a UI.
 * Token de integridade baixa para o `gk-scanworker`.
 * Pendente de acordo com o Agente B: `cpp/updates` delegar a validação de YARA ao `gk::yara::validate_rules_dir`.
   Isso mudaria decisões de pacotes (o núcleo exige os metadados `category`/`severity` do contrato de regras) e

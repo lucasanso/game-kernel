@@ -18,6 +18,7 @@
 #include "gk/filetype.hpp"
 #include "gk/file_view.hpp"
 #include "gk/hash.hpp"
+#include "gk/integrity.hpp"
 #include "gk/risk.hpp"
 #include "gk/pe.hpp"
 #include "gk/quarantine.hpp"
@@ -333,6 +334,47 @@ PYBIND11_MODULE(gk_native, m) {
             return json_to_py(j);
         },
         py::arg("path"));
+    // ---- installation integrity
+    py::class_<gk::integrity::Verifier, std::shared_ptr<gk::integrity::Verifier>>(m, "IntegrityVerifier")
+        .def(py::init([](const std::filesystem::path& root, const std::vector<std::filesystem::path>& key_dirs) {
+                 return std::make_shared<gk::integrity::Verifier>(root, gk::integrity::load_trusted_keys(key_dirs));
+             }),
+             py::arg("root"), py::arg("key_dirs"))
+        .def("check_component",
+             [](gk::integrity::Verifier& v, const std::filesystem::path& file) {
+                 gk::integrity::ComponentCheck c;
+                 {
+                     py::gil_scoped_release release;
+                     c = v.check_component(file);
+                 }
+                 py::dict d;
+                 d["status"] = std::string(gk::integrity::value_of(c.status));
+                 d["message"] = c.message;
+                 d["usable"] = c.usable();
+                 return d;
+             })
+        .def("check_installation", [](gk::integrity::Verifier& v) {
+            gk::integrity::Report r;
+            {
+                py::gil_scoped_release release;
+                r = v.check_installation();
+            }
+            py::dict d;
+            d["ok"] = r.ok;
+            d["manifest_present"] = r.manifest_present;
+            d["signature_valid"] = r.signature_valid ? py::cast(*r.signature_valid) : py::none();
+            d["signer_key_id"] = r.signer_key_id.empty() ? py::none() : py::cast(r.signer_key_id);
+            d["verified"] = r.verified;
+            d["missing"] = r.missing;
+            d["modified"] = r.modified;
+            d["detail"] = r.detail;
+            return d;
+        });
+    m.def("integrity_key_id", [](const std::string& pem) -> py::object {
+        const auto k = gk::integrity::parse_public_key_pem(pem);
+        return k ? py::cast(k->id) : py::none();
+    });
+
     // ---- quarantine vault (database bookkeeping lives in gk::quarantine::Manager, exercised through gk-cli)
     py::class_<gk::quarantine::Pending, std::unique_ptr<gk::quarantine::Pending>>(m, "PendingQuarantine")
         .def_property_readonly("metadata",

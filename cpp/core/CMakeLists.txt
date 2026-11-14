@@ -27,6 +27,7 @@ add_library(gk_core STATIC
   src/authenticode_trust.cpp
   src/signature_rules.cpp
   src/quarantine.cpp
+  src/integrity.cpp
 )
 target_include_directories(gk_core PUBLIC
   ${CMAKE_CURRENT_SOURCE_DIR}/include

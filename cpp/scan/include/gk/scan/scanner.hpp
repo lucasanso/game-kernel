@@ -19,6 +19,7 @@
 
 #include "gk/cancel.hpp"
 #include "gk/db.hpp"
+#include "gk/integrity.hpp"
 #include "gk/model.hpp"
 #include "gk/scan_support.hpp"
 
@@ -33,6 +34,7 @@ struct Config {
     QString resourceDir;             // signatures/, contracts/, third_party/ of the installation
     QString workerProgram;           // gk-scanworker(.exe)
     QString clamscan;                // empty = ClamAV unavailable
+    QString installDir;              // root of the integrity manifest (defaults to resourceDir)
     int workers = 2;
     qint64 workerMemoryLimit = qint64(2) * 1024 * 1024 * 1024;
     int fileTimeoutMs = 180000;
@@ -49,6 +51,7 @@ struct Config {
     QString componentsFile() const;
     QString catalogFile() const;
     QString databaseFile() const;
+    QStringList trustedKeyDirs() const;   // keys shipped with the program (signatures/keys)
 };
 
 struct Request {
@@ -115,6 +118,7 @@ private:
     Config config_;
     Request request_;
     std::unique_ptr<db::Database> db_;
+    std::shared_ptr<integrity::Verifier> integrity_;
     std::shared_ptr<CancelToken> token_;
     std::vector<Slot> slots_;
     std::vector<Candidate> candidates_;

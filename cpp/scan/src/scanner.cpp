@@ -19,6 +19,7 @@
 #include "gk/ipc/helper_client.hpp"
 #include "gk/risk.hpp"
 #include "gk/serialize.hpp"
+#include "gk/text.hpp"
 #include "gk/version.hpp"
 
 namespace gk::scan {
@@ -79,8 +80,11 @@ Config Config::defaults(const QString& appDir, const QString& dataDir) {
     }
     const QString bundled = QDir(c.resourceDir).filePath(QStringLiteral("third_party/clamav/") + exe(QStringLiteral("clamscan")));
     c.clamscan = QFileInfo(bundled).isExecutable() ? bundled : QStandardPaths::findExecutable(QStringLiteral("clamscan"));
+    c.installDir = c.resourceDir;
     return c;
 }
+
+QStringList Config::trustedKeyDirs() const { return {QDir(resourceDir).filePath(QStringLiteral("signatures/keys"))}; }
 
 QStringList Config::detectionRuleDirs() const {
     return {QDir(resourceDir).filePath(QStringLiteral("signatures/yara")),
@@ -183,7 +187,7 @@ qint64 Scanner::start(const Request& request) {
         db_ = db::Database::open(std::filesystem::path(utf8(config_.databaseFile())));
         if (db_->recovered_from()) {
             warnings_.push_back("O banco de dados estava corrompido e foi recriado; cópia guardada em " +
-                                db_->recovered_from()->string());
+                                text::path_utf8(*db_->recovered_from()));
         }
     } catch (const std::exception& e) {
         emit finished(QJsonObject{{QStringLiteral("status"), QStringLiteral("failed")},
@@ -194,6 +198,24 @@ qint64 Scanner::start(const Request& request) {
         emit finished(QJsonObject{{QStringLiteral("status"), QStringLiteral("failed")},
                                   {QStringLiteral("error"), QStringLiteral("gk-scanworker não encontrado")}});
         return 0;
+    }
+    // Bundled binaries run only if they match the signed integrity manifest (docs/SECURITY.md).
+    std::vector<std::filesystem::path> keyDirs;
+    for (const QString& d : config_.trustedKeyDirs()) keyDirs.push_back(text::utf8_path(utf8(d)));
+    integrity_ = std::make_shared<integrity::Verifier>(
+        text::utf8_path(utf8(config_.installDir.isEmpty() ? config_.resourceDir : config_.installDir)),
+        integrity::load_trusted_keys(keyDirs));
+    const auto workerCheck = integrity_->check_component(text::utf8_path(utf8(config_.workerProgram)));
+    if (!workerCheck.usable()) {
+        emit finished(QJsonObject{{QStringLiteral("status"), QStringLiteral("failed")},
+                                  {QStringLiteral("error"), QStringLiteral("o processo de análise não passou na verificação "
+                                                                           "de integridade e não foi executado: ") +
+                                                                QString::fromStdString(workerCheck.message)}});
+        return 0;
+    }
+    if (workerCheck.status == integrity::ComponentStatus::NoManifest) {
+        limitations_.push_back("Integridade dos componentes não verificada: sem manifesto de integridade "
+                               "(execução de desenvolvimento).");
     }
     fingerprint_ = fingerprint();
     json targets = json::array();
@@ -434,6 +456,17 @@ void Scanner::runClamav() {
     if (config_.clamscan.isEmpty()) {
         limitations_.push_back("ClamAV indisponível nesta instalação: arquivos não verificados por assinaturas do ClamAV.");
         return;
+    }
+    if (integrity_) {
+        const auto check = integrity_->check_component(text::utf8_path(utf8(config_.clamscan)));
+        if (!check.usable()) {
+            warnings_.push_back("ClamAV não executado: " + check.message);
+            limitations_.push_back("ClamAV desativado nesta varredura: o executável não passou na verificação de integridade.");
+            return;
+        }
+        if (check.status == integrity::ComponentStatus::Outside) {
+            limitations_.push_back("O ClamAV usado é externo à instalação; sua integridade não pôde ser verificada.");
+        }
     }
     const QStringList dbs = config_.clamavDatabaseDirs();
     if (dbs.isEmpty()) {
