@@ -3,6 +3,19 @@
 ## Agente A — Core e Segurança
 
 ### [não lançado]
+- Auditoria de importações: teste que verifica que nenhum binário C++ importa código de rede (controle já descrito em SECURITY.md/ARCHITECTURE.md, agora efetivamente verificado).
+- M9: quarentena em C++. Cofre `.gkq` (XChaCha20-Poly1305 em fluxo, metadados cifrados, verificação antes de apagar o original, exclusão pelo mesmo handle no Windows, chave DPAPI, ACL restrita), restauração atômica conferida por SHA-256, `Manager` com banco/eventos/auditoria e recuperação de banco perdido, `gk-cli quarantine`.
+- M4: assinaturas digitais (Authenticode). Núcleo portátil lê a tabela de certificados e o PKCS#7 (leitor DER limitado, assinaturas aninhadas), calcula o resumo da imagem e detecta adulteração e dados escondidos, inclusive em membros de compactados; no Windows, `WinVerifyTrust` sem rede + catálogos do sistema. Evidências `PE.Signature.*`, arquivo adulterado classificado como modificado, explicação com o assinante verificado, relatórios com "presente, não verificada". SHA-1 e SHA-384/512 no `gk/hash.hpp`. `signify` removido; `asn1crypto` (oráculo) e `osslsigncode` nos testes.
+- Correção (Windows/MSVC): `localtime` → `localtime_s`; `path::string()` → `text::path_utf8` (nomes fora da página de código ANSI quebravam a recuperação do banco e a carga de IOCs).
+- Correção: `signatures/data/game_components.json` não estava no repositório (o padrão `data/` do `.gitignore` também casava com `signatures/data/`; agora só `/data/` na raiz é ignorado).
+- Correção: o `gk_native` derrubava o interpretador na saída no Windows (0xC0000005): objetos Python em `static` (exceção `GkError`, `json.loads`/`json.dumps`) eram destruídos depois da finalização do Python. Agora ficam em `gil_safe_call_once_and_store`, que nunca roda destrutor. Novo teste executa cada componente num interpretador próprio e exige saída limpa.
+- M8: varredura ponta a ponta. `gk-scanworker` (processo isolado, servidor gk-ipc v1, cancelamento, membros de
+  compactados como eventos); orquestrador Qt `gk::scan::Scanner` supervisionando N workers pelo cliente gk-ipc
+  (Job Object, prazo, reinício), cache por caminho/mtime e por SHA-256 + impressão das regras, ClamAV em lotes com
+  `--file-list` e vários bancos, reputação local (IOCs JSON + marcações do usuário), contexto e risco, gravação no
+  SQLite pelo C++ com o mesmo esquema do Python (cadeia de auditoria compatível), resumo com limitações e avisos;
+  `gk-cli` com códigos de saída. EICAR detectado por três mecanismos independentes (YARA, ClamAV, IOC).
+  Testes ponta a ponta incluem worker que trava/cai e cancelamento por Ctrl+C.
 - M7: motor de risco e módulo de cracks em C++ (`gk::risk`): reconhecimento de componentes por pasta a partir de
   `signatures/data/game_components.json` (21 famílias: emuladores Steam/Epic/EA/Ubisoft, desbloqueadores de DLC,
   Online-Fix, Steamless, ReShade, ENB, ASI Loader, Special K, DXVK, BepInEx, MelonLoader, Script Hook V, script

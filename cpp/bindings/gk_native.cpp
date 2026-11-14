@@ -1,20 +1,26 @@
 // gk_native — thin pybind11 mirror of the Game Kernel C++ core (docs/INTEGRATION.md §2).
 // No logic lives here: functions convert arguments, release the GIL for long operations and
 // translate C++ exceptions into Python exceptions.
+#include <pybind11/gil_safe_call_once.h>
 #include <pybind11/pybind11.h>
 #include <pybind11/stl.h>
 #include <pybind11/stl/filesystem.h>
 
+#include <algorithm>
 #include <string>
+#include <string_view>
 
 #include "gk/analysis.hpp"
 #include "gk/archive.hpp"
+#include "gk/authenticode.hpp"
+#include "gk/db.hpp"
 #include "gk/error.hpp"
 #include "gk/filetype.hpp"
 #include "gk/file_view.hpp"
 #include "gk/hash.hpp"
 #include "gk/risk.hpp"
 #include "gk/pe.hpp"
+#include "gk/quarantine.hpp"
 #include "gk/serialize.hpp"
 #include "gk/version.hpp"
 #include "gk/yara_engine.hpp"
@@ -28,11 +34,21 @@ gk::ByteView view_of(const py::bytes& b, std::string& storage) {
     return gk::ByteView(storage);
 }
 
+// Python objects kept for the lifetime of the module live in gil_safe_call_once_and_store, which never runs
+// a destructor: a plain `static py::object` is destroyed when the C runtime unloads the module, after the
+// interpreter has finalized, and its Py_DECREF then touches freed memory (access violation on Windows).
+const py::object& json_function(const char* name) {
+    PYBIND11_CONSTINIT static py::gil_safe_call_once_and_store<py::object> loads_storage;
+    PYBIND11_CONSTINIT static py::gil_safe_call_once_and_store<py::object> dumps_storage;
+    auto& storage = std::string_view(name) == "loads" ? loads_storage : dumps_storage;
+    return storage.call_once_and_store_result([name] { return py::module_::import("json").attr(name); })
+        .get_stored();
+}
+
 // Contract documents are produced once, in C++ (gk/serialize.hpp), and handed to Python through the
 // standard json module so Python receives exactly what the IPC channel would carry.
 py::object json_to_py(const nlohmann::json& j) {
-    static py::object loads = py::module_::import("json").attr("loads");
-    return loads(j.dump(-1, ' ', false, nlohmann::json::error_handler_t::replace));
+    return json_function("loads")(j.dump(-1, ' ', false, nlohmann::json::error_handler_t::replace));
 }
 
 py::dict type_to_dict(const gk::TypeInfo& t) {
@@ -110,14 +126,15 @@ PYBIND11_MODULE(gk_native, m) {
     m.attr("API_VERSION") = gk::kNativeApiVersion;
     m.attr("CORE_VERSION") = gk::kVersion;
 
-    static py::exception<gk::Error> gk_error(m, "GkError", PyExc_RuntimeError);
+    PYBIND11_CONSTINIT static py::gil_safe_call_once_and_store<py::object> gk_error;
+    gk_error.call_once_and_store_result([&m] { return py::exception<gk::Error>(m, "GkError", PyExc_RuntimeError); });
     py::register_exception_translator([](std::exception_ptr p) {
         try {
             if (p) std::rethrow_exception(p);
         } catch (const gk::Error& e) {
             // args = (code, message) so Python code can inspect e.args[0].
             py::tuple args = py::make_tuple(static_cast<int>(e.code()), std::string(e.what()));
-            PyErr_SetObject(gk_error.ptr(), args.ptr());
+            PyErr_SetObject(gk_error.get_stored().ptr(), args.ptr());
         }
     });
 
@@ -282,6 +299,127 @@ PYBIND11_MODULE(gk_native, m) {
         return report_to_dict(report);
     });
     m.def("yara_version", &gk::yara::version);
+    m.def(
+        "authenticode_inspect",
+        [](const py::bytes& data) {
+            std::string storage;
+            const gk::ByteView v = view_of(data, storage);
+            nlohmann::json j;
+            {
+                py::gil_scoped_release release;
+                j = gk::to_json(gk::authenticode::inspect(v));
+            }
+            return json_to_py(j);
+        },
+        py::arg("data"));
+    m.def(
+        "authenticode_image_digest",
+        [](const py::bytes& data, const std::string& algorithm) -> py::object {
+            std::string storage;
+            const gk::ByteView v = view_of(data, storage);
+            const auto d = gk::authenticode::image_digest(v, algorithm);
+            return d ? py::cast(*d) : py::none();
+        },
+        py::arg("data"), py::arg("algorithm"));
+    m.def("authenticode_trust_supported", &gk::authenticode::trust_supported);
+    m.def(
+        "authenticode_verify_trust",
+        [](const std::filesystem::path& path) {
+            nlohmann::json j;
+            {
+                py::gil_scoped_release release;
+                j = gk::to_json(gk::authenticode::verify_trust(path));
+            }
+            return json_to_py(j);
+        },
+        py::arg("path"));
+    // ---- quarantine vault (database bookkeeping lives in gk::quarantine::Manager, exercised through gk-cli)
+    py::class_<gk::quarantine::Pending, std::unique_ptr<gk::quarantine::Pending>>(m, "PendingQuarantine")
+        .def_property_readonly("metadata",
+                               [](const gk::quarantine::Pending& p) { return json_to_py(gk::quarantine::to_json(p.metadata())); })
+        .def("commit", [](gk::quarantine::Pending& p) {
+            py::gil_scoped_release release;
+            p.commit();
+        })
+        .def("abort", &gk::quarantine::Pending::abort);
+    py::class_<gk::quarantine::Vault, std::unique_ptr<gk::quarantine::Vault>>(m, "QuarantineVault")
+        .def_static("open", &gk::quarantine::Vault::open, py::arg("dir"))
+        .def_property_readonly("dir", &gk::quarantine::Vault::dir)
+        .def_property_readonly("key_id", &gk::quarantine::Vault::key_id)
+        .def_property_readonly("warnings", &gk::quarantine::Vault::warnings)
+        .def("item_path", &gk::quarantine::Vault::item_path, py::arg("id"))
+        .def(
+            "prepare",
+            [](gk::quarantine::Vault& v, const std::filesystem::path& file, std::optional<std::string> expected_sha256,
+               const std::string& reason, int risk) {
+                gk::quarantine::Request r;
+                r.file = file;
+                r.expected_sha256 = std::move(expected_sha256);
+                r.reason = reason;
+                r.risk = static_cast<gk::Risk>(std::clamp(risk, 0, 5));
+                py::gil_scoped_release release;
+                return std::make_unique<gk::quarantine::Pending>(v.prepare(r));
+            },
+            py::arg("file"), py::arg("expected_sha256") = py::none(), py::arg("reason") = "", py::arg("risk") = 0,
+            py::keep_alive<0, 1>())
+        .def(
+            "restore",
+            [](gk::quarantine::Vault& v, const std::string& id, const std::filesystem::path& destination, bool overwrite,
+               std::optional<std::string> expected_sha256) {
+                gk::quarantine::Metadata meta;
+                {
+                    py::gil_scoped_release release;
+                    meta = v.restore(id, destination, overwrite, expected_sha256);
+                }
+                return json_to_py(gk::quarantine::to_json(meta));
+            },
+            py::arg("id"), py::arg("destination"), py::arg("overwrite") = false, py::arg("expected_sha256") = py::none())
+        .def("inspect",
+             [](gk::quarantine::Vault& v, const std::string& id) {
+                 gk::quarantine::Metadata meta;
+                 {
+                     py::gil_scoped_release release;
+                     meta = v.inspect(id);
+                 }
+                 return json_to_py(gk::quarantine::to_json(meta));
+             })
+        .def("erase", &gk::quarantine::Vault::erase, py::arg("id"))
+        .def(
+            "verify",
+            [](gk::quarantine::Vault& v, const std::vector<std::string>& known) {
+                gk::quarantine::VerifyReport rep;
+                {
+                    py::gil_scoped_release release;
+                    rep = v.verify(known);
+                }
+                py::list damaged, unknown;
+                for (const auto& [id, why] : rep.damaged) damaged.append(py::make_tuple(id, why));
+                for (const auto& meta : rep.unknown) unknown.append(json_to_py(gk::quarantine::to_json(meta)));
+                py::dict d;
+                d["ok"] = rep.ok;
+                d["damaged"] = damaged;
+                d["unknown"] = unknown;
+                return d;
+            },
+            py::arg("known") = std::vector<std::string>{});
+    m.def("sha1_bytes", [](const py::bytes& data) {
+        std::string storage;
+        gk::Sha1 h;
+        h.update(view_of(data, storage));
+        const auto d = h.finish();
+        return gk::to_hex(d);
+    });
+    m.def(
+        "sha512_bytes",
+        [](const py::bytes& data, bool sha384) {
+            std::string storage;
+            gk::Sha512 h(sha384);
+            h.update(view_of(data, storage));
+            const auto d = h.finish();
+            return gk::to_hex(d);
+        },
+        py::arg("data"), py::arg("sha384") = false);
+
 
     m.def(
         "archive_walk",
@@ -435,7 +573,7 @@ PYBIND11_MODULE(gk_native, m) {
     m.def(
         "risk_assess",
         [](const py::list& results, const std::filesystem::path& components, const std::filesystem::path& catalog) {
-            static py::object dumps = py::module_::import("json").attr("dumps");
+            const py::object& dumps = json_function("dumps");
             std::vector<gk::FileResult> files;
             for (const auto& item : results) {
                 files.push_back(gk::file_result_from_json(nlohmann::json::parse(dumps(item).cast<std::string>())));
@@ -452,6 +590,14 @@ PYBIND11_MODULE(gk_native, m) {
         },
         py::arg("results"), py::arg("components"), py::arg("catalog"));
     m.def("glob_match", &gk::risk::glob_match);
+
+    py::class_<gk::db::Database>(m, "CoreDatabase")
+        .def_static("open", [](const std::filesystem::path& p) { return gk::db::Database::open(p); })
+        .def("append_audit", &gk::db::Database::append_audit, py::arg("action"), py::arg("detail"), py::arg("actor") = "core")
+        .def("mark_interrupted_scans", &gk::db::Database::mark_interrupted_scans)
+        .def_property_readonly("recovered_from", [](const gk::db::Database& d) {
+            return d.recovered_from() ? py::object(py::str(d.recovered_from()->string())) : py::object(py::none());
+        });
     m.def("network_literals", [](const py::bytes& data) {
         std::string storage;
         std::vector<std::string> out;

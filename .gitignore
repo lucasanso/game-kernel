@@ -7,7 +7,7 @@ build/
 dist/
 wheelhouse/
 third_party/
-data/
+/data/
 *.gkpkg
 *.key
 private/

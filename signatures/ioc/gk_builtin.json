@@ -1,0 +1,15 @@
+{
+  "format": "gamekernel-ioc",
+  "version": "2026.11.12",
+  "entries": [
+    {
+      "sha256": "275a021bbfb6489e54d471899f7db9d1663fc695ec2fe2a2c4538aabf651fd0f",
+      "verdict": "bad",
+      "name": "Arquivo de teste EICAR",
+      "category": "test_file",
+      "severity": "HIGH",
+      "source": "eicar.org",
+      "note": "Arquivo de teste inofensivo, usado para validar a detecção por hash."
+    }
+  ]
+}

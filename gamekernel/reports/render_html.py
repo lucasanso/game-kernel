@@ -10,6 +10,17 @@ from __future__ import annotations
 from html import escape
 from typing import Any
 
+
+def _signature(d: dict) -> str:
+    """Digital signature status: verified valid, invalid, present but not verified (e.g. inside an archive or
+    when the certificate chain cannot be built offline), or absent."""
+    if d.get("signature_valid") is True:
+        return f"válida — {d.get('signer') or 'assinante sem nome'}"
+    if d.get("signature_valid") is False:
+        return "presente, inválida"
+    return "presente, não verificada" if d.get("signed") else "ausente"
+
+
 RISK_CLASS = {"CRITICAL": "critical", "HIGH": "high", "MEDIUM": "medium", "LOW": "low", "INFO": "info", "NONE": "none"}
 
 CSS = """
@@ -114,9 +125,7 @@ def _file_card(f: dict, show_threat_info: bool = True) -> str:
         ("Classificação", f.get("classification_label")),
         ("Categoria", f.get("category_label")),
         ("Detecções (regra/assinatura)", ", ".join(f.get("detections") or [])),
-        ("Assinatura digital", (f"válida — {f['signer']}" if f.get("signature_valid") else
-                                f"presente, inválida — {f.get('signer') or 'desconhecido'}" if f.get("signed") else
-                                "ausente")),
+        ("Assinatura digital", _signature(f)),
         ("Estado do crack", f["crack_status_label"] if f.get("crack_status") != "none" else None),
         ("Analisado em", f.get("analyzed_at")),
     ], mono=("Caminho completo", "Arquivo físico", "Caminho dentro do compactado", "SHA-256", "Pasta de origem"))
@@ -148,8 +157,7 @@ def _crack_card(c: dict) -> str:
         + _rows([
             ("Localização", c["path"]), ("SHA-256", c.get("sha256")),
             ("Tipo de modificação", "; ".join(c.get("modification_types") or [])),
-            ("Assinatura digital", (f"válida — {c['signer']}" if c.get("signature_valid") else
-                                    "presente, inválida" if c.get("signed") else "ausente")),
+            ("Assinatura digital", _signature(c)),
             ("Evidências de ameaça", c.get("threat_evidence_count")),
             ("Riscos potenciais", ", ".join(c.get("potential_risks") or []) or "nenhum identificado"),
             ("Falso positivo possível", "sim" if c.get("possible_false_positive") else "não indicado"),

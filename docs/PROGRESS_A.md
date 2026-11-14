@@ -34,11 +34,62 @@
 * Regras de detecção iniciais e gerador de indicadores; `docs/DETECTION_RULES.md`.
 * Testes: 133 passando no total (Linux release); suíte nativa sob ASan/UBSan com 2000 iterações de fuzzing PE.
 
-## Próximo: M4 (Authenticode, Windows), M5 (compactados com libarchive), M6 (scripts/LNK/ClamAV/reputação)
+## M5 — compactados (libarchive) ✅
+* Em memória, formatos e filtros em lista branca, limites anti-bomba com orçamento compartilhado entre níveis,
+  nomes perigosos, links, criptografia; equivalência com zipfile/tarfile; fuzzing sob ASan.
 
-## Próximas etapas do Agente A (histórico da revisão 1)
-* FASE 3 — motor de detecção: ClamAV em lote, YARA, reputação local, orquestrador `Scanner`.
-* FASE 4 — análise estática: PE, Authenticode, strings com offset/RVA, heurísticas de correlação, scripts, LNK.
-* FASE 5 — compactados recursivos com proteção anti-bomba, PyInstaller embutido.
-* FASE 6 — motor de risco, módulo de cracks (`game_context`).
-* Backend de tempo real, integridade, CLI, testes de desempenho.
+## M6 — camada de evidências ✅
+* Regras estruturais PE, nomes enganosos, correlação de capacidades (indicadores × imports), scripts
+  (`-EncodedCommand`, Base64, ofuscação), LNK/URL, IP:porta, membros de compactados. Contrato JSON idêntico ao
+  `models.py`.
+
+## M7 — motor de risco e módulo de cracks/mods ✅
+* `signatures/data/game_components.json` (21 componentes), contexto de pasta, mitigação só de traços esperados,
+  classificação, estado de crack, falso positivo possível, explicação e recomendações do catálogo.
+
+## M8 — varredura ponta a ponta ✅
+* `gk-scanworker` (processo isolado, gk-ipc v1), `gk::scan::Scanner` (Qt Core), `gk::db` (SQLite, mesmo esquema
+  e cadeia de auditoria do Python), reputação local, ClamAV em lote, `gk-cli`.
+
+## M4 — assinaturas digitais (Authenticode) ✅
+* Portátil: tabela de certificados, PKCS#7 com leitor DER limitado, assinaturas aninhadas, resumo da imagem
+  (MD5/SHA-1/SHA-256/SHA-384/SHA-512), adulteração, dados escondidos (CVE-2013-3900); também em membros de
+  compactados.
+* Windows: `WinVerifyTrust` sem rede (cache-only, sem revogação online) + catálogos do sistema; estados
+  confiável/sem assinatura/adulterado/raiz não confiável/expirado/revogado/bloqueado/cadeia incompleta/inválido.
+* Evidências `PE.Signature.*`; adulteração marca o arquivo como modificado e é traço esperado em cracks
+  reconhecidos; assinatura válida nunca reduz risco. Relatórios distinguem "presente, não verificada".
+* `signify` removido das dependências (nada o usava; o oscrypto dele não funciona com OpenSSL 3).
+* Testes: 48 em `test_authenticode.py` (oráculo asn1crypto + hashlib; 5 000 iterações de fuzzing sob ASan);
+  CI Windows valida catálogo do sistema, assinatura real do `python.exe` e cópia adulterada.
+
+## M9 — quarentena em C++ ✅
+* `gk/quarantine.hpp`: cofre `.gkq` com libsodium secretstream (XChaCha20-Poly1305), metadados cifrados no bloco
+  final (permitem reconstruir um banco perdido), uma única leitura do arquivo (hash enquanto cifra), cópia
+  decifrada e conferida antes de apagar o original; no Windows o original fica travado contra escrita e é apagado
+  pelo mesmo handle (`FileDispositionInfoEx`); chave DPAPI; ACL restrita; restauração atômica sem sobrescrever.
+* `Manager`: banco (`quarantine`, `quarantine_events`) + auditoria encadeada; `verify` recupera itens órfãos e
+  limpa cópias de itens já restaurados/apagados. `gk-cli quarantine add|list|restore|delete|verify`.
+* Testes: 24 em `test_quarantine.py` (tamanhos de 0 a >3 MiB, adulteração em cada região, truncamento,
+  reordenação, chave errada, ids inválidos, conflito de destino, ciclo completo lido pelo Python com cadeia de
+  auditoria válida, banco perdido e recuperado) + 2 000 mutações de bytes sob ASan.
+
+## Correções de CI (rodada atual)
+* `signatures/data/game_components.json` não estava versionado (padrão `data/` do `.gitignore`).
+* `gk_native` derrubava o Python na saída no Windows (objetos Python em `static`); teste de ciclo de vida.
+* Build MSVC: `localtime` (C4996 com `/sdl`) e conversões `path::string()` (página de código ANSI) trocadas por
+  `localtime_s`/`localtime_r` e `text::path_utf8`.
+
+## Próximo
+* M10 verificação de integridade em C++,
+  M11 tempo real (`ReadDirectoryChangesW`), M12 Performance Monitor / System Optimizer, M13 serviços Qt para a UI.
+* Token de integridade baixa para o `gk-scanworker`.
+* Pendente de acordo com o Agente B: `cpp/updates` delegar a validação de YARA ao `gk::yara::validate_rules_dir`.
+  Isso mudaria decisões de pacotes (o núcleo exige os metadados `category`/`severity` do contrato de regras) e
+  precisa ser feito junto com o validador Python e os testes de equivalência de pacotes, que são do Agente B;
+  além disso o `cpp/updates` precisa continuar compilável sozinho.
+
+## Auditoria de importações (rede) ✅
+* `tests/native/test_offline_imports.py` cumpre o que `SECURITY.md` promete: nenhum binário importa código de rede
+  (Windows: parser PE do núcleo; Linux: `nm`/`objdump`). O próprio verificador é testado com um PE que importa
+  `ws2_32!connect` e WinINet.

@@ -8,6 +8,7 @@
 #include <memory>
 #include <span>
 #include <string>
+#include <vector>
 
 #include "gk/byte_view.hpp"
 #include "gk/cancel.hpp"
@@ -43,6 +44,39 @@ private:
     std::array<std::uint8_t, 64> buffer_{};
     std::uint64_t length_ = 0;
     std::size_t buffered_ = 0;
+};
+
+// SHA-1 (FIPS 180-4). Only for verifying the digests stored in legacy Authenticode signatures; never used to
+// identify files.
+class Sha1 {
+public:
+    Sha1();
+    void update(ByteView data);
+    std::array<std::uint8_t, 20> finish();
+
+private:
+    void block(const std::uint8_t* chunk);
+    std::array<std::uint32_t, 5> h_{};
+    std::array<std::uint8_t, 64> buffer_{};
+    std::uint64_t length_ = 0;
+    std::size_t buffered_ = 0;
+};
+
+// SHA-512 (libsodium) and SHA-384 (the same compression function with the FIPS 180-4 SHA-384 initial values,
+// truncated to 48 bytes). finish() returns 64 or 48 bytes.
+class Sha512 {
+public:
+    explicit Sha512(bool sha384 = false);
+    ~Sha512();
+    Sha512(const Sha512&) = delete;
+    Sha512& operator=(const Sha512&) = delete;
+    void update(ByteView data);
+    std::vector<std::uint8_t> finish();
+
+private:
+    struct State;
+    std::unique_ptr<State> state_;
+    bool sha384_;
 };
 
 std::string to_hex(std::span<const std::uint8_t> bytes);

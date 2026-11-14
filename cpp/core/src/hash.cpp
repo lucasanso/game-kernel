@@ -43,6 +43,125 @@ std::array<std::uint8_t, 32> Sha256::finish() {
     return out;
 }
 
+// ------------------------------------------------------------------ SHA-512 / SHA-384
+
+struct Sha512::State {
+    crypto_hash_sha512_state st;
+};
+
+Sha512::Sha512(bool sha384) : state_(std::make_unique<State>()), sha384_(sha384) {
+    crypto_init();
+    crypto_hash_sha512_init(&state_->st);
+    if (sha384_) {
+        // FIPS 180-4 §5.3.4. crypto_hash_sha512_state exposes the chaining values as part of its public API.
+        static constexpr std::array<std::uint64_t, 8> kSha384Iv = {
+            0xcbbb9d5dc1059ed8ULL, 0x629a292a367cd507ULL, 0x9159015a3070dd17ULL, 0x152fecd8f70e5939ULL,
+            0x67332667ffc00b31ULL, 0x8eb44a8768581511ULL, 0xdb0c2e0d64f98fa7ULL, 0x47b5481dbefa4fa4ULL};
+        std::copy(kSha384Iv.begin(), kSha384Iv.end(), std::begin(state_->st.state));
+    }
+}
+
+Sha512::~Sha512() {
+    if (state_) sodium_memzero(&state_->st, sizeof(state_->st));
+}
+
+void Sha512::update(ByteView data) {
+    if (!data.empty()) crypto_hash_sha512_update(&state_->st, data.data(), data.size());
+}
+
+std::vector<std::uint8_t> Sha512::finish() {
+    std::vector<std::uint8_t> out(crypto_hash_sha512_BYTES);
+    crypto_hash_sha512_final(&state_->st, out.data());
+    if (sha384_) out.resize(48);
+    return out;
+}
+
+// ------------------------------------------------------------------ SHA-1 (FIPS 180-4)
+
+namespace {
+constexpr std::uint32_t rol32(std::uint32_t x, unsigned c) { return (x << c) | (x >> (32U - c)); }
+}  // namespace
+
+Sha1::Sha1() : h_{0x67452301U, 0xEFCDAB89U, 0x98BADCFEU, 0x10325476U, 0xC3D2E1F0U} {}
+
+void Sha1::block(const std::uint8_t* chunk) {
+    std::array<std::uint32_t, 80> w{};
+    for (std::size_t i = 0; i < 16; ++i) {
+        w[i] = (static_cast<std::uint32_t>(chunk[4 * i]) << 24) | (static_cast<std::uint32_t>(chunk[4 * i + 1]) << 16) |
+               (static_cast<std::uint32_t>(chunk[4 * i + 2]) << 8) | static_cast<std::uint32_t>(chunk[4 * i + 3]);
+    }
+    for (std::size_t i = 16; i < 80; ++i) w[i] = rol32(w[i - 3] ^ w[i - 8] ^ w[i - 14] ^ w[i - 16], 1);
+    std::uint32_t a = h_[0], b = h_[1], c = h_[2], d = h_[3], e = h_[4];
+    for (std::size_t i = 0; i < 80; ++i) {
+        std::uint32_t f = 0, k = 0;
+        if (i < 20) {
+            f = (b & c) | (~b & d);
+            k = 0x5A827999U;
+        } else if (i < 40) {
+            f = b ^ c ^ d;
+            k = 0x6ED9EBA1U;
+        } else if (i < 60) {
+            f = (b & c) | (b & d) | (c & d);
+            k = 0x8F1BBCDCU;
+        } else {
+            f = b ^ c ^ d;
+            k = 0xCA62C1D6U;
+        }
+        const std::uint32_t t = rol32(a, 5) + f + e + k + w[i];
+        e = d;
+        d = c;
+        c = rol32(b, 30);
+        b = a;
+        a = t;
+    }
+    h_[0] += a;
+    h_[1] += b;
+    h_[2] += c;
+    h_[3] += d;
+    h_[4] += e;
+}
+
+void Sha1::update(ByteView data) {
+    const std::uint8_t* p = data.data();
+    std::size_t n = data.size();
+    length_ += n;
+    if (buffered_ > 0) {
+        const std::size_t take = std::min(n, buffer_.size() - buffered_);
+        std::copy_n(p, take, buffer_.begin() + static_cast<std::ptrdiff_t>(buffered_));
+        buffered_ += take;
+        p += take;
+        n -= take;
+        if (buffered_ == buffer_.size()) {
+            block(buffer_.data());
+            buffered_ = 0;
+        }
+    }
+    while (n >= 64) {
+        block(p);
+        p += 64;
+        n -= 64;
+    }
+    if (n > 0) {
+        std::copy_n(p, n, buffer_.begin());
+        buffered_ = n;
+    }
+}
+
+std::array<std::uint8_t, 20> Sha1::finish() {
+    const std::uint64_t bits = length_ * 8;
+    static constexpr std::array<std::uint8_t, 64> kPad = {0x80};
+    const std::size_t pad = buffered_ < 56 ? 56 - buffered_ : 120 - buffered_;
+    update(ByteView(kPad.data(), pad));
+    std::array<std::uint8_t, 8> len{};
+    for (std::size_t i = 0; i < 8; ++i) len[i] = static_cast<std::uint8_t>(bits >> (56 - 8 * i));
+    update(ByteView(len.data(), len.size()));
+    std::array<std::uint8_t, 20> out{};
+    for (std::size_t i = 0; i < 5; ++i) {
+        for (std::size_t j = 0; j < 4; ++j) out[4 * i + j] = static_cast<std::uint8_t>(h_[i] >> (24 - 8 * j));
+    }
+    return out;
+}
+
 // ------------------------------------------------------------------ MD5 (RFC 1321)
 
 namespace {

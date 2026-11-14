@@ -10,6 +10,7 @@
 #include "gk/file_view.hpp"
 #include "gk/filetype.hpp"
 #include "gk/hash.hpp"
+#include "gk/text.hpp"
 
 namespace gk::analysis {
 
@@ -459,6 +460,11 @@ Output Analyzer::run(ByteView data, const Subject& s, bool allow_archives) {
             pe_info.reset();
         } else {
             pe_evidence(*pe_info, data, s, r.evidences, r.features);
+            if (!large) {
+                add_engine(r, "authenticode");
+                out.signature = authenticode::inspect(data, {}, cancel_);
+                signature_evidence(out.signature, r.evidences, r.features);
+            }
         }
     }
     const pe::PeInfo* pe = pe_info ? &*pe_info : nullptr;
@@ -517,7 +523,7 @@ RuleSet RuleSet::load(const std::vector<std::filesystem::path>& detection_dirs, 
     RuleSet set;
     std::map<std::string, std::filesystem::path> by_name;
     for (const auto& dir : detection_dirs) {
-        for (const auto& f : yara::rule_files_in(dir)) by_name[f.filename().string()] = f;
+        for (const auto& f : yara::rule_files_in(dir)) by_name[text::path_utf8(f.filename())] = f;
     }
     std::vector<std::filesystem::path> files;
     for (const auto& [_, p] : by_name) files.push_back(p);
@@ -538,13 +544,21 @@ Output analyze(ByteView data, const Subject& subject, const RuleSet& rules, cons
 Output analyze_file(const std::filesystem::path& path, const RuleSet& rules, const Options& options, CancelToken* cancel) {
     const MappedFile file = MappedFile::open(path);
     Subject s;
-    const auto u8 = path.u8string();
-    s.path = std::string(reinterpret_cast<const char*>(u8.data()), u8.size());
-    const auto name = path.filename().u8string();
-    s.name = std::string(reinterpret_cast<const char*>(name.data()), name.size());
-    const auto dir = path.parent_path().u8string();
-    s.directory = std::string(reinterpret_cast<const char*>(dir.data()), dir.size());
-    return analyze(file.view(), s, rules, options, cancel);
+    s.path = text::path_utf8(path);
+    s.name = text::path_utf8(path.filename());
+    s.directory = text::path_utf8(path.parent_path());
+    Output out = analyze(file.view(), s, rules, options, cancel);
+    // Trust needs the physical file (WinVerifyTrust, system catalogs); archive members get structure only.
+    if (options.verify_trust && authenticode::trust_supported() && out.result.features.is_pe) {
+        const auto trust = authenticode::verify_trust(path);
+        if (trust.state != authenticode::TrustState::NotChecked) {
+            out.result.engines.push_back("wintrust");
+            trust_evidence(trust, out.signature, out.result.evidences, out.result.features);
+        } else {
+            out.result.status_reasons.push_back(trust.message);
+        }
+    }
+    return out;
 }
 
 }  // namespace gk::analysis
