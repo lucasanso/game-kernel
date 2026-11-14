@@ -208,3 +208,31 @@ def test_generated_indicator_rules_are_up_to_date():
     result = subprocess.run([sys.executable, str(ROOT / "tools" / "core_gen_indicators.py"), "--check"],
                             capture_output=True, text=True)
     assert result.returncode == 0, result.stderr
+
+
+# ------------------------------------------------------------------ libyara build without OpenSSL
+
+@pytest.mark.parametrize("field", ["pe.signatures[0].issuer == \"x\"", "pe.is_signed", "pe . number_of_signatures > 0"])
+def test_signature_fields_of_the_pe_module_are_refused(native, field):
+    rules, report = native.YaraRules.compile_source(f'import "pe"\nrule r {{ condition: {field} }}')
+    assert rules is None and any("PE.Signature" in e for e in report["errors"]), report
+
+
+def test_other_pe_fields_still_compile(native):
+    rules, report = native.YaraRules.compile_source('import "pe"\nrule r { condition: pe.number_of_sections > 1 }\n'
+                                                    'rule s { strings: $a = "spe.signatures" condition: $a }')
+    assert rules is not None and report["ok"], report
+
+
+def test_hash_module_matches_hashlib(native):
+    """On Windows the product's libyara hashes through CryptoAPI (no OpenSSL): the values must stay exact."""
+    import hashlib
+    data = bytes(range(256)) * 41 + b"game kernel"
+    rule = ('import "hash"\nrule h { condition: '
+            f'hash.md5(0, filesize) == "{hashlib.md5(data).hexdigest()}" and '
+            f'hash.sha1(0, filesize) == "{hashlib.sha1(data).hexdigest()}" and '
+            f'hash.sha256(0, filesize) == "{hashlib.sha256(data).hexdigest()}" and '
+            f'hash.sha256(10, 100) == "{hashlib.sha256(data[10:110]).hexdigest()}" }}')
+    rules, report = native.YaraRules.compile_source(rule)
+    assert rules is not None, report
+    assert [m["rule"] for m in rules.scan(data)["matches"]] == ["h"]

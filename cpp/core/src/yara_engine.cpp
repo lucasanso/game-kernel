@@ -8,6 +8,9 @@
 #pragma GCC diagnostic push
 #pragma GCC diagnostic ignored "-Wpedantic"
 #endif
+#include <string_view>
+#include <optional>
+#include <cctype>
 #include <yara.h>
 #if defined(_MSC_VER)
 #pragma warning(pop)
@@ -229,7 +232,38 @@ Rules::~Rules() {
     if (handle_ != nullptr) yr_rules_destroy(static_cast<YR_RULES*>(handle_));
 }
 
+namespace {
+// Signature fields of YARA's pe module need libyara built with OpenSSL. The product's libyara is built without
+// it (vcpkg/overlay-ports/yara), so such rules are refused on every platform with the same message instead of
+// compiling on development machines and failing in the product. Conservative text check (comments included).
+std::optional<std::string> unsupported_feature(std::string_view source) {
+    auto ident = [](char c) { return std::isalnum(static_cast<unsigned char>(c)) != 0 || c == '_'; };
+    for (std::size_t at = source.find("pe"); at != std::string_view::npos; at = source.find("pe", at + 2)) {
+        if (at > 0 && ident(source[at - 1])) continue;
+        std::size_t i = at + 2;
+        while (i < source.size() && (source[i] == ' ' || source[i] == '\t')) ++i;
+        if (i >= source.size() || source[i] != '.') continue;
+        ++i;
+        while (i < source.size() && (source[i] == ' ' || source[i] == '\t')) ++i;
+        std::size_t end = i;
+        while (end < source.size() && ident(source[end])) ++end;
+        const std::string_view field = source.substr(i, end - i);
+        if (field == "signatures" || field == "is_signed" || field == "number_of_signatures") {
+            return "pe." + std::string(field) +
+                   " não é suportado (o Game Kernel verifica assinaturas Authenticode no núcleo; use as evidências "
+                   "PE.Signature.*)";
+        }
+    }
+    return std::nullopt;
+}
+}  // namespace
+
 std::shared_ptr<Rules> Rules::compile_source(const std::string& source, CompileReport& report, const std::string& ns) {
+    if (const auto why = unsupported_feature(source)) {
+        report.errors.push_back("<source>: " + *why);
+        report.ok = false;
+        return nullptr;
+    }
     CompilerMessages msgs{&report.errors, &report.warnings, "<source>"};
     Compiler compiler(msgs);
     if (yr_compiler_add_string(compiler.get(), source.c_str(), ns.c_str()) != 0) {
@@ -255,6 +289,10 @@ std::shared_ptr<Rules> Rules::compile_files(const std::vector<std::filesystem::p
             source = read_text(file);
         } catch (const Error& e) {
             report.errors.emplace_back(e.what());
+            continue;
+        }
+        if (const auto why = unsupported_feature(source)) {
+            report.errors.push_back(path_utf8(file.filename()) + ": " + *why);
             continue;
         }
         std::vector<std::string> errors;

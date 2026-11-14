@@ -36,7 +36,8 @@
       "cacheVariables": {
         "GK_WARNINGS_AS_ERRORS": "ON",
         "VCPKG_TARGET_TRIPLET": "x64-windows-static-md",
-        "CMAKE_BUILD_TYPE": "Release"
+        "CMAKE_BUILD_TYPE": "Release",
+        "VCPKG_OVERLAY_PORTS": "${sourceDir}/vcpkg/overlay-ports"
       }
     }
   ],

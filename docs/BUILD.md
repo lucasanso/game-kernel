@@ -26,6 +26,9 @@ LD_PRELOAD="$(gcc -print-file-name=libasan.so):$(gcc -print-file-name=libubsan.s
 
 ### Windows (produto)
 Requisitos: Visual Studio 2022 (MSVC v143), CMake ≥ 3.25, vcpkg (`VCPKG_ROOT`), Qt 6.8 LTS (MSVC 2022 64-bit).
+O preset usa o overlay `vcpkg/overlay-ports/yara` (libyara sem OpenSSL e sem leitor de memória de processos;
+mesma fonte e checksum do port oficial do vcpkg). Não troque pelo port oficial: o OpenSSL estático traz código de
+rede para os binários e `tests/native/test_offline_imports.py` falha.
 ```bash
 cmake --preset windows-release
 cmake --build --preset windows-release

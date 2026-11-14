@@ -74,6 +74,20 @@
   reordenação, chave errada, ids inválidos, conflito de destino, ciclo completo lido pelo Python com cadeia de
   auditoria válida, banco perdido e recuperado) + 2 000 mutações de bytes sob ASan.
 
+## libyara sem OpenSSL (achado da auditoria de importações) ✅/⏳ CI
+* A auditoria encontrou ~25 funções de socket do WS2_32 (`socket`, `connect`, `send`, `gethostbyname`,
+  `WSAStartup`…) em `gk_native.pyd` e `gk-scanworker.exe` no Windows: o port oficial `yara` do vcpkg liga
+  `OpenSSL::SSL`/`OpenSSL::Crypto` sem opção de desligar, e o OpenSSL estático traz o código de socket/HTTP.
+* Correção: overlay `vcpkg/overlay-ports/yara` (YARA 4.6.0, mesma fonte/SHA-512 do port oficial) com
+  `HAVE_WINCRYPT_H` (módulo `hash` e `pe.imphash` via CryptoAPI), sem authenticode-parser/OpenSSL e sem leitor
+  de memória de processos (some `OpenProcess`/`ReadProcessMemory`/`AdjustTokenPrivileges`). Validado localmente
+  com compilação cruzada mingw-w64: a biblioteca importa só kernel32/msvcrt/advapi32 (CryptoAPI).
+* Regras com `pe.signatures`/`pe.is_signed`/`pe.number_of_signatures` são recusadas em todas as plataformas.
+* Para o Agente B: o `ci.yml` instala o port oficial no modo clássico com triplet dinâmico (o OpenSSL fica numa
+  DLL, por isso a auditoria direta passa lá). Para testar com a mesma libyara do produto, acrescentar
+  `--overlay-ports=<repo>/vcpkg/overlay-ports` ao `vcpkg install` (e ao validador Python, se algum pacote de teste
+  usar campos de assinatura do módulo `pe`).
+
 ## Correções de CI (rodada atual)
 * `signatures/data/game_components.json` não estava versionado (padrão `data/` do `.gitignore`).
 * `gk_native` derrubava o Python na saída no Windows (objetos Python em `static`); teste de ciclo de vida.
