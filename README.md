@@ -4,9 +4,10 @@ Antivírus **offline** especializado em jogos para Windows 10/11 (64 bits): inve
 repacks, mods e launchers, explica **o que** foi encontrado, **onde** (arquivo e posição dentro dele), **por que**
 é suspeito e **o que fazer**, sem nunca enviar nada para a internet.
 
-> **Estado: em desenvolvimento.** Ainda não há instalador. A interface (Qt 6 C++) já tem as páginas de atualização
-> offline, análise comportamental e privacidade; as páginas de varredura chegam com os serviços do núcleo
-> (`cpp/bridge`). Abaixo está o que existe e foi testado. O progresso detalhado está em `docs/PROGRESS_A.md` (núcleo) e `docs/PROGRESS_B.md`
+> **Estado: em desenvolvimento.** O instalador e a versão portátil para Windows estão implementados e em validação
+> na CI (ver `docs/INSTALL.md`). A interface (Qt 6 C++) tem as páginas de atualização offline, análise comportamental e
+> privacidade; a varredura e a quarentena funcionam pela linha de comando (`gk-cli`) e chegam à interface com os
+> serviços do núcleo (`cpp/bridge`). Uso: `docs/USAGE.md`. Abaixo está o que existe e foi testado. O progresso detalhado está em `docs/PROGRESS_A.md` (núcleo) e `docs/PROGRESS_B.md`
 > (integração, ferramentas, interface e distribuição).
 
 ## Arquitetura (híbrida C++20 / Python)
