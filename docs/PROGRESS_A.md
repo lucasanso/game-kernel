@@ -99,6 +99,13 @@
   chave não confiável, sem assinatura, sem manifesto, formato inválido; verificação de componente nos 6 estados;
   instalação copiada em que um `gk-scanworker` modificado é recusado).
 
+## Endurecimento do gk-scanworker ✅
+* O `SECURITY.md` dizia que o worker rodava com integridade baixa e sem processos filhos; nada disso existia. Agora o
+  worker, antes de ler qualquer entrada, baixa o próprio token para Low, desativa privilégios e aplica políticas de
+  mitigação (sem filhos, sem código dinâmico, sem pontos de extensão, sem imagens remotas/de rótulo baixo); Linux:
+  no_new_privs. O estado real vai no handshake; `test_worker_hardening.py` conversa com o worker real pelo gk-ipc e
+  confere também que a verificação de assinaturas (incluindo catálogos) funciona com o token restrito no Windows.
+
 ## Correções de CI (rodada atual)
 * `signatures/data/game_components.json` não estava versionado (padrão `data/` do `.gitignore`).
 * `gk_native` derrubava o Python na saída no Windows (objetos Python em `static`); teste de ciclo de vida.
@@ -107,7 +114,6 @@
 
 ## Próximo
 * M11 tempo real (`ReadDirectoryChangesW`), M12 Performance Monitor / System Optimizer, M13 serviços Qt para a UI.
-* Token de integridade baixa para o `gk-scanworker`.
 * Pendente de acordo com o Agente B: `cpp/updates` delegar a validação de YARA ao `gk::yara::validate_rules_dir`.
   Isso mudaria decisões de pacotes (o núcleo exige os metadados `category`/`severity` do contrato de regras) e
   precisa ser feito junto com o validador Python e os testes de equivalência de pacotes, que são do Agente B;

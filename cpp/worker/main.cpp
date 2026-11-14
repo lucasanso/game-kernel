@@ -28,6 +28,7 @@
 #include "gk/error.hpp"
 #include "gk/serialize.hpp"
 #include "gk/version.hpp"
+#include "hardening.hpp"
 
 #ifdef _WIN32
 #include <fcntl.h>
@@ -89,7 +90,8 @@ struct Request {
 
 class Worker {
 public:
-    Worker(gk::analysis::RuleSet rules) : rules_(std::move(rules)) {}
+    Worker(gk::analysis::RuleSet rules, gk::worker::Hardening hardening)
+        : rules_(std::move(rules)), hardening_(std::move(hardening)) {}
 
     int run() {
         json hello{{"v", 1},
@@ -101,7 +103,11 @@ public:
                    {"pid", static_cast<std::int64_t>(GK_GETPID())},
                    {"rules", {{"detection", rules_.detection ? rules_.detection->rule_count() : 0},
                               {"indicators", rules_.indicators ? rules_.indicators->rule_count() : 0},
-                              {"errors", rules_.detection_report.errors}}}};
+                              {"errors", rules_.detection_report.errors}}},
+                   {"hardening", {{"integrity", hardening_.integrity},
+                                  {"privileges_disabled", hardening_.privileges_disabled},
+                                  {"mitigations", hardening_.mitigations},
+                                  {"failures", hardening_.failures}}}};
         if (!write_message(hello)) return 2;
         std::thread reader([this] { read_loop(); });
         for (;;) {
@@ -223,6 +229,7 @@ private:
     }
 
     gk::analysis::RuleSet rules_;
+    gk::worker::Hardening hardening_;
     std::mutex mutex_;
     std::condition_variable cv_;
     std::deque<Request> queue_;
@@ -236,6 +243,8 @@ private:
 }  // namespace
 
 int main(int argc, char** argv) {
+    // Before anything untrusted is read (docs/SECURITY.md, Isolamento).
+    gk::worker::Hardening hardening = gk::worker::harden_process();
 #ifdef _WIN32
     _setmode(_fileno(stdin), _O_BINARY);
     _setmode(_fileno(stdout), _O_BINARY);
@@ -249,7 +258,7 @@ int main(int argc, char** argv) {
     }
     try {
         gk::analysis::RuleSet rules = gk::analysis::RuleSet::load(rule_dirs, indicators);
-        return Worker(std::move(rules)).run();
+        return Worker(std::move(rules), std::move(hardening)).run();
     } catch (const std::exception& e) {
         std::fprintf(stderr, "gk-scanworker: %s\n", e.what());
         return 1;

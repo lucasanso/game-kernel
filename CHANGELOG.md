@@ -3,6 +3,7 @@
 ## Agente A — Core e Segurança
 
 ### [não lançado]
+- Segurança: o `gk-scanworker` passa a se proteger antes de ler qualquer entrada — integridade baixa, sem privilégios, sem processos filhos, sem código dinâmico, sem DLLs de extensão (Linux: no_new_privs). O `SECURITY.md` já descrevia a integridade baixa e a ausência de processos filhos, que não estavam implementadas.
 - M10: integridade da instalação em C++ (`gk/integrity.hpp`), ferramenta de release `tools/build_integrity_manifest.py` e verificação de `gk-scanworker`/`clamscan` antes de executá-los no orquestrador; `gk-cli integrity`. Correção: caminho do banco recuperado em mensagem usava `path::string()`.
 - Segurança (achado da auditoria de importações): libyara do Windows compilada sem OpenSSL por um overlay do vcpkg — o port oficial trazia o código de socket/HTTP do OpenSSL estático para `gk_native` e `gk-scanworker`. Também sem leitor de memória de processos. Regras com campos de assinatura do módulo `pe` são recusadas com mensagem clara em todas as plataformas.
 - Auditoria de importações: teste que verifica que nenhum binário C++ importa código de rede (controle já descrito em SECURITY.md/ARCHITECTURE.md, agora efetivamente verificado).
