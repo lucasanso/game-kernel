@@ -1,0 +1,21 @@
+﻿Teste do Game Kernel em uma máquina Windows limpa
+=================================================
+
+O que é: um roteiro automático que instala o Game Kernel num Windows novo (sem nada instalado antes, sem rede),
+confere se tudo funciona e desinstala. Serve para ter certeza de que o instalador traz tudo o que o programa
+precisa e que a assinatura é a da sua chave de release.
+
+Com a Área Restrita do Windows (Windows 10/11 Pro, Enterprise ou Education):
+  1. Ative o recurso: Painel de Controle > Programas > Ativar ou desativar recursos do Windows >
+     "Área Restrita do Windows" (pede reinicialização).
+  2. Copie esta pasta para o seu computador e coloque nela o GameKernel-<versão>-setup.exe.
+  3. Clique com o botão direito em iniciar.ps1 > "Executar com o PowerShell"
+     (ou: powershell -ExecutionPolicy Bypass -File iniciar.ps1 -ChaveEsperada <id da sua chave>).
+  4. A Área Restrita abre, o teste roda sozinho e o resultado aparece no Bloco de Notas. Ele também fica em
+     resultado-teste-<data>.txt nesta pasta. Fechar a Área Restrita apaga tudo o que foi feito dentro dela.
+
+Sem a Área Restrita (Windows Home): crie uma máquina virtual nova (Hyper-V, VirtualBox...), copie esta pasta e o
+instalador para ela e rode:  powershell -ExecutionPolicy Bypass -File teste.ps1 -ChaveEsperada <id>
+
+O id da chave é o que o tools/gk_keygen.py mostrou ao gerar a chave de release (também está em
+installer/release/assinatura.json, campo "chave").

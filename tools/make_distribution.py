@@ -28,6 +28,10 @@ Usage (Windows CI, see .github/workflows/ci.yml):
         --key <release private key> [--password-env VAR | --no-password] \
         --out dist/GameKernel --portable-zip dist/GameKernel-<versão>-portable.zip
     (--unsigned instead of --key only for local builds: the application then reports an unsigned manifest)
+    python tools/make_distribution.py ... --public-key installer/release/release.pub --out dist/release/GameKernel
+    (release prepared in CI without the private key: the folder ships the release public key and an unsigned
+    manifest; the publisher signs the manifest on their own computer and tools/release_sign.py attaches the
+    signature and builds the portable ZIP — docs/RELEASE.md)
     python tools/make_distribution.py --print-version
 """
 
@@ -51,7 +55,7 @@ if str(ROOT) not in sys.path:
     sys.path.insert(0, str(ROOT))
 
 from cryptography.hazmat.primitives import serialization  # noqa: E402
-from cryptography.hazmat.primitives.asymmetric.ed25519 import Ed25519PrivateKey  # noqa: E402
+from cryptography.hazmat.primitives.asymmetric.ed25519 import Ed25519PrivateKey, Ed25519PublicKey  # noqa: E402
 
 from gamekernel import crypto_utils  # noqa: E402
 from gamekernel.core.integrity import MANIFEST_NAME, SIGNATURE_NAME, build_manifest, manifest_bytes  # noqa: E402
@@ -113,7 +117,8 @@ class Plan:
     bins: list[Path] = field(default_factory=list)
     helper: Path | None = None
     crt_dir: Path | None = None
-    signer: Ed25519PrivateKey | None = None   # None = unsigned manifest (local builds only)
+    signer: Ed25519PrivateKey | None = None   # None = unsigned manifest (local builds, or release awaiting signature)
+    public_key: Ed25519PublicKey | None = None   # release prepared without the private key (signed afterwards)
     windeployqt: str | None = None
     require_core: bool = True
     deploy_qt: bool = True                    # False only in tests that use stand-in binaries
@@ -184,6 +189,11 @@ def _check(out: Path, plan: Plan) -> None:
             raise DistributionError(f"chave privada na distribuição: {path.relative_to(out)}")
 
 
+def public_pem(public: Ed25519PublicKey) -> bytes:
+    """The release public key exactly as shipped in signatures/keys/release.pub (and listed in the manifest)."""
+    return public.public_bytes(serialization.Encoding.PEM, serialization.PublicFormat.SubjectPublicKeyInfo)
+
+
 def sign_installation(out: Path, version: str, signer: Ed25519PrivateKey | None) -> int:
     """Write (and sign) the integrity manifest with Agent A's code; the last step of the assembly."""
     raw = manifest_bytes(build_manifest(out, version))
@@ -243,11 +253,10 @@ def build(plan: Plan) -> dict:
         (out / rel).parent.mkdir(parents=True, exist_ok=True)
         shutil.copy2(ROOT / rel, out / rel)
     key_id = None
-    if plan.signer is not None:
-        public = plan.signer.public_key()
+    public = plan.signer.public_key() if plan.signer is not None else plan.public_key
+    if public is not None:
         (out / RELEASE_PUB).parent.mkdir(parents=True, exist_ok=True)
-        (out / RELEASE_PUB).write_bytes(public.public_bytes(serialization.Encoding.PEM,
-                                                            serialization.PublicFormat.SubjectPublicKeyInfo))
+        (out / RELEASE_PUB).write_bytes(public_pem(public))
         key_id = crypto_utils.key_id(public)
     (out / "docs").mkdir()
     for doc in DOCS:
@@ -257,7 +266,8 @@ def build(plan: Plan) -> dict:
     count = sign_installation(out, version, plan.signer)
     size = sum(p.stat().st_size for p in out.rglob("*") if p.is_file())
     return {"version": version, "folder": str(out), "files": count, "bytes": size,
-            "signed": plan.signer is not None, "key_id": key_id}
+            "signed": plan.signer is not None, "key_id": key_id,
+            "awaiting_signature": plan.signer is None and plan.public_key is not None}
 
 
 def make_portable_zip(folder: Path, zip_path: Path, top: str = "GameKernel") -> int:
@@ -286,6 +296,8 @@ def main(argv: list[str] | None = None) -> int:
     signing = parser.add_mutually_exclusive_group()
     signing.add_argument("--key", type=Path, help="chave privada Ed25519 de release (assina o manifesto)")
     signing.add_argument("--unsigned", action="store_true", help="manifesto sem assinatura (somente builds locais)")
+    signing.add_argument("--public-key", type=Path,
+                         help="chave pública de release: prepara a versão para ser assinada fora da CI")
     parser.add_argument("--no-password", action="store_true", help="chave privada sem senha (CI com chave efêmera)")
     parser.add_argument("--password-env", help="lê a senha da chave desta variável de ambiente")
     parser.add_argument("--windeployqt", help="caminho do windeployqt")
@@ -301,8 +313,17 @@ def main(argv: list[str] | None = None) -> int:
             return 0
         if args.app is None:
             parser.error("--app é obrigatório para montar a distribuição")
-        if not args.key and not args.unsigned:
-            parser.error("escolha --key <chave de release> ou, só para builds locais, --unsigned")
+        if not args.key and not args.unsigned and not args.public_key:
+            parser.error("escolha --key <chave de release>, --public-key <chave pública de release> ou, só para "
+                         "builds locais, --unsigned")
+        if args.public_key and args.portable_zip is not None:
+            parser.error("com --public-key o ZIP portátil é gerado depois da assinatura (tools/release_sign.py attach)")
+        public_key = None
+        if args.public_key:
+            try:
+                public_key = crypto_utils.load_public_key(args.public_key.read_bytes())
+            except (OSError, ValueError, TypeError) as exc:
+                raise DistributionError(f"{args.public_key} não é uma chave pública Ed25519: {exc}") from None
         signer = None
         if args.key:
             password = None
@@ -312,7 +333,8 @@ def main(argv: list[str] | None = None) -> int:
                 password = getpass.getpass("Senha da chave privada: ").encode("utf-8")
             signer = load_signing_key(args.key, password)
         summary = build(Plan(out=args.out, app=args.app, bins=args.bin, helper=args.helper, crt_dir=args.crt_dir,
-                             signer=signer, windeployqt=args.windeployqt, require_core=not args.allow_missing_core))
+                             signer=signer, public_key=public_key, windeployqt=args.windeployqt,
+                             require_core=not args.allow_missing_core))
         if args.portable_zip is not None:
             summary["portable_zip"] = str(args.portable_zip)
             summary["portable_entries"] = make_portable_zip(args.out, args.portable_zip)

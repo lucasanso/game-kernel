@@ -62,15 +62,18 @@ jobs:
           python-version: "3.13"
           cache: pip
           cache-dependency-path: requirements-dev.txt
-      - name: Sintaxe do monitor da sandbox (Windows PowerShell 5.1 e PowerShell 7)
+      - name: Sintaxe dos scripts PowerShell (Windows PowerShell 5.1 e PowerShell 7)
         shell: powershell
         run: |
           foreach ($exe in @('powershell.exe', 'pwsh.exe')) {
             & $exe -NoProfile -Command {
-              $errors = $null; $tokens = $null
-              [System.Management.Automation.Language.Parser]::ParseFile("$PWD\gamekernel\sandbox\monitor.ps1", [ref]$tokens, [ref]$errors) | Out-Null
-              if ($errors) { $errors | ForEach-Object { Write-Error $_.ToString() }; exit 1 }
-              Write-Output "monitor.ps1: sem erros de sintaxe ($($PSVersionTable.PSVersion))"
+              foreach ($script in @('gamekernel\sandbox\monitor.ps1', 'installer\teste-maquina-limpa\teste.ps1',
+                                    'installer\teste-maquina-limpa\iniciar.ps1')) {
+                $errors = $null; $tokens = $null
+                [System.Management.Automation.Language.Parser]::ParseFile("$PWD\$script", [ref]$tokens, [ref]$errors) | Out-Null
+                if ($errors) { $errors | ForEach-Object { Write-Error "$script`: $($_.ToString())" }; exit 1 }
+                Write-Output "$script`: sem erros de sintaxe ($($PSVersionTable.PSVersion))"
+              }
             }
             if ($LASTEXITCODE -ne 0) { exit 1 }
           }
@@ -196,6 +199,7 @@ jobs:
           if (-not $crt) { Write-Error "runtime MSVC (Microsoft.VC143.CRT) não encontrado"; exit 1 }
           $ver = python tools/make_distribution.py --print-version
           "GK_VERSION=$ver" | Out-File -FilePath $env:GITHUB_ENV -Append -Encoding utf8
+          "GK_CRT=$crt" | Out-File -FilePath $env:GITHUB_ENV -Append -Encoding utf8
           python tools/make_distribution.py --app build/windows-release/cpp/app/Release/GameKernel.exe `
             --bin build/windows-release/cpp/cli/Release/gk-cli.exe `
             --bin build/windows-release/cpp/worker/Release/gk-scanworker.exe `
@@ -245,6 +249,52 @@ jobs:
           $env:GK_EXPECT_SIGNED = "1"
           python -m pytest -q -rs tests/integration/test_distribution.py
           exit $LASTEXITCODE
+      - name: Kit de teste em máquina limpa (installer/teste-maquina-limpa/teste.ps1, aqui com a chave descartável)
+        shell: pwsh
+        run: |
+          # The same script the publisher runs in Windows Sandbox; here it validates the script itself (this runner
+          # is not a clean machine and has no desktop for the window step).
+          $kid = python tools/release_sign.py key-id "$env:RUNNER_TEMP\ci-key\ci-efemera.pub"
+          powershell.exe -NoProfile -ExecutionPolicy Bypass -File installer\teste-maquina-limpa\teste.ps1 `
+            -Pasta "$PWD\dist" -ChaveEsperada $kid -SemPausa -SemInterface
+          exit $LASTEXITCODE
+      - name: Preparar a versão de release com a chave pública do publicador (installer/release/release.pub)
+        id: release-prep
+        if: hashFiles('installer/release/release.pub') != ''
+        shell: pwsh
+        run: |
+          # Same binaries as above; the folder ships the publisher's public key and an unsigned manifest. The
+          # private key never comes here: the manifest is signed on the publisher's computer (docs/RELEASE.md).
+          python tools/make_distribution.py --app build/windows-release/cpp/app/Release/GameKernel.exe `
+            --bin build/windows-release/cpp/cli/Release/gk-cli.exe `
+            --bin build/windows-release/cpp/worker/Release/gk-scanworker.exe `
+            --bin build/windows-release/cpp/updates/Release/gk-update.exe `
+            --helper dist/gk-helper --crt-dir $env:GK_CRT --public-key installer/release/release.pub `
+            --out dist/release/GameKernel
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          New-Item -ItemType Directory -Force -Path dist/release/manifesto | Out-Null
+          Copy-Item dist/release/GameKernel/integrity_manifest.json dist/release/manifesto/
+          Copy-Item tools/release_sign.py dist/release/manifesto/
+          $kid = python tools/release_sign.py key-id installer/release/release.pub
+          @{ versao = $env:GK_VERSION; execucao = [long]"${{ github.run_id }}"; commit = "${{ github.sha }}"; chave = $kid } |
+            ConvertTo-Json | Set-Content -Path dist/release/manifesto/preparo.json -Encoding utf8
+          Write-Output "Versão $env:GK_VERSION preparada para a chave $kid na execução ${{ github.run_id }}."
+      - name: Artefato da versão preparada (pasta completa, aguardando assinatura)
+        if: steps.release-prep.outcome == 'success'
+        uses: actions/upload-artifact@v4
+        with:
+          name: gamekernel-release-preparada
+          path: dist/release/GameKernel/
+          retention-days: 90
+          if-no-files-found: error
+      - name: Artefato para assinar (manifesto e preparo.json)
+        if: steps.release-prep.outcome == 'success'
+        uses: actions/upload-artifact@v4
+        with:
+          name: gamekernel-release-manifesto
+          path: dist/release/manifesto/
+          retention-days: 90
+          if-no-files-found: error
       - name: Artefatos (instalador e versão portátil)
         if: success() || failure()
         uses: actions/upload-artifact@v4
@@ -254,3 +304,123 @@ jobs:
             dist/GameKernel-*-setup.exe
             dist/GameKernel-*-portable.zip
           if-no-files-found: warn
+
+  release-final:
+    # The signed release. Runs only when installer/release/assinatura.json exists (the publisher signed the manifest
+    # of a prepared folder on their own computer): the folder prepared by that CI run is downloaded — no rebuild,
+    # so the signed hashes match —, the signature is attached and verified, the installer and the portable ZIP are
+    # built and the installed product is tested, signed by the publisher's key.
+    name: Windows — versão de release assinada (com installer/release/assinatura.json)
+    runs-on: windows-2022
+    timeout-minutes: 60
+    permissions:
+      contents: read
+      actions: read
+    env:
+      QT_QPA_PLATFORM: offscreen
+    steps:
+      - uses: actions/checkout@v4
+      - name: Há uma assinatura de release?
+        id: plano
+        shell: pwsh
+        run: |
+          if (-not (Test-Path installer/release/assinatura.json)) {
+            Write-Output "Sem installer/release/assinatura.json: nada a finalizar."
+            "ativo=false" | Out-File -FilePath $env:GITHUB_OUTPUT -Append -Encoding utf8
+            exit 0
+          }
+          $a = Get-Content installer/release/assinatura.json -Raw | ConvertFrom-Json
+          if ("$($a.execucao)" -notmatch '^[0-9]{5,20}$') { Write-Error "assinatura.json sem 'execucao' válida"; exit 1 }
+          "ativo=true" | Out-File -FilePath $env:GITHUB_OUTPUT -Append -Encoding utf8
+          "execucao=$($a.execucao)" | Out-File -FilePath $env:GITHUB_OUTPUT -Append -Encoding utf8
+          Write-Output "Finalizando a versão $($a.versao), preparada na execução $($a.execucao), chave $($a.chave)."
+      - uses: actions/setup-python@v5
+        if: steps.plano.outputs.ativo == 'true'
+        with:
+          python-version: "3.13"
+          cache: pip
+          cache-dependency-path: requirements-dev.txt
+      - name: Dependências Python
+        if: steps.plano.outputs.ativo == 'true'
+        run: python -m pip install -r requirements-dev.txt
+      - name: Pasta preparada pela execução indicada em assinatura.json
+        if: steps.plano.outputs.ativo == 'true'
+        uses: actions/download-artifact@v4
+        with:
+          name: gamekernel-release-preparada
+          path: dist/release/GameKernel
+          run-id: ${{ steps.plano.outputs.execucao }}
+          github-token: ${{ github.token }}
+      - name: Anexar e conferir a assinatura, ZIP portátil
+        if: steps.plano.outputs.ativo == 'true'
+        shell: pwsh
+        run: |
+          $ver = (Get-Content dist/release/GameKernel/integrity_manifest.json -Raw | ConvertFrom-Json).version
+          if ($ver -notmatch '^[0-9]+\.[0-9]+\.[0-9]+$') { Write-Error "versão inválida no manifesto: $ver"; exit 1 }
+          "GK_VERSION=$ver" | Out-File -FilePath $env:GITHUB_ENV -Append -Encoding utf8
+          $kid = python tools/release_sign.py key-id installer/release/release.pub
+          "GK_RELEASE_KEY=$kid" | Out-File -FilePath $env:GITHUB_ENV -Append -Encoding utf8
+          python tools/release_sign.py attach dist/release/GameKernel --signature installer/release/assinatura.json `
+            --expect-key installer/release/release.pub --portable-zip "dist/final/GameKernel-$ver-portable.zip"
+          exit $LASTEXITCODE
+      - name: Instalador (Inno Setup)
+        if: steps.plano.outputs.ativo == 'true'
+        shell: pwsh
+        run: |
+          $iscc = "${env:ProgramFiles(x86)}\Inno Setup 6\ISCC.exe"
+          if (-not (Test-Path $iscc)) {
+            choco install innosetup -y --no-progress
+            if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          }
+          & $iscc /Qp "/DAppVersion=$env:GK_VERSION" "/DSourceDir=$PWD\dist\release\GameKernel" "/DOutputDir=$PWD\dist\final" installer\gamekernel.iss
+          exit $LASTEXITCODE
+      - name: Produto instalado, assinado pela chave do publicador
+        if: steps.plano.outputs.ativo == 'true'
+        shell: pwsh
+        run: |
+          $target = "$env:RUNNER_TEMP\GameKernel release"
+          $log = "$env:RUNNER_TEMP\instalacao.log"
+          $p = Start-Process -FilePath "dist\final\GameKernel-$env:GK_VERSION-setup.exe" -Wait -PassThru `
+                 -ArgumentList '/VERYSILENT', '/SUPPRESSMSGBOXES', '/NORESTART', '/CURRENTUSER', "/DIR=`"$target`"", "/LOG=`"$log`""
+          if ($p.ExitCode -ne 0) { Get-Content $log -Tail 60; exit $p.ExitCode }
+          $env:GK_INSTALLED_DIR = $target
+          $env:GK_EXPECT_SIGNED = "1"
+          $env:GK_EXPECT_KEY_ID = $env:GK_RELEASE_KEY
+          python -m pytest -q -rs tests/integration/test_distribution.py
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          Start-Process -FilePath "$target\unins000.exe" -Wait -ArgumentList '/VERYSILENT', '/SUPPRESSMSGBOXES', '/NORESTART'
+          for ($i = 0; $i -lt 120 -and (Test-Path "$target\GameKernel.exe"); $i++) { Start-Sleep -Seconds 1 }
+          if (Test-Path "$target\GameKernel.exe") { Write-Error "a desinstalação não removeu o programa"; exit 1 }
+      - name: Kit de teste em máquina limpa com o instalador final
+        if: steps.plano.outputs.ativo == 'true'
+        shell: pwsh
+        run: |
+          powershell.exe -NoProfile -ExecutionPolicy Bypass -File installer\teste-maquina-limpa\teste.ps1 `
+            -Pasta "$PWD\dist\final" -ChaveEsperada $env:GK_RELEASE_KEY -SemPausa -SemInterface
+          exit $LASTEXITCODE
+      - name: Versão portátil final
+        if: steps.plano.outputs.ativo == 'true'
+        shell: pwsh
+        run: |
+          $dest = "$env:RUNNER_TEMP\portatil"
+          Expand-Archive -Path "dist\final\GameKernel-$env:GK_VERSION-portable.zip" -DestinationPath $dest
+          $env:GK_INSTALLED_DIR = "$dest\GameKernel"
+          $env:GK_EXPECT_SIGNED = "1"
+          $env:GK_EXPECT_KEY_ID = $env:GK_RELEASE_KEY
+          python -m pytest -q -rs tests/integration/test_distribution.py
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          Get-ChildItem dist\final\GameKernel-* | ForEach-Object {
+            "{0}  {1}" -f (Get-FileHash $_.FullName -Algorithm SHA256).Hash.ToLower(), $_.Name
+          } | Set-Content -Path dist\final\SHA256SUMS.txt -Encoding ascii
+          Get-Content dist\final\SHA256SUMS.txt
+      - name: Artefatos da versão final (instalador, portátil, SHA256SUMS)
+        if: steps.plano.outputs.ativo == 'true'
+        uses: actions/upload-artifact@v4
+        with:
+          name: gamekernel-${{ env.GK_VERSION }}-release
+          path: |
+            dist/final/GameKernel-*-setup.exe
+            dist/final/GameKernel-*-portable.zip
+            dist/final/SHA256SUMS.txt
+          retention-days: 90
+          if-no-files-found: error

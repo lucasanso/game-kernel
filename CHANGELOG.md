@@ -62,6 +62,14 @@
 ## Agente B — Python, integração e ferramentas
 
 ### [não lançado]
+- **Release assinada sem a chave privada sair do computador do publicador**: a CI monta a versão com a chave
+  pública de `installer/release/release.pub` (`make_distribution.py --public-key`); o publicador assina o manifesto
+  em casa (`tools/release_sign.py sign`, só Python + `cryptography`) e devolve `assinatura.json`; o job
+  `release-final` anexa a assinatura à mesma pasta (sem recompilar), gera instalador, ZIP portátil e `SHA256SUMS.txt`
+  e testa o produto instalado exigindo a chave do publicador. Kit de teste em máquina limpa
+  (`installer/teste-maquina-limpa/`: Área Restrita do Windows sem rede, instalação, runtime incluído, integridade com
+  a chave esperada, varredura, interface, desinstalação), também executado na CI. Teste que barra chave privada no
+  repositório.
 - **Opções de varredura com efeito**: o núcleo lê o `settings.json` (`gk::scan::Config::load`: processos, tamanho
   máximo, limites de compactados, tipos de arquivo, exclusões, ClamAV) — na interface, na proteção em tempo real e no
   `gk-cli` (a linha de comando tem prioridade). A página Configurações ganhou o bloco **Varredura**. Corrigido: excluir

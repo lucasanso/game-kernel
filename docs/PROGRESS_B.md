@@ -268,6 +268,25 @@ Com o A indisponível, o usuário pediu ao B que assumisse as tarefas dele (regi
 * Corrigido no núcleo (`enumerate.cpp`): a exclusão por pasta comparava só o prefixo do texto, então `.../Foo`
   excluía também `.../FooBar`.
 
+## Release assinada fora da CI e teste em máquina limpa
+
+* Revisão do A (`ce8bb87`) incorporada: quatro correções no meu trabalho (sanitizadores no `gk-update` do produto,
+  raiz de limpeza precisa se chamar Temp/Tmp, nível de aviso não decide mais a quarentena automática de ameaça
+  confirmada, ClamAV desativado ≠ indisponível no resumo).
+* `make_distribution.py --public-key`: versão preparada sem a chave privada (manifesto sem assinatura, chave pública
+  do publicador dentro). `tools/release_sign.py`: `sign` (no computador do publicador; confere que a versão leva a
+  chave pública desta chave privada, mostra o que vai assinar, grava `assinatura.json`), `attach` (CI: assinatura,
+  pasta × manifesto, chave esperada, ZIP portátil) e `key-id`.
+* CI: `windows-package` publica `gamekernel-release-preparada` e `gamekernel-release-manifesto` quando
+  `installer/release/release.pub` existe; `release-final` finaliza quando `installer/release/assinatura.json` existe
+  (baixa a pasta da execução indicada — o `workflow_dispatch` só funciona na branch principal, por isso o fluxo é
+  guiado por arquivos).
+* `installer/teste-maquina-limpa/` (`iniciar.ps1` cria e abre a configuração da Área Restrita do Windows sem rede;
+  `teste.ps1` instala, confere e desinstala sem Python). Roda também na CI com a chave descartável e com a versão
+  final, para o próprio script estar testado.
+* Ensaio completo num ambiente só com Python + `cryptography` (chave descartável, apagada depois).
+* Testes: `tests/integration/test_release_signing.py`.
+
 ## B9 — páginas que não dependem do A (2026-11-15)
 
 * **Relatórios forenses**: lista as varreduras do banco pelo novo método `reports.scans` do auxiliar (somente

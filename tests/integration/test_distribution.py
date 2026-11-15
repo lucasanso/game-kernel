@@ -238,6 +238,8 @@ def test_installed_product_integrity_is_confirmed_by_the_core(tmp_path):
     if os.environ.get("GK_EXPECT_SIGNED") == "1":
         shipped = crypto_utils.load_public_key((_installed() / MD.RELEASE_PUB).read_bytes())
         assert report["signature_valid"] is True and report["signer_key_id"] == crypto_utils.key_id(shipped)
+    if os.environ.get("GK_EXPECT_KEY_ID"):   # the release: signed with the publisher's key, not a CI one
+        assert report["signer_key_id"] == os.environ["GK_EXPECT_KEY_ID"], report
 
 
 @installed
