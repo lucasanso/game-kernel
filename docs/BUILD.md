@@ -76,12 +76,11 @@ Nenhum segredo é usado; a chave privada de *release* nunca chega à CI.
 
 ### Distribuição: instalador e versão portátil (Windows)
 
-1. Núcleo: `cmake --preset windows-release -DCMAKE_PREFIX_PATH=C:/Qt/6.8.3/msvc2022_64 -DGK_BUILD_BINDINGS=OFF` e
-   `cmake --build --preset windows-release --target gk-cli gk-scanworker gk-update` (com Qt, a raiz também compila
-   a varredura, a CLI e o `gk-update`).
-2. Interface com as mesmas dependências estáticas: `cmake -S cpp/app -B build/pkg-app` com o *toolchain* do vcpkg,
-   `-DVCPKG_TARGET_TRIPLET=x64-windows-static-md -DVCPKG_INSTALLED_DIR=<build/windows-release/vcpkg_installed>
-   -DVCPKG_MANIFEST_MODE=OFF -DGK_APP_BUILD_TESTS=OFF`, depois `--target GameKernel`.
+1. Produto: `cmake --preset windows-release -DCMAKE_PREFIX_PATH=C:/Qt/6.8.3/msvc2022_64 -DGK_BUILD_BINDINGS=OFF` e
+   `cmake --build --preset windows-release --target gk-cli gk-scanworker gk-update GameKernel` (com Qt Widgets e
+   Svg, a raiz também compila a varredura, a CLI, o `gk-update` e a interface, todos com as mesmas dependências
+   estáticas e o mesmo endurecimento: CFG, CET, ASLR e avisos como erro).
+2. (A interface também compila sozinha, `cmake -S cpp/app`, para desenvolvimento e testes.)
 3. Auxiliar: `pyinstaller installer/gk_helper.spec --distpath dist --workpath build/pyinstaller`.
 4. Pasta do produto, manifesto e ZIP portátil: `python tools/make_distribution.py --app … --bin gk-cli.exe
    --bin gk-scanworker.exe --bin gk-update.exe --helper dist/gk-helper --crt-dir <Microsoft.VC143.CRT>

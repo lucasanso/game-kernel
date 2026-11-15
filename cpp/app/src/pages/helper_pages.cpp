@@ -163,11 +163,11 @@ void SandboxPage::cancel() {
     status_->setText(QStringLiteral("Cancelando e descartando a máquina virtual…"));
 }
 
-void SandboxPage::onEvent(qint64 id, const QString& name, const QJsonObject& data) {
+void SandboxPage::onEvent(qint64 id, const QString& name, const QJsonObject& payload) {
     if (id != analyzeCall_ || name != QLatin1String("progress")) return;
-    const QString stage = data.value("stage").toString();
+    const QString stage = payload.value("stage").toString();
     if (stage == "boot") status_->setText(QStringLiteral("Iniciando a máquina virtual sem rede…"));
-    else if (stage == "running") status_->setText(QStringLiteral("Observando a amostra (%1 s)…").arg(data.value("elapsed").toInt()));
+    else if (stage == "running") status_->setText(QStringLiteral("Observando a amostra (%1 s)…").arg(payload.value("elapsed").toInt()));
     else if (stage == "collecting") status_->setText(QStringLiteral("Coletando observações e descartando a máquina virtual…"));
 }
 

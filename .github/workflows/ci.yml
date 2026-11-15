@@ -162,7 +162,7 @@ jobs:
         with:
           path: .vcpkg-cache-static
           key: vcpkg-${{ runner.os }}-static-md-${{ hashFiles('vcpkg.json', 'vcpkg/overlay-ports/**') }}
-      - name: Núcleo (gk-cli, gk-scanworker, gk-update) pelo preset windows-release, com Qt
+      - name: Produto (gk-cli, gk-scanworker, gk-update, GameKernel) pelo preset windows-release, com Qt
         id: core
         shell: pwsh
         run: |
@@ -170,7 +170,7 @@ jobs:
           $env:VCPKG_ROOT = $env:VCPKG_INSTALLATION_ROOT
           cmake --preset windows-release -DCMAKE_PREFIX_PATH="C:/Qt/$env:QT_VERSION/msvc2022_64" -DGK_BUILD_BINDINGS=OFF
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
-          cmake --build --preset windows-release --target gk-cli gk-scanworker gk-update
+          cmake --build --preset windows-release --target gk-cli gk-scanworker gk-update GameKernel
           exit $LASTEXITCODE
       - name: Salvar cache binário do vcpkg (mesmo que passos seguintes falhem)
         if: always() && steps.vcpkg-cache.outputs.cache-hit != 'true' && hashFiles('.vcpkg-cache-static/**') != ''
@@ -178,16 +178,6 @@ jobs:
         with:
           path: .vcpkg-cache-static
           key: vcpkg-${{ runner.os }}-static-md-${{ hashFiles('vcpkg.json', 'vcpkg/overlay-ports/**') }}
-      - name: Interface (cpp/app) com as mesmas dependências estáticas
-        shell: pwsh
-        run: |
-          $vcpkg = $env:VCPKG_INSTALLATION_ROOT -replace '\\','/'
-          cmake -S cpp/app -B build/pkg-app "-DCMAKE_TOOLCHAIN_FILE=$vcpkg/scripts/buildsystems/vcpkg.cmake" `
-            -DVCPKG_TARGET_TRIPLET=x64-windows-static-md "-DVCPKG_INSTALLED_DIR=$PWD/build/windows-release/vcpkg_installed" `
-            -DVCPKG_MANIFEST_MODE=OFF "-DCMAKE_PREFIX_PATH=C:/Qt/$env:QT_VERSION/msvc2022_64" -DGK_APP_BUILD_TESTS=OFF
-          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
-          cmake --build build/pkg-app --config Release --target GameKernel
-          exit $LASTEXITCODE
       - name: Auxiliar congelado (PyInstaller)
         run: pyinstaller installer/gk_helper.spec --noconfirm --distpath dist --workpath build/pyinstaller
       - name: Montar a distribuição (pasta do produto, manifesto de integridade assinado, ZIP portátil)
@@ -203,7 +193,7 @@ jobs:
           if (-not $crt) { Write-Error "runtime MSVC (Microsoft.VC143.CRT) não encontrado"; exit 1 }
           $ver = python tools/make_distribution.py --print-version
           "GK_VERSION=$ver" | Out-File -FilePath $env:GITHUB_ENV -Append -Encoding utf8
-          python tools/make_distribution.py --app build/pkg-app/Release/GameKernel.exe `
+          python tools/make_distribution.py --app build/windows-release/cpp/app/Release/GameKernel.exe `
             --bin build/windows-release/cpp/cli/Release/gk-cli.exe `
             --bin build/windows-release/cpp/worker/Release/gk-scanworker.exe `
             --bin build/windows-release/cpp/updates/Release/gk-update.exe `

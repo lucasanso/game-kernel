@@ -154,6 +154,20 @@ Defeitos encontrados e corrigidos pelo caminho (todos do B): o `gk-helper.exe` c
 `sandbox.*` nem o `monitor.ps1`, e o `system.info` não mostrava serviços que falharam ao carregar (agora mostra
 `unavailable_services`); a distribuição não levava o `contracts/threat_catalog.json`.
 
+## Tarefas do A assumidas pelo B (pedido do usuário, 2026-11-15)
+
+Com o A indisponível, o usuário pediu ao B que assumisse as tarefas dele (registrado na `WORK_SPLIT.md` §6).
+
+* **Motor de risco à prova de falha** (`cpp/scan/src/scanner.cpp`): se o motor de risco não carrega (ex.: catálogo
+  ausente), todo arquivo com evidências vira `inconclusive`, com o maior risco das evidências e sem atenuação, situação
+  `partial` com o motivo, e a limitação entra no resumo. Antes, um EICAR saía "desconhecido, sem risco".
+  Teste: `tests/native/test_scan_cli.py::test_risk_engine_failure_never_hides_evidence`.
+* **`gk-cli` portátil** (`cpp/cli/main.cpp`): respeita o `portable.flag`, com as mesmas regras do `app_paths.py` e
+  da interface. Teste: `test_portable_copy_keeps_its_data_next_to_the_program`.
+* **Interface na raiz do CMake**: `add_subdirectory(cpp/app)` quando há Qt Widgets/Svg; compilada pela raiz, a
+  interface recebe o mesmo endurecimento e os mesmos avisos do núcleo (`gk_apply_options`). Corrigidos os avisos
+  `-Wshadow` que isso revelou. A CI do instalador passa a tirar o `GameKernel.exe` desse mesmo build.
+
 ## B9 — páginas que não dependem do A (2026-11-15)
 
 * **Relatórios forenses**: lista as varreduras do banco pelo novo método `reports.scans` do auxiliar (somente

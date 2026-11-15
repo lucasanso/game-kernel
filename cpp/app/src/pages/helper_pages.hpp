@@ -39,7 +39,7 @@ signals:
 private:
     void onSucceeded(qint64 id, const QJsonValue& result);
     void onFailed(qint64 id, const gk::ipc::CallError& error);
-    void onEvent(qint64 id, const QString& name, const QJsonObject& data);
+    void onEvent(qint64 id, const QString& name, const QJsonObject& payload);
     void showReport(const QJsonObject& report);
     void updateButtons();
 

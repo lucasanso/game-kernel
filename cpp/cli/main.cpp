@@ -39,9 +39,14 @@ void on_interrupt(int) {
     if (g_scanner != nullptr) QMetaObject::invokeMethod(g_scanner, [] { g_scanner->cancel(); }, Qt::QueuedConnection);
 }
 
+// Same rules as gamekernel/app_paths.py and the desktop application (AppContext::defaultDataDir):
+// GAMEKERNEL_DATA_DIR, then the portable layout (<program folder>/portable.flag -> <program folder>/data),
+// then the per-user folder. Without the portable rule the CLI of a portable copy wrote somewhere else than the UI.
 QString default_data_dir() {
     const QByteArray env = qgetenv("GAMEKERNEL_DATA_DIR");
     if (!env.isEmpty()) return QString::fromLocal8Bit(env);
+    const QDir program(QCoreApplication::applicationDirPath());
+    if (QFileInfo::exists(program.filePath(QStringLiteral("portable.flag")))) return program.filePath(QStringLiteral("data"));
 #ifdef Q_OS_WIN
     return QDir(QString::fromLocal8Bit(qgetenv("LOCALAPPDATA"))).filePath(QStringLiteral("GameKernel"));
 #else

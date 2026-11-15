@@ -90,20 +90,20 @@ SettingsPage::SettingsPage(AppContext* ctx, QWidget* parent) : QWidget(parent), 
                                           sandbox));
     col->addWidget(sandbox);
 
-    auto* data = new Card(QStringLiteral("Dados neste computador"), content);
-    data->body()->addWidget(mutedLabel(
+    auto* dataCard = new Card(QStringLiteral("Dados neste computador"), content);
+    dataCard->body()->addWidget(mutedLabel(
         QStringLiteral("Pasta de dados: %1\nGuarda o banco de varreduras, os relatórios, as configurações, as "
                        "atualizações de assinaturas e a quarentena. Nada sai deste computador.")
             .arg(QDir::toNativeSeparators(ctx_->dataDir())),
-        data));
+        dataCard));
     auto* dataRow = new QHBoxLayout;
     dataRow->addStretch();
-    auto* openData = new QPushButton(icon(QStringLiteral("folder")), QStringLiteral("Abrir pasta de dados"), data);
-    auto* defaults = new QPushButton(icon(QStringLiteral("rotate-ccw")), QStringLiteral("Restaurar padrões desta página"), data);
+    auto* openData = new QPushButton(icon(QStringLiteral("folder")), QStringLiteral("Abrir pasta de dados"), dataCard);
+    auto* defaults = new QPushButton(icon(QStringLiteral("rotate-ccw")), QStringLiteral("Restaurar padrões desta página"), dataCard);
     dataRow->addWidget(openData);
     dataRow->addWidget(defaults);
-    data->body()->addLayout(dataRow);
-    col->addWidget(data);
+    dataCard->body()->addLayout(dataRow);
+    col->addWidget(dataCard);
     col->addWidget(mutedLabel(QStringLiteral("Opções de varredura, motores, tempo real e quarentena ainda não são "
                                              "configuráveis pela interface; a varredura pelo gk-cli usa os valores padrão."),
                               content));

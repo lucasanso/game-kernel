@@ -195,3 +195,48 @@ def test_cli_rejects_missing_target(cli, tmp_path):
     proc, report = _run(cli, [tmp_path / "nao-existe"], tmp_path / "data")
     assert report["summary"]["files_found"] == 0
     assert any("nao-existe" in w for w in report["summary"]["warnings"])
+
+
+def test_risk_engine_failure_never_hides_evidence(cli, tmp_path):
+    """Installation without contracts/threat_catalog.json (the packaging bug found by the B10 end-to-end test):
+    the scan must not report an EICAR with YARA/reputation evidence as "unknown, no risk"."""
+    install = tmp_path / "instalacao"
+    install.mkdir()
+    for binary in (cli, cli.parent.parent / "worker" / cli.name.replace("gk-cli", "gk-scanworker")):
+        shutil.copy2(binary, install / binary.name)
+    shutil.copytree(ROOT / "signatures", install / "signatures")      # no contracts/: the risk engine cannot load
+    game = tmp_path / "Jogo"
+    game.mkdir()
+    (game / "leia_eicar.com").write_bytes(("X5O!P%@AP[4\\PZX54(P^)7CC)7}$" + "EICAR-STANDARD-ANTIVIRUS-"
+                                           + "TEST-FILE!$H+H*").encode())
+    (game / "config.ini").write_text("[video]\nfullscreen=1\n")
+    proc, report = _run(install / cli.name, [game], tmp_path / "data")
+    assert report is not None, proc.stderr
+    assert any("Motor de risco indisponível" in w for w in report["summary"]["warnings"])
+    assert any("avaliação de risco não pôde ser concluída" in x for x in report["summary"]["limitations"])
+    r = _by_name(report)
+    eicar = r["leia_eicar.com"]
+    assert eicar["classification"] == "inconclusive" and eicar["status"] == "partial"
+    assert eicar["risk"] != "NONE" and eicar["evidences"]
+    assert r["config.ini"]["classification"] == "unknown"                # nothing to hide: left as is
+
+
+def test_portable_copy_keeps_its_data_next_to_the_program(cli, tmp_path):
+    """portable.flag next to gk-cli: without --data-dir the database goes to <program>/data, like the UI."""
+    portable = tmp_path / "GameKernel"
+    portable.mkdir()
+    for binary in (cli, cli.parent.parent / "worker" / cli.name.replace("gk-cli", "gk-scanworker")):
+        shutil.copy2(binary, portable / binary.name)
+    shutil.copytree(ROOT / "signatures", portable / "signatures")
+    shutil.copytree(ROOT / "contracts", portable / "contracts")
+    (portable / "portable.flag").write_text("portátil")
+    target = tmp_path / "Jogo"
+    target.mkdir()
+    (target / "readme.txt").write_text("nada aqui")
+    env = {k: v for k, v in os.environ.items() if k != "GAMEKERNEL_DATA_DIR"}
+    env["LOCALAPPDATA"] = env["XDG_DATA_HOME"] = str(tmp_path / "perfil-do-usuario")
+    proc = subprocess.run([str(portable / cli.name), "scan", str(target), "--quiet"], capture_output=True, text=True,
+                          timeout=300, env=env)
+    assert proc.returncode == 0, proc.stderr
+    assert (portable / "data" / "gamekernel.db").is_file()
+    assert not (tmp_path / "perfil-do-usuario").exists()

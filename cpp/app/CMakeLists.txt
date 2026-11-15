@@ -56,6 +56,13 @@ if(MSVC)
   target_compile_options(GameKernel PRIVATE /utf-8)
 endif()
 
+# Built from the root project: same warnings and hardening as the core binaries (CFG, CET, ASLR, /WX or
+# -Werror when GK_WARNINGS_AS_ERRORS).
+if(COMMAND gk_apply_options)
+  gk_apply_options(gk_app_lib)
+  gk_apply_options(GameKernel)
+endif()
+
 if(GK_APP_BUILD_TESTS)
   enable_testing()
   find_package(Qt6 6.4 REQUIRED COMPONENTS Test)

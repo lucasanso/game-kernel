@@ -350,8 +350,8 @@ void ReportsPage::onFailed(qint64 id, const gk::ipc::CallError& error) {
     }
 }
 
-void ReportsPage::onEvent(qint64 id, const QString& name, const QJsonObject& data) {
-    if (id == generateCall_ && name == QLatin1String("progress")) status_->setText(stageLabel(data.value("stage").toString()));
+void ReportsPage::onEvent(qint64 id, const QString& name, const QJsonObject& payload) {
+    if (id == generateCall_ && name == QLatin1String("progress")) status_->setText(stageLabel(payload.value("stage").toString()));
 }
 
 }  // namespace gk::app

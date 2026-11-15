@@ -15,8 +15,8 @@ AppContext::AppContext(QString dataDir, QString resourceDir, gk::ipc::HelperConf
     : QObject(parent), dataDir_(std::move(dataDir)), resourceDir_(std::move(resourceDir)),
       helper_(new gk::ipc::HelperClient(std::move(helperConfig), this)) {
     QDir().mkpath(dataDir_);
-    confirm = [](QWidget* parent, const QString& title, const QString& text) {
-        QMessageBox box(QMessageBox::Question, title, text, QMessageBox::NoButton, parent);
+    confirm = [](QWidget* owner, const QString& title, const QString& text) {
+        QMessageBox box(QMessageBox::Question, title, text, QMessageBox::NoButton, owner);
         auto* yes = box.addButton(QStringLiteral("Confirmar"), QMessageBox::AcceptRole);
         box.addButton(QStringLiteral("Cancelar"), QMessageBox::RejectRole);
         box.exec();

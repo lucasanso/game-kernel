@@ -581,7 +581,25 @@ void Scanner::finalize() {
         const auto catalog = risk::Catalog::load(std::filesystem::path(utf8(config_.catalogFile())));
         risk::assess_all(results_, components, catalog);
     } catch (const std::exception& e) {
-        warnings_.push_back(std::string("Motor de risco: ") + e.what());
+        // Fail safe: an internal failure of the assessment must never turn evidence into "unknown, no risk".
+        // Every file with evidence becomes inconclusive at the highest unmitigated evidence severity.
+        const std::string why = std::string("Motor de risco indisponível: ") + e.what();
+        warnings_.push_back(why);
+        limitations_.push_back("A avaliação de risco não pôde ser concluída nesta varredura; os arquivos com "
+                               "evidências aparecem como inconclusivos, com o maior risco observado e sem atenuação "
+                               "por contexto. Reinstale o Game Kernel e repita a varredura.");
+        for (auto& r : results_) {
+            if (r.evidences.empty()) continue;
+            Risk highest = Risk::None;
+            for (const auto& ev : r.evidences) highest = std::max(highest, ev.severity);
+            r.risk = highest;
+            r.classification = Classification::Inconclusive;
+            if (r.status == AnalysisStatus::Complete) r.status = AnalysisStatus::Partial;
+            r.status_reasons.push_back(why);
+            r.explanation = {"A avaliação de risco falhou (" + std::string(e.what()) + ").",
+                             "O risco mostrado é o maior entre as evidências encontradas, sem atenuação por contexto."};
+            r.recommendations = {"Reinstale o Game Kernel e repita a varredura antes de decidir sobre este arquivo."};
+        }
     }
 
     progress_.phase = QStringLiteral("saving");

@@ -62,8 +62,7 @@ Observação: os testes do B em `tests/integration/` que compilam `cpp/ipc` e `c
 
 ## 4. Decisões pendentes do usuário
 
-* **P1 — Nome do produto**: "Game Kernel" (título da diretriz e repositório) ou "OFFLINE GAME GUARD"? Mantido
-  *Game Kernel* (constante única `gk::kProductName`).
+* **P1 — Nome do produto**: decidido pelo usuário em 2026-11-15: **Game Kernel** (constante única `gk::kProductName`).
 * **P2 — Interface**: os dois agentes propõem **B** (preserva a divisão original). Sem objeção do usuário até agora.
 
 ## 5. Regras comuns
@@ -80,6 +79,7 @@ Observação: os testes do B em `tests/integration/` que compilam `cpp/ipc` e `c
 
 | Data | Agente | Mudança |
 |---|---|---|
+| 2026-11-15 | B | **Por pedido do usuário, com o A indisponível, o B assume as tarefas pendentes do A**: M13 (`cpp/bridge`), M11 (tempo real), M12 (Performance Monitor / System Optimizer) e as correções anotadas no `PROGRESS_B.md` (falha do motor de risco, `gk-cli` portátil, `cpp/app` na raiz do CMake). Os arquivos continuam com o dono da tabela do §2; cada mudança do B em área do A é registrada aqui e no `PROGRESS_B.md`. **O A deve mesclar a branch do B antes de continuar.** P1 decidido pelo usuário: o nome é **Game Kernel**. |
 | 2026-11-14 | A | **Para B (relatórios)**: `render_html.py`/`render_pdf.py` — os 4 trechos de "Assinatura digital" viraram um helper `_signature()` que distingue "presente, não verificada" (`signature_valid` nulo: membros de compactados ou cadeia não montável offline). Mudança mecânica decorrente do M4. |
 | 2026-11-14 | A | **Para B (dependências)**: `signify` removido de `requirements.txt` (ninguém importava; o `oscrypto` dele falha com OpenSSL 3); `asn1crypto==1.5.1` em `requirements-dev.txt` como oráculo. |
 | 2026-11-14 | A | **Para B (CI Windows)**: o produto usa a libyara do overlay `vcpkg/overlay-ports/yara` (sem OpenSSL, sem leitor de memória de processos). O `ci.yml` ainda instala o port oficial; para testar contra a mesma libyara, acrescentar `--overlay-ports=<repo>/vcpkg/overlay-ports` ao `vcpkg install`. Regras com `pe.signatures`/`pe.is_signed` agora são recusadas pelo núcleo em todas as plataformas. |

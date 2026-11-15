@@ -40,7 +40,7 @@ de integridade registra os arquivos exatamente como serão distribuídos. Assine
 ## 4. Montar e assinar a pasta do produto
 
 ```bash
-python tools/make_distribution.py --app build\pkg-app\Release\GameKernel.exe ^
+python tools/make_distribution.py --app build\windows-release\cpp\app\Release\GameKernel.exe ^
   --bin build\windows-release\cpp\cli\Release\gk-cli.exe ^
   --bin build\windows-release\cpp\worker\Release\gk-scanworker.exe ^
   --bin build\windows-release\cpp\updates\Release\gk-update.exe ^
