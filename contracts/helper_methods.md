@@ -76,6 +76,13 @@ Resultado: `{"scan_id", "files": [{"format","path","size","sha256"}], "counts": 
 Erros: `invalid_params`, `not_found` (banco ou varredura), `io_error`, `cancelled`, `timeout`.
 Conteúdo do relatório: `gamekernel-report` v1 (as 15 seções da especificação §16 + relatório individual de cracks).
 
+### `reports.scans` (`limit` 1…1000, padrão 100; `db_path` absoluto opcional) → `{"scans": [...], "db_path", "database_present"}`
+Varreduras do banco, da mais recente para a mais antiga, lidas com `PRAGMA query_only` (o banco nunca é criado nem
+alterado; sem banco, `scans` vem vazio e `database_present` é `false`). Cada item: `scan_id`, `started_at`,
+`finished_at` (ISO 8601 local), `mode`, `origin`, `label`, `targets`, `status`, `files_found`, `files_analyzed`,
+`files_errors`, `threats`, `suspicious`, `pua`, `max_risk` (`{"level","label"}`), `error`. Usado pela página de
+Relatórios da interface para escolher a varredura antes de `reports.generate`.
+
 ### `reports.formats` → `{"formats": [...], "unavailable": {formato: motivo}, "default_output_dir": "…"}`
 
 ### `sandbox.availability` → `{"available", "reason", "enabled_in_settings", "supported_extensions", "limitations"}`

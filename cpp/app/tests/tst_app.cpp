@@ -7,11 +7,14 @@
 #include "app_context.hpp"
 #include "main_window.hpp"
 #include "pages/helper_pages.hpp"
+#include "pages/reports_page.hpp"
 #include "pages/updates_page.hpp"
 #include "ui_kit.hpp"
 
+#include <QDateTime>
 #include <QDir>
 #include <QFile>
+#include <QFileInfo>
 #include <QImage>
 #include <QJsonDocument>
 #include <QRegularExpression>
@@ -19,6 +22,7 @@
 #include <QTemporaryDir>
 #include <QtTest>
 
+#include <algorithm>
 #include <memory>
 
 using namespace gk::app;
@@ -35,8 +39,10 @@ class TestApp : public QObject {
         bool answerDowngrade = true;
     };
 
-    std::unique_ptr<Env> makeEnv(bool withBuiltinKey = true) {
+    std::unique_ptr<Env> makeEnv(bool withBuiltinKey = true, bool withScans = false) {
         auto env = std::make_unique<Env>();
+        if (withScans)   // database with a realistic scan, written by the Python data layer (GK_TEST_DB)
+            QFile::copy(qEnvironmentVariable("GK_TEST_DB"), QDir(env->data.path()).filePath(QStringLiteral("gamekernel.db")));
         if (withBuiltinKey) {
             QDir(env->resources.path()).mkpath(QStringLiteral("signatures/keys"));
             QFile::copy(qEnvironmentVariable("GK_TEST_KEY"),
@@ -230,13 +236,53 @@ private slots:
         env->ctx->helper()->stop();
     }
 
-    void mainWindowNavigationNotificationsAndScreenshots() {
+    void reportsFromTheRealDatabase() {
+        auto env = makeEnv(true, true);
+        const qint64 scanId = qEnvironmentVariable("GK_TEST_SCAN_ID").toLongLong();
+        const QString db = QDir(env->data.path()).filePath(QStringLiteral("gamekernel.db"));
+        const QDateTime dbTime = QFileInfo(db).lastModified();
+        ReportsPage page(env->ctx.get());
+        QSignalSpy loaded(&page, &ReportsPage::scansLoaded);
+        QVERIFY(waitFinished(loaded));
+        QVERIFY(page.scanCount() >= 1);
+        QVERIFY(page.emptyStateText().isEmpty());
+        QVERIFY(page.selectScan(scanId));
+        QCOMPARE(page.selectedScan(), scanId);
+        QVERIFY(!page.selectScan(987654));                       // unknown scans are not selectable
+
+        QSignalSpy finished(&page, &ReportsPage::reportFinished);
+        QVERIFY(page.generate());
+        QVERIFY(waitFinished(finished, 120000));
+        const auto result = finished.takeFirst();
+        QVERIFY2(result.at(0).toBool(), qPrintable(result.at(1).toString()));
+        const QStringList files = page.generatedFiles();
+        QVERIFY2(files.size() >= 2, qPrintable(files.join(',')));
+        QVERIFY(std::any_of(files.begin(), files.end(), [](const QString& f) { return f.endsWith(QStringLiteral(".html")); }));
+        QVERIFY(std::any_of(files.begin(), files.end(), [](const QString& f) { return f.endsWith(QStringLiteral(".json")); }));
+        for (const QString& f : files) QVERIFY(QFileInfo(QDir(page.reportsDir()).filePath(f)).size() > 0);
+        QCOMPARE(QFileInfo(db).lastModified(), dbTime);          // the database was only read
+        env->ctx->helper()->stop();
+    }
+
+    void reportsOnAFreshInstallation() {
         auto env = makeEnv();
+        ReportsPage page(env->ctx.get());
+        QSignalSpy loaded(&page, &ReportsPage::scansLoaded);
+        QVERIFY(waitFinished(loaded));
+        QCOMPARE(page.scanCount(), 0);
+        QVERIFY(page.emptyStateText().contains(QStringLiteral("gk-cli")));
+        QVERIFY(!page.generate());                               // nothing selected: nothing is sent
+        QVERIFY(!QFileInfo::exists(QDir(env->data.path()).filePath(QStringLiteral("gamekernel.db"))));
+        env->ctx->helper()->stop();
+    }
+
+    void mainWindowNavigationNotificationsAndScreenshots() {
+        auto env = makeEnv(true, true);
         MainWindow window(env->ctx.get());
         window.resize(1280, 820);
         window.show();
         QVERIFY(QTest::qWaitForWindowExposed(&window));
-        QCOMPARE(window.pageCount(), 3);
+        QCOMPARE(window.pageCount(), 4);
         QCOMPARE(window.currentTitle(), QStringLiteral("Central de Atualização Offline"));
 
         QSignalSpy done(window.updatesPage(), &UpdatesPage::operationFinished);
@@ -255,12 +301,18 @@ private slots:
         screenshot(&window, QStringLiteral("02-sandbox.png"));
 
         window.showPage(2);
+        QCOMPARE(window.currentTitle(), QStringLiteral("Relatórios forenses"));
+        QTRY_VERIFY_WITH_TIMEOUT(window.reportsPage()->scanCount() >= 1, 30000);
+        QTest::qWait(200);
+        screenshot(&window, QStringLiteral("03-relatorios.png"));
+
+        window.showPage(3);
         QCOMPARE(window.currentTitle(), QStringLiteral("Privacidade e rede"));
         QSignalSpy selfTest(window.privacyPage(), &PrivacyPage::selfTestFinished);
         window.privacyPage()->runNetworkSelfTest();
         QVERIFY(waitFinished(selfTest));
         QTest::qWait(200);
-        screenshot(&window, QStringLiteral("03-privacidade.png"));
+        screenshot(&window, QStringLiteral("04-privacidade.png"));
         env->ctx->helper()->stop();
     }
 };

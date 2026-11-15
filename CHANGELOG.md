@@ -69,6 +69,9 @@
   comportamental (`sandbox.*`: disponibilidade com o motivo, ativação gravada em `settings.json`, confirmação com as
   limitações, progresso, cancelamento, evidências) e Privacidade e rede (`system.info`, autoteste de rede, reinício
   do auxiliar). As páginas do núcleo entram com o `cpp/bridge` (A), sem telas provisórias.
+- Interface: página **Relatórios forenses** (varreduras do banco pelo novo método `reports.scans` do auxiliar, só
+  leitura; geração em HTML, JSON e PDF com as opções de privacidade; progresso; relatórios gerados com abertura do
+  arquivo ou da pasta). Utilitários de página (`scrollingPage`, `mutedLabel`) movidos para o `ui_kit`.
 - Distribuição (B10): `tools/make_distribution.py` monta a pasta do produto (interface, `gk-cli`, `gk-scanworker`,
   `gk-update`, `gk-helper` congelado, assinaturas, catálogo de ameaças, runtime MSVC, guias) com o manifesto de
   integridade assinado do núcleo (M10 do A) e o ZIP portátil, recusando chave privada, DLL de rede e DLLs conflitantes; `installer/gamekernel.iss` (Inno

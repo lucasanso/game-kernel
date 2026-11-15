@@ -10,6 +10,7 @@
 #include <QPainter>
 #include <QPalette>
 #include <QPixmap>
+#include <QScrollArea>
 #include <QStyleFactory>
 #include <QSvgRenderer>
 #include <QVBoxLayout>
@@ -41,6 +42,9 @@ const QHash<QString, QString>& iconPaths() {
         {"play", "<path d='M7 4l13 8-13 8z'/>"},
         {"stop", "<rect x='6' y='6' width='12' height='12' rx='1'/>"},
         {"trash", "<path d='M4 7h16'/><path d='M9 7V4h6v3'/><path d='M6 7l1 14h10l1-14'/>"},
+        {"file-text", "<path d='M14 3H6v18h12V7z'/><path d='M14 3v4h4'/><path d='M9 12h6'/><path d='M9 16h6'/>"},
+        {"folder", "<path d='M3 6.5A1.5 1.5 0 0 1 4.5 5H9l2 2h8.5A1.5 1.5 0 0 1 21 8.5v9a1.5 1.5 0 0 1-1.5 1.5h-15A1.5 1.5 0 0 1 3 17.5z'/>"},
+        {"sliders", "<path d='M4 6h9'/><path d='M17 6h3'/><circle cx='15' cy='6' r='2'/><path d='M4 12h3'/><path d='M11 12h9'/><circle cx='9' cy='12' r='2'/><path d='M4 18h11'/><path d='M19 18h1'/><circle cx='17' cy='18' r='2'/>"},
     };
     return paths;
 }
@@ -166,6 +170,29 @@ void applyTheme() {
     QApplication::setFont(font);
     qApp->setStyleSheet(styleSheet());
     QApplication::setWindowIcon(appIcon());
+}
+
+QWidget* scrollingPage(QWidget* page, QVBoxLayout** column) {
+    page->setObjectName(QStringLiteral("page"));
+    auto* scroll = new QScrollArea(page);
+    scroll->setWidgetResizable(true);
+    auto* content = new QWidget(scroll);
+    content->setObjectName(QStringLiteral("page"));
+    *column = new QVBoxLayout(content);
+    (*column)->setContentsMargins(0, 0, 8, 0);
+    (*column)->setSpacing(16);
+    scroll->setWidget(content);
+    auto* outer = new QVBoxLayout(page);
+    outer->setContentsMargins(0, 0, 0, 0);
+    outer->addWidget(scroll);
+    return content;
+}
+
+QLabel* mutedLabel(const QString& text, QWidget* parent) {
+    auto* l = new QLabel(text, parent);
+    l->setWordWrap(true);
+    l->setProperty("muted", true);
+    return l;
 }
 
 QTableWidget* makeTable(const QStringList& headers, QWidget* parent) {

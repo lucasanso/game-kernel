@@ -11,6 +11,7 @@ from pathlib import Path
 
 import pytest
 
+from gamekernel.core.models import RiskLevel
 from gamekernel.reports import engine as RE
 from gamekernel.reports.render_html import render_html
 from gamekernel.reports.render_pdf import render_pdf
@@ -265,3 +266,31 @@ def test_helper_lists_formats(helper):
 def test_signature_status_wording(fields, expected):
     from gamekernel.reports.render_html import _signature
     assert _signature(fields) == expected
+
+
+def test_helper_lists_scans_newest_first_without_touching_the_database(scan, helper):
+    db, scan_id = scan
+    before = db.path.stat().st_mtime_ns
+    result = helper.call("reports.scans", {"db_path": str(db.path), "limit": 10})
+    assert result["database_present"] is True and result["db_path"] == str(db.path)
+    row = next(s for s in result["scans"] if s["scan_id"] == scan_id)
+    assert row["status"] and row["mode"] and isinstance(row["targets"], list) and row["targets"]
+    assert row["max_risk"] == {"level": "CRITICAL", "label": RiskLevel.CRITICAL.label}
+    assert row["threats"] >= 1 and row["files_found"] >= row["files_analyzed"] >= 1
+    started = [s["started_at"] for s in result["scans"]]
+    assert started == sorted(started, reverse=True)
+    assert db.path.stat().st_mtime_ns == before
+
+
+def test_helper_scans_on_a_fresh_installation(helper, isolated_data_dir):
+    result = helper.call("reports.scans", {})
+    assert result == {"scans": [], "db_path": str(isolated_data_dir / "gamekernel.db"), "database_present": False}
+    assert not (isolated_data_dir / "gamekernel.db").exists()          # never created by a listing
+
+
+@pytest.mark.parametrize("params, field", [({"limit": 0}, "limit"), ({"limit": True}, "limit"),
+                                           ({"db_path": "relativo.db"}, "db_path")])
+def test_helper_scans_validates_parameters(helper, params, field):
+    with pytest.raises(HelperError) as exc:
+        helper.call("reports.scans", params)
+    assert exc.value.reason == "invalid_params" and exc.value.details.get("field") == field

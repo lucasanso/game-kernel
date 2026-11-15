@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import os
+import sqlite3
 from pathlib import Path
 from typing import Any
 
@@ -75,6 +76,30 @@ def generate(params: dict[str, Any], ctx: RequestContext) -> dict[str, Any]:
         raise P.ServiceError(P.Reason.IO_ERROR, f"sem permissão: {exc}") from None
 
 
+def scans(params: dict[str, Any], ctx: RequestContext) -> dict[str, Any]:
+    """Scans recorded in the database (read-only), newest first, to choose one for a report."""
+    unknown = sorted(set(params) - {"limit", "db_path"})
+    if unknown:
+        raise _invalid(f"parâmetros desconhecidos: {unknown}", fields=unknown)
+    limit = params.get("limit", 100)
+    if isinstance(limit, bool) or not isinstance(limit, int) or not 1 <= limit <= 1000:
+        raise _invalid("'limit' precisa ser um inteiro entre 1 e 1000", field="limit")
+    db_path = _abs_path(params, "db_path", app_paths.db_path())
+    if not db_path.is_file():   # fresh installation: nothing scanned yet (the database is never created here)
+        return {"scans": [], "db_path": str(db_path), "database_present": False}
+    try:
+        store = RE.ReadOnlyStore(db_path)
+    except RE.ReportError as exc:
+        raise P.ServiceError(P.Reason.NOT_FOUND, str(exc)) from None
+    try:
+        rows = store.list_scans(limit)
+    except sqlite3.DatabaseError as exc:
+        raise P.ServiceError(P.Reason.IO_ERROR, f"banco de dados ilegível: {exc}") from None
+    finally:
+        store.close()
+    return {"scans": rows, "db_path": str(db_path), "database_present": True}
+
+
 def formats(params: dict[str, Any], ctx: RequestContext) -> dict[str, Any]:
     available = ["json", "html"]
     detail = {}
@@ -92,4 +117,5 @@ def services() -> list[Service]:
     return [
         Service("reports.generate", generate, "Gera o relatório forense (JSON, HTML, PDF) de uma varredura."),
         Service("reports.formats", formats, "Formatos de relatório disponíveis nesta instalação."),
+        Service("reports.scans", scans, "Varreduras registradas no banco (somente leitura), da mais recente."),
     ]

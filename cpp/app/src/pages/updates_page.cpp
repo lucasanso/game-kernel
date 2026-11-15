@@ -14,7 +14,6 @@
 #include <QJsonArray>
 #include <QLabel>
 #include <QPushButton>
-#include <QScrollArea>
 #include <QTableWidget>
 #include <QtConcurrent>
 
@@ -69,18 +68,8 @@ QString UpdatesPage::describeError(const QString& code) {
 }
 
 UpdatesPage::UpdatesPage(AppContext* ctx, QWidget* parent) : QWidget(parent), ctx_(ctx) {
-    setObjectName(QStringLiteral("page"));
-    auto* scroll = new QScrollArea(this);
-    scroll->setWidgetResizable(true);
-    auto* content = new QWidget(scroll);
-    content->setObjectName(QStringLiteral("page"));
-    auto* col = new QVBoxLayout(content);
-    col->setContentsMargins(0, 0, 8, 0);
-    col->setSpacing(16);
-    scroll->setWidget(content);
-    auto* outer = new QVBoxLayout(this);
-    outer->setContentsMargins(0, 0, 0, 0);
-    outer->addWidget(scroll);
+    QVBoxLayout* col = nullptr;
+    QWidget* content = scrollingPage(this, &col);
 
     // ---- active set
     auto* state = new Card(QStringLiteral("Assinaturas instaladas"), content);

@@ -5,8 +5,8 @@ encontrou, onde (arquivo e posição), por que é suspeito e o que fazer. Nada q
 computador; a única execução possível é a análise comportamental, dentro de uma máquina virtual descartável sem
 rede, e só quando você confirma.
 
-> **Estado desta versão.** A interface gráfica já tem a Central de Atualização Offline, a análise comportamental e
-> Privacidade e rede. A varredura, os resultados e a quarentena funcionam hoje pela linha de comando (`gk-cli`,
+> **Estado desta versão.** A interface gráfica já tem a Central de Atualização Offline, a análise comportamental,
+> os Relatórios forenses e Privacidade e rede. A varredura, os resultados e a quarentena funcionam hoje pela linha de comando (`gk-cli`,
 > instalado junto). As telas de varredura entram na interface numa próxima versão. Limitações conhecidas:
 > `docs/LIMITATIONS.md`.
 
@@ -41,6 +41,20 @@ leitura.
 
 Um programa malicioso pode detectar a máquina virtual e não fazer nada; ausência de comportamento suspeito **não**
 prova que o arquivo é seguro.
+
+### Relatórios forenses
+Gera o relatório de uma varredura registrada neste computador (hoje, as feitas com o `gk-cli`).
+
+1. Escolha a varredura na lista (número, data, modo, alvos, ameaças, risco máximo). O banco é só lido.
+2. Marque os formatos: **HTML** (para ler; sem scripts e sem acesso à internet), **JSON** (para ferramentas) e
+   **PDF** (para arquivar).
+3. Opções de privacidade: por padrão o nome de usuário é ocultado nos caminhos e o nome do computador não entra.
+   Marque as opções só se for compartilhar o relatório com quem precisa desses dados.
+4. **Gerar relatório da varredura escolhida**. Ao terminar, **Abrir relatório** abre o HTML, e a lista
+   *Relatórios gerados* mostra tudo o que está na pasta de relatórios (clique duas vezes para abrir).
+
+O relatório traz as 15 seções da análise (resumo, ameaças, cracks, locais exatos, evidências, recomendações,
+limitações...) e um relatório individual para cada crack encontrado.
 
 ### Privacidade e rede
 * Mostra se o processo auxiliar está ativo e com o bloqueio de rede ligado.

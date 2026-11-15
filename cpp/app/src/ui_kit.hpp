@@ -41,6 +41,12 @@ QIcon icon(const QString& name, const QColor& color = palette::Text, int size = 
 QStringList iconNames();
 QIcon appIcon();                           // shield logo
 
+// Page skeleton shared by every page: a vertical scroll area whose content column is returned in *column
+// (cards are appended to it). Returns the content widget, the parent for the cards.
+QWidget* scrollingPage(QWidget* page, QVBoxLayout** column);
+// Secondary text (explanations, limitations, statuses): muted colour, word-wrapped.
+QLabel* mutedLabel(const QString& text, QWidget* parent);
+
 // Read-only tables with the product look (no grid, alternating rows, row selection).
 QTableWidget* makeTable(const QStringList& headers, QWidget* parent);
 // Height follows the content (up to maxRows visible rows; at least one row tall when empty).

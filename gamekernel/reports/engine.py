@@ -151,6 +151,29 @@ class ReadOnlyStore:
         d["max_risk"] = RiskLevel(d["max_risk"] or 0)
         return d
 
+    def list_scans(self, limit: int) -> list[dict]:
+        """Most recent scans first, with the counters the UI lists before a report is generated."""
+        rows = self.conn.execute(
+            "SELECT id, started_at, finished_at, mode, origin, label, targets, status, files_found, files_analyzed,"
+            " files_errors, threats, suspicious, pua, max_risk, error FROM scans ORDER BY started_at DESC, id DESC"
+            " LIMIT ?", (limit,)).fetchall()
+        out = []
+        for r in rows:
+            risk = RiskLevel(r["max_risk"] or 0)
+            try:
+                targets = json.loads(r["targets"] or "[]")
+            except ValueError:
+                targets = []
+            out.append({
+                "scan_id": r["id"], "started_at": _iso(r["started_at"]), "finished_at": _iso(r["finished_at"]),
+                "mode": r["mode"], "origin": r["origin"], "label": r["label"],
+                "targets": targets if isinstance(targets, list) else [], "status": r["status"],
+                "files_found": r["files_found"], "files_analyzed": r["files_analyzed"], "files_errors": r["files_errors"],
+                "threats": r["threats"], "suspicious": r["suspicious"], "pua": r["pua"],
+                "max_risk": {"level": risk.name, "label": risk.label}, "error": r["error"],
+            })
+        return out
+
     def grouped(self, scan_id: int, column: str) -> dict[str, int]:
         if column not in ("classification", "risk", "status", "crack_status"):
             raise ValueError(column)

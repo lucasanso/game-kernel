@@ -12,36 +12,12 @@
 #include <QLabel>
 #include <QProgressBar>
 #include <QPushButton>
-#include <QScrollArea>
 #include <QSpinBox>
 #include <QTableWidget>
 
 namespace gk::app {
 
 namespace {
-
-QWidget* scrollingPage(QWidget* page, QVBoxLayout** column) {
-    page->setObjectName(QStringLiteral("page"));
-    auto* scroll = new QScrollArea(page);
-    scroll->setWidgetResizable(true);
-    auto* content = new QWidget(scroll);
-    content->setObjectName(QStringLiteral("page"));
-    *column = new QVBoxLayout(content);
-    (*column)->setContentsMargins(0, 0, 8, 0);
-    (*column)->setSpacing(16);
-    scroll->setWidget(content);
-    auto* outer = new QVBoxLayout(page);
-    outer->setContentsMargins(0, 0, 0, 0);
-    outer->addWidget(scroll);
-    return content;
-}
-
-QLabel* mutedLabel(const QString& text, QWidget* parent) {
-    auto* l = new QLabel(text, parent);
-    l->setWordWrap(true);
-    l->setProperty("muted", true);
-    return l;
-}
 
 const char* kSampleFilter = "Executáveis e scripts (*.exe *.dll *.bat *.cmd *.ps1 *.vbs *.js *.msi)";
 

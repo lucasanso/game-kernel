@@ -9,12 +9,15 @@ from __future__ import annotations
 
 import json
 import re
+import shutil
 import sys
 
 from cryptography.hazmat.primitives import serialization
 from cryptography.hazmat.primitives.asymmetric.ed25519 import Ed25519PrivateKey
 
+from gamekernel.database.db import Database
 from gamekernel.updates import package as pkg
+from tests.corpus import sample_scan
 from tests.integration.native_build import BUILD_ROOT, ROOT, build_project, run_qtest
 
 YARA_RULE = '''rule GK_UI_Test
@@ -54,13 +57,19 @@ def test_desktop_application(isolated_data_dir, tmp_path):
         out = tmp_path / f"{name}.gkpkg"
         pkg.build_package(out, private, version, _components(tmp_path, name), publisher="Equipe de testes")
         packages[f"GK_TEST_PKG_{name}"] = str(out)
+    db = Database()                                   # realistic scan for the reports page (GK_TEST_DB)
+    scan_id = sample_scan.build(db)
+    db.close()
     shots = BUILD_ROOT / "native-app" / "screenshots"
+    shutil.rmtree(shots, ignore_errors=True)          # only this run's screenshots are compared
     code, report = run_qtest(exe, {"GK_PYTHON": sys.executable, "GK_REPO": str(ROOT), "GK_TEST_KEY": str(key),
                                    "GK_SCREENSHOT_DIR": str(shots), "GAMEKERNEL_DATA_DIR": str(isolated_data_dir),
+                                   "GK_TEST_DB": str(db.path), "GK_TEST_SCAN_ID": str(scan_id),
                                    **packages}, timeout=900)
     totals = re.search(r"Totals: (\d+) passed, (\d+) failed, (\d+) skipped", report)
     assert code == 0 and totals, report
     passed, failed, skipped = map(int, totals.groups())
     assert failed == 0 and skipped == 0, report
     assert passed >= 10, report
-    assert sorted(p.name for p in shots.glob("*.png")) == ["01-atualizacoes.png", "02-sandbox.png", "03-privacidade.png"]
+    assert sorted(p.name for p in shots.glob("*.png")) == ["01-atualizacoes.png", "02-sandbox.png", "03-relatorios.png",
+                                                           "04-privacidade.png"]
