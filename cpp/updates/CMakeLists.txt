@@ -38,7 +38,13 @@ target_link_libraries(gk_updates PUBLIC Qt6::Core PRIVATE ${GK_SODIUM_TARGET})
 target_compile_features(gk_updates PUBLIC cxx_std_20)
 target_compile_definitions(gk_updates PUBLIC QT_NO_CAST_FROM_BYTEARRAY)
 
-if(GK_UPDATES_WITH_YARA)
+if(TARGET gk_core)
+  # Product build from the repository root: YARA packages are validated by the core's own engine
+  # (gk::yara::validate_rules_dir), so a package is accepted only if the engine that loads it accepts it.
+  target_link_libraries(gk_updates PRIVATE gk_core)
+  target_compile_definitions(gk_updates PRIVATE GK_UPDATES_CORE_YARA)
+  message(STATUS "gk_updates: validação YARA pelo núcleo (gk::yara::validate_rules_dir)")
+elseif(GK_UPDATES_WITH_YARA)
   # vcpkg (Windows): static libyara exported with its dependencies (OpenSSL::Crypto, Crypt32, Ws2_32).
   # Note: Ws2_32 is pulled in by libyara for byte-order helpers (htonl/ntohl), not for sockets.
   find_package(unofficial-libyara CONFIG QUIET)

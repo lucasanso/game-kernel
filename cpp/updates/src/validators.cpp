@@ -11,7 +11,10 @@
 #include <QJsonParseError>
 #include <QRegularExpression>
 
-#if defined(GK_UPDATES_HAVE_YARA)
+#if defined(GK_UPDATES_CORE_YARA)
+#include "gk/text.hpp"
+#include "gk/yara_engine.hpp"
+#elif defined(GK_UPDATES_HAVE_YARA)
 #include <yara.h>
 #endif
 
@@ -254,7 +257,49 @@ ValidationResult validateClamavDir(const QString& dir) {
 }
 
 // ------------------------------------------------------------------------------------ YARA
-#if defined(GK_UPDATES_HAVE_YARA)
+#if defined(GK_UPDATES_CORE_YARA)
+// Product build (repository root): the core decides — the same compiler, external variables, refused
+// constructs (include, pe.signatures) and required metadata (category, severity with known values) as the
+// engine that will load the rules. The package-level checks (extensions, size, NUL bytes) stay here.
+bool yaraValidationAvailable() { return true; }
+
+ValidationResult validateYaraDir(const QString& dir) {
+    ValidationResult r;
+    const QFileInfoList files = filesIn(dir);
+    if (files.isEmpty()) {
+        report(r, QStringLiteral("componente YARA sem arquivos"));
+        return r;
+    }
+    for (const QFileInfo& fi : files) {
+        const QString ext = fi.suffix().toLower();
+        if (ext != "yar" && ext != "yara") {
+            report(r, QStringLiteral("%1: extensão não permitida").arg(fi.fileName()));
+            return r;
+        }
+        QFile f(fi.absoluteFilePath());
+        if (fi.size() > kMaxYaraFile || !f.open(QIODevice::ReadOnly)) {
+            report(r, QStringLiteral("%1: ilegível ou acima de 64 MB").arg(fi.fileName()));
+            return r;
+        }
+        if (f.readAll().contains('\0')) {
+            report(r, QStringLiteral("%1: byte nulo no arquivo de regras").arg(fi.fileName()));
+            return r;
+        }
+    }
+    try {
+        const gk::yara::CompileReport core = gk::yara::validate_rules_dir(gk::text::utf8_path(QDir(dir).absolutePath().toStdString()));
+        for (const auto& e : core.errors) report(r, QString::fromStdString(e));
+        for (const auto& w : core.warnings) report(r, QStringLiteral("aviso: ") + QString::fromStdString(w));
+        r.count = static_cast<qint64>(core.rule_count);
+        r.ok = core.ok && core.errors.empty() && r.count > 0;
+        if (core.ok && r.count == 0) report(r, QStringLiteral("nenhuma regra encontrada"));
+    } catch (const std::exception& e) {
+        report(r, QStringLiteral("validação YARA falhou: %1").arg(QString::fromUtf8(e.what())));
+    }
+    return r;
+}
+#elif defined(GK_UPDATES_HAVE_YARA)
+// Standalone development build (cmake -S cpp/updates): libyara directly. The product uses the core above.
 namespace {
 
 struct YaraCtx {

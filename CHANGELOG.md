@@ -61,6 +61,9 @@
 ## Agente B — Python, integração e ferramentas
 
 ### [não lançado]
+- **Pacotes de regras validados pelo núcleo**: no produto, a Central de Atualização e o `gk-update` aceitam um pacote
+  YARA só se o motor que vai carregá-lo aceita (`gk::yara::validate_rules_dir`); o núcleo agora recusa também categoria
+  desconhecida, severidade fora da escala, metadado vazio e componente sem regras, como o validador do publicador.
 - **Monitor de desempenho e otimizador (M12, tarefa do A assumida pelo B)**: `cpp/perf` — processador
   (GetSystemTimes), memória, disco e GPU por mecanismo / memória de vídeo por contadores PDH adicionados pelo nome em
   inglês (independem do idioma do Windows), placas de vídeo pelo DXGI, processos que mais usam processador, memória

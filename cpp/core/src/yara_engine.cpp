@@ -19,12 +19,14 @@
 #endif
 
 #include <algorithm>
+#include <array>
 #include <cstdio>
 #include <mutex>
 
 #include "gk/error.hpp"
 #include "gk/file_view.hpp"
 #include "gk/filetype.hpp"
+#include "gk/model.hpp"
 #include "gk/text.hpp"
 
 namespace gk::yara {
@@ -407,9 +409,26 @@ CompileReport validate_rules_dir(const std::filesystem::path& dir, const std::ve
     }
     auto rules = Rules::compile_files(files, report);
     if (rules) {
+        if (rules->rule_count() == 0) report.errors.emplace_back("nenhuma regra encontrada");
+        const bool wantsCategory = std::find(required_meta.begin(), required_meta.end(), "category") != required_meta.end();
+        const bool wantsSeverity = std::find(required_meta.begin(), required_meta.end(), "severity") != required_meta.end();
         for (const auto& [name, meta] : rules->metadata()) {
             for (const auto& key : required_meta) {
-                if (!meta.contains(key)) report.errors.push_back("regra " + name + " sem metadado obrigatório '" + key + "'");
+                const auto it = meta.find(key);
+                if (it == meta.end() || it->second.empty())
+                    report.errors.push_back("regra " + name + " sem metadado obrigatório '" + key + "'");
+            }
+            // The values the risk engine understands (same checks as the publisher, gamekernel/rules/prepare.py):
+            // a rule with an unknown category or severity would be classified by guesswork.
+            if (const auto it = meta.find("category"); wantsCategory && it != meta.end() && !it->second.empty() &&
+                                                       !category::known(it->second))
+                report.errors.push_back("regra " + name + ": categoria desconhecida '" + it->second + "'");
+            if (const auto it = meta.find("severity"); wantsSeverity && it != meta.end() && !it->second.empty()) {
+                std::string upper = it->second;
+                std::transform(upper.begin(), upper.end(), upper.begin(), [](unsigned char c) { return static_cast<char>(std::toupper(c)); });
+                static constexpr std::array<std::string_view, 5> kLevels{"INFO", "LOW", "MEDIUM", "HIGH", "CRITICAL"};
+                if (std::find(kLevels.begin(), kLevels.end(), upper) == kLevels.end())
+                    report.errors.push_back("regra " + name + ": severidade inválida '" + it->second + "'");
             }
         }
     }
