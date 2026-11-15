@@ -83,8 +83,13 @@ Config Config::defaults(const QString& appDir, const QString& dataDir) {
         if (!probe.cdUp()) break;
     }
     if (c.resourceDir.isEmpty()) c.resourceDir = appDir;
+    // Installed layout: next to the program. Build trees: cpp/<x>/ (single-config generators such as Ninja) or
+    // cpp/<x>/<Config>/ (Visual Studio), with the worker in cpp/worker/[<Config>/].
+    const QString config = QDir(appDir).dirName();
     for (const QString& candidate : {QDir(appDir).filePath(exe(QStringLiteral("gk-scanworker"))),
-                                     QDir(appDir).filePath(QStringLiteral("../worker/") + exe(QStringLiteral("gk-scanworker")))}) {
+                                     QDir(appDir).filePath(QStringLiteral("../worker/") + exe(QStringLiteral("gk-scanworker"))),
+                                     QDir(appDir).filePath(QStringLiteral("../../worker/") + config + QLatin1Char('/') +
+                                                           exe(QStringLiteral("gk-scanworker")))}) {
         if (QFileInfo(candidate).isExecutable()) {
             c.workerProgram = QFileInfo(candidate).absoluteFilePath();
             break;

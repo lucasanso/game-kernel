@@ -1,6 +1,7 @@
 #include "reports_page.hpp"
 
 #include "../ui_kit.hpp"
+#include "scan_table.hpp"
 
 #include <QCheckBox>
 #include <QDateTime>
@@ -20,24 +21,6 @@
 namespace gk::app {
 
 namespace {
-
-QString when(const QString& iso) {
-    const QDateTime t = QDateTime::fromString(iso, Qt::ISODate);
-    return t.isValid() ? t.toLocalTime().toString(QStringLiteral("dd/MM/yyyy HH:mm")) : QStringLiteral("—");
-}
-
-QString modeLabel(const QString& mode) {
-    if (mode == QLatin1String("deep")) return QStringLiteral("Completa");
-    if (mode == QLatin1String("quick")) return QStringLiteral("Rápida");
-    return mode;
-}
-
-QString statusLabel(const QString& status) {
-    static const QHash<QString, QString> labels{{"completed", "Concluída"}, {"cancelled", "Cancelada"},
-                                                {"failed", "Falhou"},       {"running", "Em andamento"},
-                                                {"interrupted", "Interrompida"}};
-    return labels.value(status, status);
-}
 
 QString stageLabel(const QString& stage) {
     static const QHash<QString, QString> labels{{"load", "Lendo a varredura no banco…"}, {"json", "Gerando o JSON…"},
@@ -72,14 +55,7 @@ ReportsPage::ReportsPage(AppContext* ctx, QWidget* parent) : QWidget(parent), ct
     auto* refreshButton = new QPushButton(icon(QStringLiteral("refresh")), QStringLiteral("Atualizar"), scansCard);
     scansHeader->addWidget(refreshButton, 0, Qt::AlignTop);
     scansCard->body()->addLayout(scansHeader);
-    scans_ = makeTable({"Nº", "Início", "Modo", "Alvos", "Arquivos", "Ameaças", "Suspeitos", "Risco máximo", "Situação"},
-                       scansCard);
-    // Paths are the long column: they stretch and are elided in the middle; the status fits its text.
-    scans_->horizontalHeader()->setSectionResizeMode(3, QHeaderView::Stretch);
-    scans_->horizontalHeader()->setSectionResizeMode(8, QHeaderView::ResizeToContents);
-    scans_->setTextElideMode(Qt::ElideMiddle);
-    scans_->setWordWrap(false);
-    scans_->setHorizontalScrollBarPolicy(Qt::ScrollBarAlwaysOff);
+    scans_ = makeScanTable(scansCard);
     scansCard->body()->addWidget(scans_);
     empty_ = mutedLabel(QString(), scansCard);
     empty_->setVisible(false);
@@ -176,21 +152,14 @@ void ReportsPage::refresh() {
     listGeneratedFiles();
 }
 
-qint64 ReportsPage::selectedScan() const {
-    const auto rows = scans_->selectionModel() ? scans_->selectionModel()->selectedRows() : QModelIndexList{};
-    if (rows.isEmpty()) return -1;
-    const QTableWidgetItem* item = scans_->item(rows.first().row(), 0);
-    return item ? item->data(Qt::UserRole).toLongLong() : -1;
-}
+qint64 ReportsPage::selectedScan() const { return selectedScanId(scans_); }
 
-bool ReportsPage::selectScan(qint64 scanId) {
-    for (int row = 0; row < scans_->rowCount(); ++row) {
-        if (scans_->item(row, 0)->data(Qt::UserRole).toLongLong() == scanId) {
-            scans_->selectRow(row);
-            return true;
-        }
-    }
-    return false;
+bool ReportsPage::selectScan(qint64 scanId) { return selectScanId(scans_, scanId); }
+
+void ReportsPage::focusScan(qint64 scanId) {
+    pendingFocus_ = scanId;
+    if (!selectScan(scanId)) refresh();   // selected once the list arrives (showScans)
+    else pendingFocus_ = -1;
 }
 
 int ReportsPage::scanCount() const { return scans_->rowCount(); }
@@ -234,42 +203,16 @@ void ReportsPage::updateButtons() {
 }
 
 void ReportsPage::showScans(const QJsonArray& scans, bool databasePresent) {
-    const qint64 previous = selectedScan();
-    scans_->setRowCount(0);
-    for (const auto& v : scans) {
-        const QJsonObject s = v.toObject();
-        const int row = scans_->rowCount();
-        scans_->insertRow(row);
-        auto* id = cell(QString::number(s.value("scan_id").toInteger()));
-        id->setData(Qt::UserRole, s.value("scan_id").toInteger());
-        QStringList targets;
-        for (const auto& t : s.value("targets").toArray()) targets << QDir::toNativeSeparators(t.toString());
-        const QJsonObject risk = s.value("max_risk").toObject();
-        auto* riskItem = cell(risk.value("label").toString());
-        riskItem->setForeground(riskColor(risk.value("level").toString()));
-        const QStringList texts{when(s.value("started_at").toString()), modeLabel(s.value("mode").toString()),
-                                targets.join(QStringLiteral("; ")),
-                                QString::number(s.value("files_found").toInteger()),
-                                QString::number(s.value("threats").toInteger()),
-                                QString::number(s.value("suspicious").toInteger() + s.value("pua").toInteger())};
-        scans_->setItem(row, 0, id);
-        for (int c = 0; c < texts.size(); ++c) scans_->setItem(row, c + 1, cell(texts[c]));
-        scans_->setItem(row, 7, riskItem);
-        QString status = statusLabel(s.value("status").toString());
-        if (!s.value("error").toString().isEmpty()) status += QStringLiteral(" — ") + s.value("error").toString();
-        scans_->setItem(row, 8, cell(status));
-    }
+    fillScanTable(scans_, scans);
     const bool none = scans.isEmpty();
     scans_->setVisible(!none);
     empty_->setVisible(none);
     if (none) {
         empty_->setText(databasePresent ? QStringLiteral("O banco não tem varreduras registradas.")
-                                        : QStringLiteral("Nenhuma varredura registrada neste computador ainda. As "
-                                                         "varreduras feitas com o gk-cli aparecem aqui (veja o guia de uso)."));
+                                        : QStringLiteral("Nenhuma varredura registrada neste computador ainda. Faça uma "
+                                                         "varredura em Segurança do jogo (ou com o gk-cli)."));
     }
-    fitTableToContents(scans_);
-    if (previous >= 0) selectScan(previous);
-    else if (!none) scans_->selectRow(0);
+    if (pendingFocus_ >= 0 && selectScan(pendingFocus_)) pendingFocus_ = -1;
     updateButtons();
     emit scansLoaded(scans_->rowCount());
 }

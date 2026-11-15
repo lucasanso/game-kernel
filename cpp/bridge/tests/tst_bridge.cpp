@@ -8,6 +8,7 @@
 #include <QDir>
 #include <QFile>
 #include <QFileInfo>
+#include <QJsonDocument>
 #include <QSignalSpy>
 #include <QTemporaryDir>
 #include <QtTest>
@@ -60,7 +61,8 @@ private slots:
         QVERIFY(wait(finished));
         QVERIFY(!scans.running());
         const QJsonObject summary = finished.takeFirst().at(0).toJsonObject();
-        QCOMPARE(summary.value("status").toString(), QStringLiteral("completed"));
+        QVERIFY2(summary.value("status").toString() == QLatin1String("completed"),
+                 qPrintable(QString::fromUtf8(QJsonDocument(summary).toJson(QJsonDocument::Compact))));
         QVERIFY(started.count() == 1 && started.first().at(0).toLongLong() > 0);
         const qint64 scanId = started.first().at(0).toLongLong();
         QCOMPARE(summary.value("scan_id").toInteger(), scanId);
@@ -110,7 +112,9 @@ private slots:
         QSignalSpy progress(&scans, &ScanService::progressChanged);
         QSignalSpy finished(&scans, &ScanService::finished);
         QVERIFY(scans.start({game.path()}, true));
-        QTRY_VERIFY_WITH_TIMEOUT(progress.count() > 0, 60000);
+        QTRY_VERIFY_WITH_TIMEOUT(progress.count() > 0 || finished.count() > 0, 60000);
+        QVERIFY2(finished.isEmpty(), qPrintable(QString::fromUtf8(
+                     QJsonDocument(finished.isEmpty() ? QJsonObject{} : finished.first().at(0).toJsonObject()).toJson())));
         scans.pause();
         QTRY_VERIFY_WITH_TIMEOUT(std::any_of(progress.begin(), progress.end(),
                                              [](const QList<QVariant>& a) { return a.at(0).toJsonObject().value("paused").toBool(); }),

@@ -2,6 +2,7 @@
 // the shared settings.json, the helper process client and factories for B's native services.
 #pragma once
 
+#include "gk/bridge/services.hpp"
 #include "gk/ipc/helper_client.hpp"
 #include "gk/updates/installer.hpp"
 
@@ -46,6 +47,15 @@ public:
     bool setSetting(const QString& dotted, const QJsonValue& value, QString* error = nullptr);
 
     gk::ipc::HelperClient* helper() const { return helper_; }
+
+    // Core services (cpp/bridge), created on first use. The installation is found from the executable's folder
+    // (resources, gk-scanworker); the data folder is this context's.
+    gk::bridge::Environment coreEnvironment() const;
+    gk::bridge::ScanService* scans();
+    gk::bridge::HistoryService* history();
+    gk::bridge::QuarantineService* quarantine();
+    gk::bridge::IntegrityService* integrity();
+    const gk::bridge::Catalog& catalog();
     std::unique_ptr<gk::updates::Installer> makeInstaller() const;
 
     // Every destructive or security-relevant action asks through this (tests replace it).
@@ -60,6 +70,11 @@ signals:
 private:
     QString dataDir_;
     QString resourceDir_;
+    gk::bridge::ScanService* scans_ = nullptr;
+    gk::bridge::HistoryService* history_ = nullptr;
+    gk::bridge::QuarantineService* quarantine_ = nullptr;
+    gk::bridge::IntegrityService* integrity_ = nullptr;
+    std::unique_ptr<gk::bridge::Catalog> catalog_;
     gk::ipc::HelperClient* helper_;
 };
 

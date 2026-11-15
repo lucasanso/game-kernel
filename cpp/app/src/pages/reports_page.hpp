@@ -27,6 +27,7 @@ public:
 
     void refresh();                              // formats, scans and generated files
     bool selectScan(qint64 scanId);              // false when the scan is not listed
+    void focusScan(qint64 scanId);               // select now, or as soon as the list (re)loads
     qint64 selectedScan() const;                 // -1 when nothing is selected
     bool generate();                             // false (and nothing sent) without a scan or a format
     int scanCount() const;
@@ -51,6 +52,7 @@ private:
     qint64 formatsCall_ = -1;
     qint64 generateCall_ = -1;
     QString lastReport_;
+    qint64 pendingFocus_ = -1;
     QTableWidget* scans_;
     QLabel* empty_;
     QCheckBox* html_;

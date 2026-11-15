@@ -7,6 +7,7 @@
 #include "gk/text.hpp"
 
 #include <QDir>
+#include <QFile>
 #include <QFileInfo>
 #include <QJsonDocument>
 #include <QMetaObject>
@@ -62,6 +63,32 @@ QJsonValue toQt(const nlohmann::json& value) {
 gk::scan::Config Environment::scanConfig() const { return gk::scan::Config::defaults(appDir, dataDir); }
 QString Environment::databaseFile() const { return QDir(dataDir).filePath(QStringLiteral("gamekernel.db")); }
 QString Environment::quarantineDir() const { return QDir(dataDir).filePath(QStringLiteral("quarantine")); }
+
+// ============================================================================================== catalog
+Catalog::Catalog(const Environment& env) {
+    QFile f(env.scanConfig().catalogFile());
+    if (f.open(QIODevice::ReadOnly) && f.size() < 8 * 1024 * 1024) {
+        const QJsonDocument doc = QJsonDocument::fromJson(f.readAll());
+        if (doc.isObject() && doc.object().value("format").toString() == QLatin1String("gamekernel-threat-catalog"))
+            root_ = doc.object();
+    }
+}
+
+QString Catalog::text(const char* section, const QString& code) const {
+    const QString t = root_.value(QLatin1String(section)).toObject().value(code).toString();
+    return t.isEmpty() ? code : t;   // unknown codes are shown as they are, never hidden
+}
+
+QString Catalog::classification(const QString& code) const { return text("classifications", code); }
+QString Catalog::crackStatus(const QString& code) const { return text("crack_status", code); }
+QString Catalog::evidenceSource(const QString& code) const { return text("evidence_sources", code); }
+QJsonObject Catalog::category(const QString& code) const {
+    return root_.value(QLatin1String("categories")).toObject().value(code).toObject();
+}
+QString Catalog::categoryLabel(const QString& code) const {
+    const QString label = category(code).value("label").toString();
+    return label.isEmpty() ? code : label;
+}
 
 // ================================================================================================ scans
 ScanService::ScanService(Environment env, QObject* parent) : QObject(parent), env_(std::move(env)) {

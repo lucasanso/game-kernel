@@ -31,6 +31,24 @@ struct Environment {
 // nlohmann::json <-> Qt JSON (exact round trip through the text form).
 QJsonValue toQt(const nlohmann::json& value);
 
+// pt-BR labels and explanations of the data contract (contracts/threat_catalog.json of the installation):
+// the UI shows exactly the texts the risk engine and the reports use.
+class Catalog {
+public:
+    explicit Catalog(const Environment& env);
+    [[nodiscard]] bool loaded() const { return !root_.isEmpty(); }
+    [[nodiscard]] QString classification(const QString& code) const;
+    [[nodiscard]] QString crackStatus(const QString& code) const;
+    [[nodiscard]] QString evidenceSource(const QString& code) const;
+    [[nodiscard]] QString categoryLabel(const QString& code) const;
+    // {label, can_do, data_at_risk, detection, limitations, ...} or empty.
+    [[nodiscard]] QJsonObject category(const QString& code) const;
+
+private:
+    QString text(const char* section, const QString& code) const;
+    QJsonObject root_;
+};
+
 // ------------------------------------------------------------------------------------------- scans
 class ScanService : public QObject {
     Q_OBJECT

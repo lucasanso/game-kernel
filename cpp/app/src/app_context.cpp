@@ -1,5 +1,6 @@
 #include "app_context.hpp"
 
+#include <QCoreApplication>
 #include <QDir>
 #include <QFile>
 #include <QFileInfo>
@@ -85,6 +86,35 @@ std::unique_ptr<gk::updates::Installer> AppContext::makeInstaller() const {
     QStringList problems;
     auto keys = gk::updates::loadTrustedKeys(trustedKeyDirs(), &problems);
     return std::make_unique<gk::updates::Installer>(signaturesRoot(), std::move(keys), appVersion());
+}
+
+gk::bridge::Environment AppContext::coreEnvironment() const {
+    return {QCoreApplication::applicationDirPath(), dataDir_};
+}
+
+gk::bridge::ScanService* AppContext::scans() {
+    if (!scans_) scans_ = new gk::bridge::ScanService(coreEnvironment(), this);
+    return scans_;
+}
+
+gk::bridge::HistoryService* AppContext::history() {
+    if (!history_) history_ = new gk::bridge::HistoryService(coreEnvironment(), this);
+    return history_;
+}
+
+gk::bridge::QuarantineService* AppContext::quarantine() {
+    if (!quarantine_) quarantine_ = new gk::bridge::QuarantineService(coreEnvironment(), this);
+    return quarantine_;
+}
+
+gk::bridge::IntegrityService* AppContext::integrity() {
+    if (!integrity_) integrity_ = new gk::bridge::IntegrityService(coreEnvironment(), this);
+    return integrity_;
+}
+
+const gk::bridge::Catalog& AppContext::catalog() {
+    if (!catalog_) catalog_ = std::make_unique<gk::bridge::Catalog>(coreEnvironment());
+    return *catalog_;
 }
 
 bool AppContext::ask(QWidget* parent, const QString& title, const QString& text) const {
