@@ -94,8 +94,9 @@ def _deploy_qt_runtime(executable: Path) -> None:
     tool = shutil.which("windeployqt") or shutil.which("windeployqt6")
     if not tool:
         _unavailable("windeployqt não encontrado (pasta bin do Qt fora do PATH)")
+    # Same plugin policy as the product (tools/make_distribution.py): no "generic" plugins, which pull Qt6Network.
     proc = subprocess.run([tool, "--no-translations", "--no-compiler-runtime", "--no-opengl-sw",
-                           "--no-system-d3d-compiler", str(executable)], capture_output=True, text=True, encoding="utf-8", errors="replace")
+                           "--no-system-d3d-compiler", "--skip-plugin-types", "generic", str(executable)], capture_output=True, text=True, encoding="utf-8", errors="replace")
     if proc.returncode != 0:
         pytest.fail(f"windeployqt falhou para {executable.name}:\n{proc.stdout[-3000:]}\n{proc.stderr[-3000:]}")
     # Headless tests use QT_QPA_PLATFORM=offscreen; windeployqt only deploys the qwindows platform plugin.

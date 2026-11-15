@@ -8,8 +8,12 @@ Esta página descreve o comportamento dos componentes já implementados e é atu
 * **Processos Python** (auxiliar `gk-helper`, ferramentas): `gamekernel/netguard.py` instala um *audit hook* antes
   de qualquer outro *import* e bloqueia conexões, DNS, `urllib`/`http`/`ftp`/`smtp` e `webbrowser`, além de
   limpar variáveis de *proxy*. Os testes confirmam o bloqueio dentro do auxiliar (`tests/helper`).
-* **Processos C++**: não vinculam bibliotecas de rede (verificação de *imports* no núcleo, Agente A). O canal entre o
-  aplicativo e o auxiliar usa **pipes anônimos**, não *sockets*.
+* **Processos C++**: não vinculam bibliotecas de rede. A verificação de *imports* cobre os binários do núcleo
+  (Agente A), a interface e tudo o que o instalador entrega (Agente B): nenhum deles importa funções de conexão,
+  resolução de nomes ou envio/recebimento (`connect`, `getaddrinfo`, `send`, `recv`, WinHTTP, WinINet...), e o
+  módulo de rede do Qt (`Qt6Network.dll`) não é distribuído. Única exceção, documentada e testada: o `Qt6Core.dll`
+  inicializa o Winsock (`WSAStartup`/`WSACleanup`/`WSAAsyncSelect`) para o laço de eventos do Qt, sem capacidade de
+  abrir conexões. O canal entre o aplicativo e o auxiliar usa **pipes anônimos**, não *sockets*.
 * **Atualizações**: só por arquivo local `.gkpkg` assinado; nada é baixado.
 * **Sandbox**: a máquina virtual roda com a rede desativada; tentativas de conexão da amostra são apenas registradas.
 

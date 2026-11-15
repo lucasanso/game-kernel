@@ -18,8 +18,16 @@ from tests.integration.native_build import ROOT, build_project
 from tests.native.test_offline_imports import FORBIDDEN_DLLS, WS2_ALLOWED, _elf_violations
 
 
+# Qt Core's Windows event dispatcher initialises Winsock and uses WSAAsyncSelect for QSocketNotifier; it cannot
+# resolve names or open connections by itself (that is QtNetwork, which is never shipped). Narrow, per-DLL
+# exception: connect/getaddrinfo/send/recv... stay forbidden everywhere, Qt included.
+PER_DLL_WS2_ALLOWED = {"qt6core.dll": {"WSAStartup", "WSACleanup", "WSAAsyncSelect"}}
+
+
 def _pe_violations(path) -> list[str]:
     import pefile
+
+    allowed = WS2_ALLOWED | PER_DLL_WS2_ALLOWED.get(Path(path).name.lower(), set())
 
     pe = pefile.PE(str(path), fast_load=True)
     try:
@@ -29,7 +37,7 @@ def _pe_violations(path) -> list[str]:
             dll = entry.dll.decode("ascii", "replace").lower()
             for imp in entry.imports:
                 name = imp.name.decode("ascii", "replace") if imp.name else f"#{imp.ordinal}"
-                if dll in FORBIDDEN_DLLS or (dll == "ws2_32.dll" and name not in WS2_ALLOWED):
+                if dll in FORBIDDEN_DLLS or (dll == "ws2_32.dll" and name not in allowed):
                     problems.append(f"{path.name}: {dll}!{name}")
         return problems
     finally:
@@ -149,3 +157,13 @@ def test_load_closure_follows_only_what_the_program_loads(tmp_path):
     assert "qt6network.dll" not in closure and "qt6test.dll" not in closure
     write("styles/qmodernwindowsstyle.dll", {"qt6network.dll": ["g"]})   # a plugin the program loads
     assert _load_closure(exe)["qt6network.dll"] == "qmodernwindowsstyle.dll"
+
+
+def test_qt_core_event_dispatcher_exception_is_narrow(tmp_path):
+    winsock_init = {"ws2_32.dll": ["WSAStartup", "WSACleanup", "WSAAsyncSelect"]}
+    (tmp_path / "Qt6Core.dll").write_bytes(_pe_with_imports(winsock_init))
+    assert _pe_violations(tmp_path / "Qt6Core.dll") == []
+    (tmp_path / "Qt6Core.dll").write_bytes(_pe_with_imports({"ws2_32.dll": ["WSAStartup", "connect"]}))
+    assert _pe_violations(tmp_path / "Qt6Core.dll") == ["Qt6Core.dll: ws2_32.dll!connect"]
+    (tmp_path / "GameKernel.exe").write_bytes(_pe_with_imports(winsock_init))       # not allowed for our code
+    assert len(_pe_violations(tmp_path / "GameKernel.exe")) == 3

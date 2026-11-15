@@ -144,9 +144,11 @@ def _deploy_qt(exe: Path, windeployqt: str | None) -> None:
     tool = windeployqt or shutil.which("windeployqt") or shutil.which("windeployqt6")
     if not tool:
         raise DistributionError("windeployqt não encontrado (Qt 6 no PATH ou --windeployqt)")
+    # --skip-plugin-types generic: Qt's "generic" input plugins (TUIO touch over UDP) need Qt6Network, which
+    # would otherwise be deployed although the application never loads it (found by the assembly check).
     proc = subprocess.run([tool, "--release", "--no-translations", "--no-system-d3d-compiler", "--no-opengl-sw",
-                           "--no-compiler-runtime", str(exe)], capture_output=True, text=True, encoding="utf-8",
-                          errors="replace")
+                           "--no-compiler-runtime", "--skip-plugin-types", "generic", str(exe)],
+                          capture_output=True, text=True, encoding="utf-8", errors="replace")
     if proc.returncode != 0:
         raise DistributionError(f"windeployqt falhou:\n{proc.stdout[-3000:]}\n{proc.stderr[-3000:]}")
 
