@@ -292,22 +292,16 @@ Com o A indisponível, o usuário pediu ao B que assumisse as tarefas dele (regi
 
 ## Pendências
 
-1. **P1 — Nome do produto: decidido pelo usuário em 2026-11-15 — "Game Kernel".** (Para o A: atualizar o §4 da `WORK_SPLIT.md`; `gk::kProductName` e a interface já usam esse nome.)
+1. **P1 — Nome do produto: decidido pelo usuário em 2026-11-15 — "Game Kernel".** (Para o A: atualizar o §4 da `WORK_SPLIT.md`.)
 2. **P2 — Interface com o B** (usuário): proposta dos dois agentes, sem objeção até agora.
-3. **Para o A — `add_subdirectory(cpp/app)`** no `CMakeLists.txt` da raiz quando Qt 6 Widgets e Svg estiverem
-   disponíveis. O app já compila sozinho (`cmake -S cpp/app`).
-4. **Para o A — `gk_native` na CI do produto**: a `ci.yml` não compila o `gk_native`, então os testes do A aparecem
-   como pulados nela (a `core-ci` os cobre). Se o A preferir uma CI única, incluo o *preset* do núcleo na `ci.yml`.
-5. **`signatures/keys/`** (B): a chave pública de *release* é derivada da chave que assina o manifesto (`--key`) e
-   gravada na montagem; a privada nunca é versionada nem chega à CI. Pacotes da CI usam uma chave efêmera e não são
-   para distribuição.
-6. **Para o A — falha do motor de risco não pode rebaixar o resultado**: sem `contracts/threat_catalog.json`, o
-   `gk-cli` terminou a varredura como `completed` e classificou um EICAR com evidências YARA, de assinatura e de
-   reputação como `unknown`/`NONE`, com apenas um *warning* ("Motor de risco: não foi possível abrir ..."). Uma
-   falha interna da avaliação deveria dar `inconclusive` (ou falhar a varredura), nunca "desconhecido, sem risco".
-   (Achado pelo teste de ponta a ponta da distribuição; o lado do B já leva o catálogo.)
-7. **Para o A — `gk-cli` e a versão portátil**: o `default_data_dir()` do `gk-cli` ignora o `portable.flag`
-   (o `app_paths.py` e a interface respeitam). Na versão portátil, a CLI sem `--data-dir` grava em
-   `%LOCALAPPDATA%\GameKernel`, separada dos dados da interface.
-8. **Para o A — primeira compilação MSVC de `cpp/scan` e `cpp/cli`**: a `core-ci` Windows não instala Qt, então
-   essas partes (e `cpp/ipc`/`cpp/updates` com `/WX`) só passam a ser compiladas com MSVC no job `windows-package`.
+3. ~~`add_subdirectory(cpp/app)` na raiz~~ — feito (tarefas do A assumidas pelo B).
+4. **`gk_native` na CI do produto**: a `ci.yml` não compila o `gk_native`, então os testes do núcleo via Python
+   aparecem como pulados nela (a `core-ci` do A os cobre). Os testes do produto (`gk-cli`, *bridge*, tempo real,
+   desempenho, interface, `gk-update` do produto) rodam na `ci.yml` em Linux e Windows.
+5. **`signatures/keys/`**: a chave pública de *release* é derivada da chave que assina o manifesto (`--key`) e
+   gravada na montagem; a privada nunca é versionada nem chega à CI. Pacotes da CI usam uma chave efêmera.
+6. ~~Falha do motor de risco não pode rebaixar o resultado~~ — feito (`inconclusive`, à prova de falha).
+7. **Limites conhecidos, ditos ao usuário**: a proteção em tempo real não bloqueia a execução antes da análise (exigiria
+   um *driver* de sistema) e só funciona com o programa aberto (inclusive na área de notificação); o otimizador não
+   altera configurações do Windows; métricas de GPU só no Windows 10 1709 ou mais novo.
+8. **Para o A, ao voltar**: mesclar esta branch antes de continuar (registro completo no §6 da `WORK_SPLIT.md`).
