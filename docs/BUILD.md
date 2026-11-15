@@ -93,6 +93,7 @@ Nenhum segredo é usado; a chave privada de *release* nunca chega à CI.
    `portable.flag` na pasta instalada, e confere o manifesto antes de gerar o ZIP.
 5. Instalador: `iscc /DAppVersion=<versão> /DSourceDir=<dist\GameKernel> /DOutputDir=dist installer\gamekernel.iss`.
 
+Passo a passo de uma versão oficial (chave de *release*, assinatura de código, conferência): `docs/RELEASE.md`.
 A chave privada de *release* nunca chega à CI: os pacotes da CI são assinados com uma chave efêmera gerada no
 próprio job (a pública vai em `signatures/keys`, a privada some com a máquina) e servem para teste, não para
 distribuição. O job `windows-package` da CI faz todos os passos, instala em silêncio, testa o

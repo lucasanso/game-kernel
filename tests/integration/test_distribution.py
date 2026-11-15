@@ -197,6 +197,15 @@ def test_cli_requires_an_explicit_signing_choice(parts, capsys):
     assert capsys.readouterr().out.strip().splitlines()[-1] == MD.product_version()
 
 
+def test_ui_and_core_share_the_product_version():
+    """The installer, the UI and VERSIONINFO use cpp/app's version; the core (gk::kVersion, gk-cli --version)
+    uses the root project's. A release with two different numbers would be confusing and unauditable."""
+    import re
+    root = (ROOT / "CMakeLists.txt").read_text(encoding="utf-8")
+    core = re.search(r"project\(GameKernel VERSION (\d+\.\d+\.\d+)", root)
+    assert core and core.group(1) == MD.product_version()
+
+
 def test_installer_script_matches_the_distribution():
     iss = (ROOT / "installer" / "gamekernel.iss").read_text(encoding="utf-8-sig")
     assert '#define AppExe "GameKernel.exe"' in iss

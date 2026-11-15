@@ -333,8 +333,14 @@ void PrivacyPage::onSucceeded(qint64 id, const QJsonValue& result) {
     if (id == infoCall_) {
         infoCall_ = -1;
         const bool guard = r.value("netguard").toBool();
-        helperPill_->set(guard ? QStringLiteral("Ativo e offline") : QStringLiteral("Sem bloqueio de rede"),
-                         guard ? StatusPill::Tone::Good : StatusPill::Tone::Bad);
+        const QJsonObject missing = r.value("unavailable_services").toObject();
+        unavailable_ = missing.keys();
+        if (!guard)
+            helperPill_->set(QStringLiteral("Sem bloqueio de rede"), StatusPill::Tone::Bad);
+        else if (!missing.isEmpty())
+            helperPill_->set(QStringLiteral("Offline, com serviços indisponíveis"), StatusPill::Tone::Warning);
+        else
+            helperPill_->set(QStringLiteral("Ativo e offline"), StatusPill::Tone::Good);
         helperDetails_->setText(QStringLiteral("Versão %1 · protocolo %2 · Python %3 · %4\nBloqueio de rede (netguard): %5 · "
                                                "tentativas bloqueadas nesta sessão: %6")
                                     .arg(r.value("version").toString())
@@ -343,6 +349,14 @@ void PrivacyPage::onSucceeded(qint64 id, const QJsonValue& result) {
                                          r.value("frozen").toBool() ? QStringLiteral("empacotado") : QStringLiteral("desenvolvimento"),
                                          guard ? QStringLiteral("ativo") : QStringLiteral("INATIVO"))
                                     .arg(r.value("network_blocked_attempts").toInt()));
+        if (!missing.isEmpty()) {
+            QStringList lines;
+            for (auto it = missing.begin(); it != missing.end(); ++it)
+                lines << QStringLiteral("• %1 — %2").arg(it.key(), it.value().toString());
+            helperDetails_->setText(helperDetails_->text() +
+                                    QStringLiteral("\nServiços que não carregaram (reinstale o Game Kernel):\n") +
+                                    lines.join('\n'));
+        }
         emit helperChecked(guard);
     } else if (id == selfTestCall_) {
         selfTestCall_ = -1;
@@ -369,6 +383,8 @@ void PrivacyPage::onSucceeded(qint64 id, const QJsonValue& result) {
         emit selfTestFinished(ok);
     }
 }
+
+QString PrivacyPage::helperStatus() const { return helperPill_->text(); }
 
 void PrivacyPage::onFailed(qint64 id, const gk::ipc::CallError& error) {
     if (id == infoCall_) {

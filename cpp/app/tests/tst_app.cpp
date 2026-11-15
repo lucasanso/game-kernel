@@ -331,6 +331,22 @@ private slots:
         env->ctx->helper()->stop();
     }
 
+    void privacyShowsServicesThatFailedToLoad() {
+        auto env = std::make_unique<Env>();
+        auto cfg = gk::ipc::HelperConfig::forDevelopment(qEnvironmentVariable("GK_PYTHON"), qEnvironmentVariable("GK_REPO"),
+                                                         env->data.path());
+        cfg.arguments = {QStringLiteral("-I"),
+                         QDir(qEnvironmentVariable("GK_REPO")).filePath(QStringLiteral("tests/helper/fault_helper.py")),
+                         QStringLiteral("--unavailable-service")};
+        env->ctx = std::make_unique<AppContext>(env->data.path(), env->resources.path(), cfg);
+        PrivacyPage page(env->ctx.get());
+        QSignalSpy checked(&page, &PrivacyPage::helperChecked);
+        QVERIFY(waitFinished(checked));
+        QCOMPARE(page.unavailableServices(), QStringList{QStringLiteral("gamekernel.helper.services.sandbox")});
+        QVERIFY(page.helperStatus().contains(QStringLiteral("indisponíveis")));
+        env->ctx->helper()->stop();
+    }
+
     void mainWindowNavigationNotificationsAndScreenshots() {
         auto env = makeEnv(true, true);
         MainWindow window(env->ctx.get());

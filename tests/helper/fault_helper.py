@@ -83,5 +83,10 @@ SERVICES = [H.Service(name, fn) for name, fn in {
 }.items()]
 
 if __name__ == "__main__":
+    if "--unavailable-service" in sys.argv:
+        # Simulates a build that left a service module out (as the frozen helper once did with sandbox.*):
+        # system.info must report it, and the UI must show it.
+        from gamekernel.helper import services as S
+        S.IMPORT_ERRORS["gamekernel.helper.services.sandbox"] = "ModuleNotFoundError: simulado pelo teste"
     reader, writer = H.claim_stdio()
     sys.exit(H.HelperServer(reader, writer, SERVICES, max_frame=MAX_FRAME).serve())

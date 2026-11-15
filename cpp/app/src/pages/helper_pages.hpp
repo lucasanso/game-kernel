@@ -71,6 +71,8 @@ public:
     void runNetworkSelfTest();
     void restartHelper();
     QString lastSelfTestVerdict() const { return verdict_; }   // "ok", "falha" or empty
+    QStringList unavailableServices() const { return unavailable_; }   // from system.info
+    QString helperStatus() const;                                    // text of the status badge
 
 signals:
     void helperChecked(bool ok);
@@ -84,6 +86,7 @@ private:
     qint64 infoCall_ = -1;
     qint64 selfTestCall_ = -1;
     QString verdict_;
+    QStringList unavailable_;
     StatusPill* helperPill_;
     QLabel* helperDetails_;
     StatusPill* netPill_;

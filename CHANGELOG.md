@@ -69,6 +69,9 @@
   comportamental (`sandbox.*`: disponibilidade com o motivo, ativação gravada em `settings.json`, confirmação com as
   limitações, progresso, cancelamento, evidências) e Privacidade e rede (`system.info`, autoteste de rede, reinício
   do auxiliar). As páginas do núcleo entram com o `cpp/bridge` (A), sem telas provisórias.
+- `docs/RELEASE.md`: como publicar uma versão (chave de *release*, assinatura de código, montagem, instalador,
+  conferência em máquina limpa, pacotes de assinaturas, decisões sobre ClamAV e Sysmon); teste que exige a mesma
+  versão no núcleo e na interface; a página Privacidade e rede mostra serviços do auxiliar que não carregaram.
 - Interface: página **Configurações** só com opções que têm efeito hoje (padrões de privacidade dos relatórios, aviso
   de assinaturas desatualizadas, análise comportamental com Sysmon opcional, pasta de dados), validadas com as faixas
   do `config.py`, gravadas de forma atômica preservando as demais chaves e propagadas na hora para as outras páginas
