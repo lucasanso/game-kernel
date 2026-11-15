@@ -28,6 +28,7 @@ public:
     void clearTargets();
     QStringList targets() const;
     void setDeep(bool deep);
+    [[nodiscard]] bool deep() const;
     bool start();                                   // false without targets or while a scan runs
     void pause();
     void resume();

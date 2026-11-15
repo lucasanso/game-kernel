@@ -60,7 +60,7 @@ QJsonValue toQt(const nlohmann::json& value) {
     return QJsonDocument::fromJson(QByteArray::fromStdString(nlohmann::json::array({value}).dump())).array().at(0);
 }
 
-gk::scan::Config Environment::scanConfig() const { return gk::scan::Config::defaults(appDir, dataDir); }
+gk::scan::Config Environment::scanConfig() const { return gk::scan::Config::load(appDir, dataDir); }
 QString Environment::databaseFile() const { return QDir(dataDir).filePath(QStringLiteral("gamekernel.db")); }
 QString Environment::quarantineDir() const { return QDir(dataDir).filePath(QStringLiteral("quarantine")); }
 
@@ -128,7 +128,8 @@ bool ScanService::start(const QStringList& targets, bool deep, const QString& la
     gk::scan::Scanner* scanner = scanner_;
     QMetaObject::invokeMethod(
         scanner_,
-        [this, scanner, request] {
+        [this, scanner, request, config = env_.scanConfig()] {
+            scanner->setConfig(config);   // settings.json as it is now (the scanner is idle here)
             const qint64 id = scanner->start(request);   // returns after enumeration; 0 = could not start
             QMetaObject::invokeMethod(this, [this, id] {
                 if (id > 0) {
@@ -407,7 +408,10 @@ bool RealtimeService::supported() { return gk::realtime::DirectoryWatcher::suppo
 
 void RealtimeService::apply(const gk::realtime::Settings& settings) {
     gk::realtime::Monitor* monitor = monitor_;
-    QMetaObject::invokeMethod(monitor_, [monitor, settings] { monitor->apply(settings); }, Qt::QueuedConnection);
+    QMetaObject::invokeMethod(monitor_, [monitor, settings, config = env_.scanConfig()] {
+        monitor->setScanConfig(config);   // exclusions, limits and workers of settings.json as they are now
+        monitor->apply(settings);
+    }, Qt::QueuedConnection);
 }
 
 qint64 RealtimeService::listEvents(int limit) {

@@ -6,11 +6,13 @@
 #include <QElapsedTimer>
 #include <QFile>
 #include <QFileInfo>
+#include <QJsonArray>
 #include <QJsonDocument>
 #include <QProcess>
 #include <QStandardPaths>
 #include <QTimer>
 
+#include <algorithm>
 #include <chrono>
 
 #include "gk/authenticode.hpp"
@@ -101,6 +103,62 @@ Config Config::defaults(const QString& appDir, const QString& dataDir) {
     return c;
 }
 
+Config Config::load(const QString& appDir, const QString& dataDir) {
+    Config c = defaults(appDir, dataDir);
+    QFile f(QDir(dataDir).filePath(QStringLiteral("settings.json")));
+    if (f.open(QIODevice::ReadOnly) && f.size() < 4 * 1024 * 1024) {
+        const QJsonDocument doc = QJsonDocument::fromJson(f.readAll());
+        if (doc.isObject()) c.applySettings(doc.object());
+    }
+    return c;
+}
+
+void Config::applySettings(const QJsonObject& settings) {
+    const QJsonObject scan = settings.value("scan").toObject();
+    auto number = [&scan](const char* key, qint64 lo, qint64 hi, qint64* out) {
+        const QJsonValue v = scan.value(QLatin1String(key));
+        if (v.isDouble()) *out = std::clamp<qint64>(static_cast<qint64>(v.toDouble()), lo, hi);
+        return v.isDouble();
+    };
+    qint64 n = 0;
+    if (number("max_workers", 1, 32, &n)) workers = static_cast<int>(n);
+    if (number("max_file_size_mb", 8, 16384, &n)) enumeration.max_analysis_bytes = static_cast<std::uint64_t>(n) << 20;
+    if (number("max_archive_depth", 0, 10, &n)) archiveLimits.insert(QStringLiteral("max_depth"), n);
+    if (number("max_archive_total_mb", 16, 65536, &n)) archiveLimits.insert(QStringLiteral("max_total_bytes"), n << 20);
+    if (number("max_archive_members", 10, 1000000, &n)) archiveLimits.insert(QStringLiteral("max_members"), n);
+    if (number("max_compression_ratio", 10, 10000, &n)) archiveLimits.insert(QStringLiteral("max_ratio"), n);
+    if (number("max_member_size_mb", 1, 4096, &n)) archiveLimits.insert(QStringLiteral("max_member_bytes"), n << 20);
+    if (scan.value("excluded_paths").isArray()) {
+        enumeration.excluded_paths.clear();
+        for (const auto& p : scan.value("excluded_paths").toArray())
+            if (!p.toString().trimmed().isEmpty()) enumeration.excluded_paths.push_back(p.toString().trimmed().toStdString());
+    }
+    if (scan.value("excluded_extensions").isArray()) {
+        enumeration.excluded_extensions.clear();
+        for (const auto& e : scan.value("excluded_extensions").toArray()) {
+            const QString ext = e.toString().trimmed().toLower();
+            if (ext.isEmpty() || ext == QLatin1String(".")) continue;
+            enumeration.excluded_extensions.push_back((ext.startsWith('.') ? ext : QLatin1Char('.') + ext).toStdString());
+        }
+    }
+    const QJsonObject types = scan.value("file_types").toObject();
+    auto type = [&types](const char* key, bool* field) {
+        if (types.value(QLatin1String(key)).isBool()) *field = types.value(QLatin1String(key)).toBool();
+    };
+    type("executables", &enumeration.types.executables);
+    type("libraries", &enumeration.types.libraries);
+    type("drivers", &enumeration.types.drivers);
+    type("scripts", &enumeration.types.scripts);
+    type("archives", &enumeration.types.archives);
+    type("installers", &enumeration.types.installers);
+    type("java", &enumeration.types.java);
+    type("shortcuts", &enumeration.types.shortcuts);
+    type("data_sniffing", &enumeration.types.data_sniffing);
+    const QJsonObject clamav = settings.value("engines").toObject().value("clamav").toObject();
+    if (clamav.value("enabled").isBool() && !clamav.value("enabled").toBool()) clamscan.clear();
+    if (clamav.value("batch_size").isDouble()) clamavBatch = std::clamp(clamav.value("batch_size").toInt(), 10, 5000);
+}
+
 QStringList Config::trustedKeyDirs() const { return {QDir(resourceDir).filePath(QStringLiteral("signatures/keys"))}; }
 
 QStringList Config::detectionRuleDirs() const {
@@ -134,6 +192,12 @@ QString Config::databaseFile() const { return QDir(dataDir).filePath(QStringLite
 
 Scanner::Scanner(Config config, QObject* parent) : QObject(parent), config_(std::move(config)) {
     qRegisterMetaType<gk::scan::Progress>();
+}
+
+bool Scanner::setConfig(const Config& config) {
+    if (running_) return false;
+    config_ = config;
+    return true;
 }
 
 Scanner::~Scanner() {

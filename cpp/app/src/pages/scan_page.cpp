@@ -134,6 +134,13 @@ ScanPage::ScanPage(AppContext* ctx, QWidget* parent) : QWidget(parent), ctx_(ctx
     connect(startButton_, &QPushButton::clicked, this, &ScanPage::start);
     connect(pauseButton_, &QPushButton::clicked, this, [this] { paused_ ? resume() : pause(); });
     connect(cancelButton_, &QPushButton::clicked, this, &ScanPage::cancel);
+    // The default mode chosen in Configurações applies to the next scan (not to one already running).
+    connect(ctx_, &AppContext::settingChanged, this, [this](const QString& key) {
+        if (key != QLatin1String("scan.default_mode") || running()) return;
+        const bool deep = ctx_->setting(QStringLiteral("scan.default_mode"), QStringLiteral("deep")).toString() != QLatin1String("quick");
+        deep_->setChecked(deep);
+        quick_->setChecked(!deep);
+    });
     connect(resultsButton_, &QPushButton::clicked, this, [this] {
         if (scanId_ > 0) emit openResults(scanId_);
     });
@@ -156,6 +163,8 @@ QStringList ScanPage::targets() const {
     for (int i = 0; i < targets_->count(); ++i) out << targets_->item(i)->text();
     return out;
 }
+
+bool ScanPage::deep() const { return deep_->isChecked(); }
 
 void ScanPage::setDeep(bool deep) { (deep ? deep_ : quick_)->setChecked(true); }
 

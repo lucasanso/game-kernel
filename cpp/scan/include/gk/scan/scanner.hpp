@@ -45,6 +45,11 @@ struct Config {
 
     // Defaults for an installation or a development checkout (searches parents of appDir for resources).
     static Config defaults(const QString& appDir, const QString& dataDir);
+    // defaults() plus the user's choices in <dataDir>/settings.json (the file gamekernel/config.py defines).
+    static Config load(const QString& appDir, const QString& dataDir);
+    // Applies scan.* and engines.clamav.* of a settings document, with the ranges of config.py; missing or
+    // invalid values keep the current ones.
+    void applySettings(const QJsonObject& settings);
     QStringList detectionRuleDirs() const;
     QString indicatorFile() const;
     QStringList iocDirs() const;
@@ -77,6 +82,8 @@ class Scanner : public QObject {
 public:
     explicit Scanner(Config config, QObject* parent = nullptr);
     ~Scanner() override;
+    // New settings for the next scan; ignored (false) while a scan runs.
+    bool setConfig(const Config& config);
 
     // Starts a scan. Returns the scan id (0 when it could not start; see `finished`).
     qint64 start(const Request& request);

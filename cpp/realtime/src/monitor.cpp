@@ -99,6 +99,13 @@ Monitor::~Monitor() {
 
 void Monitor::setTickInterval(int ms) { timer_->setInterval(std::max(10, ms)); }
 
+void Monitor::setScanConfig(gk::scan::Config config) {
+    config.clamscan.clear();   // see the constructor
+    config.dataDir = config_.dataDir;
+    config_ = std::move(config);
+    configChanged_ = true;
+}
+
 void Monitor::apply(const Settings& requested) {
     Settings s = requested;
     s.batchSeconds = std::clamp(s.batchSeconds, 2, 300);
@@ -189,7 +196,8 @@ void Monitor::tick() {
 }
 
 void Monitor::ensureScanner() {
-    if (scanner_ && scannerWorkers_ == settings_.workers) return;
+    if (scanner_ && scannerWorkers_ == settings_.workers && !configChanged_) return;
+    configChanged_ = false;
     if (scanner_) {
         scanner_->disconnect(this);
         scanner_->deleteLater();

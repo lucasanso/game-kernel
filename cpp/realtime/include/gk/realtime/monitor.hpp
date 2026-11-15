@@ -60,6 +60,8 @@ public:
     [[nodiscard]] QJsonObject status() const;
     [[nodiscard]] bool active() const { return watcher_->active(); }
     void setTickInterval(int ms);   // how often pending changes are looked at (default 1 s)
+    // Scan settings for the next batches (the next batch uses a scanner built with them).
+    void setScanConfig(gk::scan::Config config);
 
 signals:
     // {enabled, active, supported, folders:[{path, watching, error}], pending, scanning, batches, files_scanned,
@@ -94,6 +96,7 @@ private:
     DirectoryWatcher* watcher_;
     gk::scan::Scanner* scanner_ = nullptr;
     int scannerWorkers_ = 0;
+    bool configChanged_ = false;
     QTimer* timer_;
     QElapsedTimer clock_;
     ChangeBatcher batcher_;

@@ -256,6 +256,18 @@ Com o A indisponível, o usuário pediu ao B que assumisse as tarefas dele (regi
   usuário); casos no `tst_bridge.cpp` e no `tst_app.cpp` (capturas `07-desempenho.png` e `08-otimizador.png`); limpos
   sob ASan/UBSan.
 
+### Opções de varredura lidas pelo núcleo
+
+* `gk::scan::Config::load(appDir, dataDir)` = padrões + `settings.json` (`applySettings`: `scan.max_workers`,
+  `max_file_size_mb`, limites de compactados, `file_types`, `excluded_paths`/`excluded_extensions`,
+  `engines.clamav.enabled`/`batch_size`, nas faixas do `config.py`). Usado pela varredura da interface (relido a cada
+  varredura, `Scanner::setConfig`), pela proteção em tempo real (`Monitor::setScanConfig`) e pelo `gk-cli` (opções da
+  linha de comando têm prioridade). Teste: `test_settings_json_is_honoured`.
+* Configurações → bloco **Varredura** (modo padrão, processos, tamanho máximo, compactados, ClamAV, pastas e extensões
+  excluídas), validado como o `config.py`; a página Segurança do jogo segue o modo padrão.
+* Corrigido no núcleo (`enumerate.cpp`): a exclusão por pasta comparava só o prefixo do texto, então `.../Foo`
+  excluía também `.../FooBar`.
+
 ## B9 — páginas que não dependem do A (2026-11-15)
 
 * **Relatórios forenses**: lista as varreduras do banco pelo novo método `reports.scans` do auxiliar (somente

@@ -61,6 +61,10 @@
 ## Agente B — Python, integração e ferramentas
 
 ### [não lançado]
+- **Opções de varredura com efeito**: o núcleo lê o `settings.json` (`gk::scan::Config::load`: processos, tamanho
+  máximo, limites de compactados, tipos de arquivo, exclusões, ClamAV) — na interface, na proteção em tempo real e no
+  `gk-cli` (a linha de comando tem prioridade). A página Configurações ganhou o bloco **Varredura**. Corrigido: excluir
+  a pasta `C:\Jogos\Foo` também excluía `C:\Jogos\FooBar`.
 - **Pacotes de regras validados pelo núcleo**: no produto, a Central de Atualização e o `gk-update` aceitam um pacote
   YARA só se o motor que vai carregá-lo aceita (`gk::yara::validate_rules_dir`); o núcleo agora recusa também categoria
   desconhecida, severidade fora da escala, metadado vazio e componente sem regras, como o validador do publicador.

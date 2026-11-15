@@ -1,9 +1,9 @@
-// Settings page. Only options that something reads today are shown (no inert switches): report privacy
+// Settings page. Only options that something reads today are shown (no inert switches): scanning (read by the
+// core through gk::scan::Config::load — the application, real-time protection and gk-cli), report privacy
 // defaults (helper reports.generate and the reports page), the staleness warning of the offline update center,
 // behavioural analysis (helper sandbox.* and its page) and where the data lives. Values are validated with the
 // same ranges as gamekernel/config.py and written atomically to settings.json, keeping every other key.
-// Scan, engine, real-time, quarantine and interface options join this page when their C++ consumers exist
-// (cpp/bridge, Agent A).
+// Real-time options live on their own page.
 #pragma once
 
 #include "../app_context.hpp"
@@ -11,7 +11,10 @@
 #include <QWidget>
 
 class QCheckBox;
+class QComboBox;
 class QLabel;
+class QLineEdit;
+class QListWidget;
 class QPushButton;
 class QSpinBox;
 
@@ -23,6 +26,15 @@ public:
     explicit SettingsPage(AppContext* ctx, QWidget* parent = nullptr);
 
     // Each setter validates, writes settings.json and returns false (with lastError()) when refused.
+    bool setDefaultMode(const QString& mode);      // deep | quick
+    bool setScanWorkers(int workers);              // 1..32
+    bool setMaxFileSizeMb(int mb);                 // 8..16384
+    bool setArchiveDepth(int depth);               // 0..10
+    bool setArchiveTotalMb(int mb);                // 16..65536
+    bool setClamavEnabled(bool on);
+    bool addExcludedFolder(const QString& folder); // existing folder
+    bool removeExcludedFolder(const QString& folder);
+    bool setExcludedExtensions(const QString& text);   // ".pak, bk2 ; .ogg" -> [".bk2", ".ogg", ".pak"]
     bool setRedactUsername(bool on);
     bool setIncludeHostname(bool on);
     bool setStaleAfterDays(int days);              // 1..365
@@ -38,6 +50,15 @@ private:
 
     AppContext* ctx_;
     QString error_;
+    QComboBox* mode_;
+    QSpinBox* workers_;
+    QSpinBox* maxFileMb_;
+    QSpinBox* archiveDepth_;
+    QSpinBox* archiveTotalMb_;
+    QCheckBox* clamav_;
+    QListWidget* excludedFolders_;
+    QPushButton* removeExcluded_;
+    QLineEdit* excludedExt_;
     QCheckBox* redact_;
     QCheckBox* hostname_;
     QSpinBox* staleDays_;

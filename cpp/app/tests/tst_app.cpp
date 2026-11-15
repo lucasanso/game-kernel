@@ -301,8 +301,9 @@ private slots:
 
     void settingsAreValidatedSharedAndReadByTheHelper() {
         auto env = makeEnv();
-        QVERIFY(env->ctx->setSetting(QStringLiteral("scan.max_workers"), 3));     // a key this page does not own
+        QVERIFY(env->ctx->setSetting(QStringLiteral("logging.level"), QStringLiteral("DEBUG")));   // not this page's
         SettingsPage settings(env->ctx.get());
+        ScanPage scanPage(env->ctx.get());
         SandboxPage sandbox(env->ctx.get());
         QSignalSpy checked(&sandbox, &SandboxPage::availabilityChecked);
         QVERIFY(waitFinished(checked));
@@ -330,8 +331,36 @@ private slots:
         QCOMPARE(ctx.setting(QStringLiteral("updates.stale_after_days")).toInt(), 30);
         QCOMPARE(ctx.setting(QStringLiteral("sandbox.timeout_seconds")).toInt(), 600);
         QCOMPARE(ctx.setting(QStringLiteral("sandbox.sysmon_path")).toString(), QFileInfo(sysmon).absoluteFilePath());
-        QCOMPARE(ctx.setting(QStringLiteral("scan.max_workers")).toInt(), 3);     // preserved
+        QCOMPARE(ctx.setting(QStringLiteral("logging.level")).toString(), QStringLiteral("DEBUG"));   // preserved
         QVERIFY(sandbox.analysisEnabled());                                       // the sandbox page followed the switch
+
+        // Scanning options: validated like config.py and read by the core (gk::scan::Config::load).
+        QVERIFY(!settings.setScanWorkers(0));
+        QVERIFY(settings.setScanWorkers(3));
+        QVERIFY(!settings.setMaxFileSizeMb(4));
+        QVERIFY(settings.setMaxFileSizeMb(1024));
+        QVERIFY(!settings.setArchiveDepth(11));
+        QVERIFY(settings.setArchiveDepth(2));
+        QVERIFY(settings.setArchiveTotalMb(4096));
+        QVERIFY(settings.setClamavEnabled(false));
+        QVERIFY(!settings.addExcludedFolder(QDir(tools.path()).filePath(QStringLiteral("nao-existe"))));
+        QVERIFY(settings.addExcludedFolder(tools.path()));
+        QVERIFY(!settings.addExcludedFolder(tools.path()));                       // already excluded
+        QVERIFY(!settings.setExcludedExtensions(QStringLiteral("pak, ../x")));
+        QVERIFY(settings.setExcludedExtensions(QStringLiteral(".PAK, bk2; ogg .pak")));
+        QCOMPARE(ctx.setting(QStringLiteral("scan.excluded_extensions")).toArray(), QJsonArray({".bk2", ".ogg", ".pak"}));
+        QVERIFY(scanPage.deep());
+        QVERIFY(settings.setDefaultMode(QStringLiteral("quick")));
+        QVERIFY(!scanPage.deep());                                                // the scan page follows
+        const gk::scan::Config core = gk::scan::Config::load(QCoreApplication::applicationDirPath(), env->data.path());
+        QCOMPARE(core.workers, 3);
+        QCOMPARE(core.enumeration.max_analysis_bytes, std::uint64_t(1024) << 20);
+        QCOMPARE(core.archiveLimits.value("max_depth").toInt(), 2);
+        QCOMPARE(core.archiveLimits.value("max_total_bytes").toInteger(), qint64(4096) << 20);
+        QVERIFY(core.clamscan.isEmpty());
+        QCOMPARE(core.enumeration.excluded_extensions, (std::vector<std::string>{".bk2", ".ogg", ".pak"}));
+        QCOMPARE(core.enumeration.excluded_paths.size(), std::size_t(1));
+        QCOMPARE(QString::fromStdString(core.enumeration.excluded_paths.front()), QDir::cleanPath(QFileInfo(tools.path()).absoluteFilePath()));
 
         // The Python helper reads the file written by the C++ page (gamekernel/config.py validation included).
         const auto availability = env->ctx->helper()->callBlocking(QStringLiteral("sandbox.availability"));
@@ -348,7 +377,11 @@ private slots:
         QCOMPARE(ctx.setting(QStringLiteral("updates.stale_after_days")).toInt(), 7);
         QCOMPARE(ctx.setting(QStringLiteral("reports.redact_username")).toBool(), true);
         QCOMPARE(ctx.setting(QStringLiteral("sandbox.sysmon_path")).toString(), QString());
-        QCOMPARE(ctx.setting(QStringLiteral("scan.max_workers")).toInt(), 3);
+        QCOMPARE(ctx.setting(QStringLiteral("logging.level")).toString(), QStringLiteral("DEBUG"));
+        QVERIFY(ctx.setting(QStringLiteral("scan.excluded_paths")).toArray().isEmpty());
+        QCOMPARE(ctx.setting(QStringLiteral("scan.max_archive_depth")).toInt(), 4);
+        QCOMPARE(ctx.setting(QStringLiteral("engines.clamav.enabled")).toBool(), true);
+        QVERIFY(scanPage.deep());
         QVERIFY(QFileInfo::exists(sysmon));                                       // forgetting never deletes the file
         env->ctx->helper()->stop();
     }

@@ -132,6 +132,11 @@ limitações...) e um relatório individual para cada crack encontrado.
 * Lista as tentativas de rede bloqueadas nesta sessão e permite reiniciar o processo auxiliar.
 
 ### Configurações
+* **Varredura**: modo padrão (completa ou rápida), processos de análise em paralelo, até que tamanho um arquivo é
+  analisado por completo, até que nível de compactados dentro de compactados e quanto descompactar no máximo, usar
+  ou não o ClamAV, e **pastas e extensões excluídas** (valem também para a proteção em tempo real). Arquivos
+  excluídos aparecem no resultado como "excluído nas configurações"; nunca somem em silêncio. Valem também para o
+  `gk-cli`, que lê o mesmo `settings.json` (as opções da linha de comando têm prioridade).
 * **Relatórios forenses**: padrões de privacidade (ocultar o nome de usuário, incluir o nome do computador).
 * **Atualização offline**: depois de quantos dias (1 a 365) o programa avisa que as assinaturas estão
   desatualizadas.

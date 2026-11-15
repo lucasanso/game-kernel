@@ -118,7 +118,8 @@ gk::bridge::RealtimeService* AppContext::realtime() {
     if (!realtime_) {
         realtime_ = new gk::bridge::RealtimeService(coreEnvironment(), this);
         connect(this, &AppContext::settingChanged, realtime_, [this](const QString& key) {
-            if (key.startsWith(QLatin1String("realtime.")) || key == QLatin1String("scan.excluded_paths"))
+            if (key.startsWith(QLatin1String("realtime.")) || key.startsWith(QLatin1String("scan.")) ||
+                key.startsWith(QLatin1String("engines.")))
                 realtime_->apply(realtimeSettings());
         });
     }

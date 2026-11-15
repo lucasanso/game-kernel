@@ -18,8 +18,11 @@ std::string normalized(const std::string& p) {
 
 bool excluded(const std::string& path_norm, const std::string& ext, const EnumOptions& o) {
     for (const auto& prefix : o.excluded_paths) {
-        const std::string p = normalized(prefix);
-        if (!p.empty() && path_norm.rfind(p, 0) == 0) return true;
+        std::string p = normalized(prefix);
+        while (p.size() > 1 && p.back() == '/') p.pop_back();
+        if (p.empty()) continue;
+        // The folder itself or something inside it: "c:/jogos/foo" must not exclude "c:/jogos/foobar".
+        if (path_norm == p || path_norm.rfind(p + "/", 0) == 0) return true;
     }
     for (const auto& e : o.excluded_extensions) {
         if (lower_ascii(e) == ext) return true;

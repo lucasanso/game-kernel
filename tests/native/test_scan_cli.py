@@ -11,6 +11,7 @@ import json
 import os
 import shutil
 import signal
+import sqlite3
 import struct
 import subprocess
 import sys
@@ -240,3 +241,36 @@ def test_portable_copy_keeps_its_data_next_to_the_program(cli, tmp_path):
     assert proc.returncode == 0, proc.stderr
     assert (portable / "data" / "gamekernel.db").is_file()
     assert not (tmp_path / "perfil-do-usuario").exists()
+
+
+def test_settings_json_is_honoured(cli, game, tmp_path):
+    """The user's settings.json (the one the application writes) drives gk-cli too: folder and extension
+    exclusions — a sibling folder whose name only starts the same is still scanned —, ClamAV turned off and the
+    number of workers; command-line options still win."""
+    eicar = ("X5O!P%@AP[4\\PZX54(P^)7CC)7}$" + "EICAR-STANDARD-ANTIVIRUS-" + "TEST-FILE!$H+H*").encode()
+    (game / "Data2").mkdir()
+    (game / "Data2" / "copia_eicar.com").write_bytes(eicar)
+    data = tmp_path / "data"
+    data.mkdir()
+    (data / "settings.json").write_text(json.dumps({
+        "scan": {"excluded_paths": [str(game / "Data") + os.sep], "excluded_extensions": ["INI"], "max_workers": 3},
+        "engines": {"clamav": {"enabled": False}},
+    }), encoding="utf-8")
+    proc, report = _run(cli, [game], data)
+    assert proc.returncode == 3, proc.stderr
+    r = _by_name(report)
+    assert "level1.pak" not in r                                  # inside the excluded folder: not even listed
+    assert r["copia_eicar.com"]["classification"] == "malware"   # "Data2" is not "Data"
+    for name in ("ReShade.ini", "configs.user.ini"):
+        assert r[name]["status"] == "skipped" and "excluído nas configurações" in r[name]["status_reasons"], name
+    clamav = next(e for e in report["summary"]["engines"] if e["key"] == "clamav")
+    assert clamav["available"] is False
+
+    def workers_of_last_scan():
+        with sqlite3.connect(data / "gamekernel.db") as db:
+            return json.loads(db.execute("SELECT options FROM scans ORDER BY id DESC LIMIT 1").fetchone()[0])["workers"]
+
+    assert workers_of_last_scan() == 3
+    proc, _ = _run(cli, [game], data, "--workers", "1")
+    assert proc.returncode == 3, proc.stderr
+    assert workers_of_last_scan() == 1                            # the command line wins

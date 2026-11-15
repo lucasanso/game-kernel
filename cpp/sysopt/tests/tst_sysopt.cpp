@@ -152,9 +152,11 @@ private slots:
         QVERIFY(r.bytesFreed >= 2300);
         QCOMPARE(toJson(r).value("deleted").toInt(), r.deleted);
 
-        // Running the same plan again deletes nothing more.
+        // Running the same plan again deletes nothing more — except, on Windows, the file that was in use then
+        // and is closed now (it is still unchanged and still listed).
         const CleanResult again = cleanTemp(plan);
-        QCOMPARE(again.deleted, 0);
+        QCOMPARE(again.deleted, r.inUse);
+        QVERIFY(!QFileInfo::exists(root + "/old1.tmp"));
     }
 
     void defaultFoldersAreTheUsersTempAndTheProgramsOwn() {

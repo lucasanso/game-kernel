@@ -247,8 +247,9 @@ int main(int argc, char** argv) {
         parser.showHelp(2);
     }
     QDir().mkpath(data);
-    gk::scan::Config config = gk::scan::Config::defaults(QCoreApplication::applicationDirPath(), data);
-    config.workers = std::max(1, parser.value(workers).toInt());
+    // The user's settings (settings.json, shared with the application) first; command-line options win.
+    gk::scan::Config config = gk::scan::Config::load(QCoreApplication::applicationDirPath(), data);
+    if (parser.isSet(workers)) config.workers = std::max(1, parser.value(workers).toInt());
     if (parser.isSet(worker)) config.workerProgram = QFileInfo(parser.value(worker)).absoluteFilePath();
     if (parser.isSet(fileTimeout)) config.fileTimeoutMs = std::max(1000, parser.value(fileTimeout).toInt());
     gk::scan::Scanner scanner(config);
