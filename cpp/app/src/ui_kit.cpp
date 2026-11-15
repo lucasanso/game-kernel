@@ -40,10 +40,16 @@ const QHash<QString, QString>& iconPaths() {
         {"x", "<path d='M6 6l12 12'/><path d='M18 6L6 18'/>"},
         {"wifi-off", "<path d='M2 2l20 20'/><path d='M8.5 16.5a5 5 0 0 1 7 0'/><path d='M5 13a10 10 0 0 1 5.2-2.8'/><path d='M19 13a10 10 0 0 0-2.2-1.6'/><path d='M12 20h.01'/>"},
         {"play", "<path d='M7 4l13 8-13 8z'/>"},
+        {"pause", "<rect x='6' y='5' width='4' height='14' rx='1'/><rect x='14' y='5' width='4' height='14' rx='1'/>"},
         {"stop", "<rect x='6' y='6' width='12' height='12' rx='1'/>"},
         {"trash", "<path d='M4 7h16'/><path d='M9 7V4h6v3'/><path d='M6 7l1 14h10l1-14'/>"},
         {"file-text", "<path d='M14 3H6v18h12V7z'/><path d='M14 3v4h4'/><path d='M9 12h6'/><path d='M9 16h6'/>"},
         {"folder", "<path d='M3 6.5A1.5 1.5 0 0 1 4.5 5H9l2 2h8.5A1.5 1.5 0 0 1 21 8.5v9a1.5 1.5 0 0 1-1.5 1.5h-15A1.5 1.5 0 0 1 3 17.5z'/>"},
+        {"home", "<path d='M3 11l9-7 9 7'/><path d='M5 10v10h14V10'/><path d='M10 20v-6h4v6'/>"},
+        {"search", "<circle cx='11' cy='11' r='6.5'/><path d='M16 16l5 5'/>"},
+        {"file-search", "<path d='M14 3H6v18h6'/><path d='M14 3v4h4v4'/><circle cx='16' cy='16' r='3'/><path d='M18.2 18.2L21 21'/>"},
+        {"clock", "<circle cx='12' cy='12' r='9'/><path d='M12 7v5l3 2'/>"},
+        {"archive", "<rect x='3' y='4' width='18' height='4' rx='1'/><path d='M5 8v11h14V8'/><path d='M10 12h4'/>"},
         {"sliders", "<path d='M4 6h9'/><path d='M17 6h3'/><circle cx='15' cy='6' r='2'/><path d='M4 12h3'/><path d='M11 12h9'/><circle cx='9' cy='12' r='2'/><path d='M4 18h11'/><path d='M19 18h1'/><circle cx='17' cy='18' r='2'/>"},
     };
     return paths;

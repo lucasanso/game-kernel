@@ -71,5 +71,6 @@ def test_desktop_application(isolated_data_dir, tmp_path):
     passed, failed, skipped = map(int, totals.groups())
     assert failed == 0 and skipped == 0, report
     assert passed >= 10, report
-    assert sorted(p.name for p in shots.glob("*.png")) == ["01-atualizacoes.png", "02-sandbox.png", "03-relatorios.png",
-                                                           "04-privacidade.png", "05-configuracoes.png"]
+    assert sorted(p.name for p in shots.glob("*.png")) == [
+        "01-painel.png", "02-varredura.png", "03-analise.png", "04-historico.png", "05-quarentena.png",
+        "06-atualizacoes.png", "07-sandbox.png", "08-relatorios.png", "09-privacidade.png", "10-configuracoes.png"]

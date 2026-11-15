@@ -26,6 +26,11 @@ add_library(gk_app_lib STATIC
   src/pages/helper_pages.hpp src/pages/helper_pages.cpp
   src/pages/reports_page.hpp src/pages/reports_page.cpp
   src/pages/scan_table.hpp src/pages/scan_table.cpp
+  src/pages/dashboard_page.hpp src/pages/dashboard_page.cpp
+  src/pages/scan_page.hpp src/pages/scan_page.cpp
+  src/pages/results_page.hpp src/pages/results_page.cpp
+  src/pages/history_page.hpp src/pages/history_page.cpp
+  src/pages/quarantine_page.hpp src/pages/quarantine_page.cpp
   src/pages/settings_page.hpp src/pages/settings_page.cpp
 )
 target_include_directories(gk_app_lib PUBLIC ${CMAKE_CURRENT_SOURCE_DIR}/src)

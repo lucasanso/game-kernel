@@ -1,6 +1,6 @@
 // Main window: sidebar navigation, page header, page stack and in-app notifications (toasts).
-// Only pages backed by working services are listed; core pages (dashboard, scanner, results,
-// quarantine, history, real-time, performance, optimizer) are added as cpp/bridge (Agent A) lands.
+// Only pages backed by working services are listed (real-time, performance and optimizer pages join with
+// their core modules, M11/M12).
 #pragma once
 
 #include "app_context.hpp"
@@ -15,6 +15,11 @@ class QVBoxLayout;
 
 namespace gk::app {
 
+class DashboardPage;
+class ScanPage;
+class ResultsPage;
+class HistoryPage;
+class QuarantinePage;
 class UpdatesPage;
 class SandboxPage;
 class PrivacyPage;
@@ -46,6 +51,13 @@ public:
     int pageCount() const;
     void showPage(int index);
     QString currentTitle() const;
+    // Page indices, in sidebar order.
+    enum Page { Dashboard, Scan, Results, History, Quarantine, Updates, Sandbox, Reports, Privacy, Settings };
+    DashboardPage* dashboardPage() const { return dashboard_; }
+    ScanPage* scanPage() const { return scan_; }
+    ResultsPage* resultsPage() const { return results_; }
+    HistoryPage* historyPage() const { return history_; }
+    QuarantinePage* quarantinePage() const { return quarantine_; }
     UpdatesPage* updatesPage() const { return updates_; }
     SandboxPage* sandboxPage() const { return sandbox_; }
     PrivacyPage* privacyPage() const { return privacy_; }
@@ -65,6 +77,11 @@ private:
     QLabel* subtitle_;
     ToastArea* toasts_;
     QList<PageInfo> pages_;
+    DashboardPage* dashboard_ = nullptr;
+    ScanPage* scan_ = nullptr;
+    ResultsPage* results_ = nullptr;
+    HistoryPage* history_ = nullptr;
+    QuarantinePage* quarantine_ = nullptr;
     UpdatesPage* updates_ = nullptr;
     SandboxPage* sandbox_ = nullptr;
     PrivacyPage* privacy_ = nullptr;

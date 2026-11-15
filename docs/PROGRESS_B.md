@@ -37,7 +37,7 @@ passagem para o B).
 | B6 | Usar `gk_native` (A) nos testes de integração | em andamento conforme o A amplia a API |
 | B7 | Sandbox (Windows Sandbox sem rede) no auxiliar | ✅ (sem VM no Linux; `monitor.ps1` com sintaxe verificada na CI Windows) |
 | B8 | CI Linux + Windows/MSVC, auxiliar congelado | ✅ |
-| B9 | Interface Qt 6 C++ (`cpp/app`) | 🔄 5 páginas com serviços reais (Atualização offline, Análise comportamental, Relatórios forenses, Privacidade e rede, Configurações); páginas do núcleo aguardam `cpp/bridge` (A, M13), M11 e M12 |
+| B9 | Interface Qt 6 C++ (`cpp/app`) | 🔄 10 páginas com serviços reais (Painel, Segurança do jogo, Análise forense, Histórico, Quarentena, Atualização offline, Análise comportamental, Relatórios, Privacidade e rede, Configurações); Tempo real, Desempenho e Otimizador entram com M11 e M12 |
 | B10 | Instalador (Inno Setup), versão portátil, docs de usuário (INSTALL, USAGE) | ✅ validado na CI Windows (`c0af4d5`, execução 43656278389): produto compilado com MSVC, instalador gerado, instalação silenciosa, 17 testes do produto instalado e 17 do portátil sem pulos, desinstalação preservando os dados |
 
 ## Mesclagem da rev. 4 (esta etapa)
@@ -186,6 +186,19 @@ Com o A indisponível, o usuário pediu ao B que assumisse as tarefas dele (regi
   (varredura com *workers* isolados e EICAR gerado no teste, histórico, pausa/cancelamento, quarentena completa,
   instalação nova, integridade), também sob ASan/UBSan. Achado: sob ASan o `gk-scanworker` não iniciava por causa do
   limite `RLIMIT_AS` (o ASan reserva terabytes de endereços); nas builds com sanitizador o limite é desligado.
+
+### Páginas do núcleo na interface (sobre o `cpp/bridge`)
+
+* **Painel**, **Segurança do jogo**, **Análise forense**, **Histórico** e **Quarentena**, todas pelos serviços do
+  `cpp/bridge` (a interface não chama o `gk_core` diretamente). Rótulos e explicações vêm do catálogo de ameaças da
+  instalação (`gk::bridge::Catalog`), os mesmos textos do motor de risco e dos relatórios.
+* Testes (`tst_app.cpp`, pelo pytest, também sob ASan/UBSan): varredura real com EICAR gerado no teste, histórico,
+  painel (incluindo integridade "Sem manifesto" no desenvolvimento), análise com explicação e evidências, filtro,
+  quarentena recusada e confirmada, restauração conferida byte a byte, verificação do cofre; janela com 10 páginas e
+  capturas de todas em `build/screenshots/`.
+* Corrigido pelo caminho: corrida em que o "carregar a última varredura" do início sobrescrevia uma varredura pedida
+  explicitamente; no Windows, programas de uma árvore de build do Visual Studio (`cpp/<x>/Release/`) não achavam o
+  `gk-scanworker`.
 
 ## B9 — páginas que não dependem do A (2026-11-15)
 

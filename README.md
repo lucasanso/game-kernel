@@ -34,7 +34,10 @@ Detalhes: `docs/ARCHITECTURE.md`, `docs/INTEGRATION.md`, `docs/CORE_API.md`, `do
 * **Integração (B)**: processo auxiliar Python supervisionado. Uma falha, travamento ou estouro de memória do Python
   não derruba o aplicativo (prazo, cancelamento, reinício, Job Object). O cliente C++/Qt (`cpp/ipc`) é testado
   contra o auxiliar real no Linux e no Windows (MSVC).
-* **Interface (B)**: aplicativo Qt 6 C++ (`cpp/app`) com tema escuro, menu lateral e notificações internas. Já tem a
+* **Interface (B)**: aplicativo Qt 6 C++ (`cpp/app`) com tema escuro, menu lateral e notificações internas, ligado ao
+  núcleo pela camada de serviços `cpp/bridge`. Tem Painel, Segurança do jogo (varredura em processos isolados, com
+  pausa e cancelamento), Análise forense (o quê, onde, por quê e o que fazer, com evidências e locais exatos),
+  Histórico, Quarentena (cofre criptografado: colocar, restaurar conferindo o conteúdo, apagar, verificar), a
   Central de Atualização Offline (importar, conferir publicador e chave, instalar, reverter, chaves confiáveis), a
   análise comportamental (disponibilidade real da sandbox, confirmação, progresso, evidências), os Relatórios
   forenses (varreduras do banco, HTML/JSON/PDF com opções de privacidade), Privacidade e rede (autoteste que tenta

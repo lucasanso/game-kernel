@@ -61,6 +61,12 @@
 ## Agente B — Python, integração e ferramentas
 
 ### [não lançado]
+- Interface: páginas do núcleo sobre o `cpp/bridge` — **Painel** (última varredura, assinaturas, quarentena,
+  integridade da instalação, ações rápidas), **Segurança do jogo** (varredura com progresso, pausa, cancelamento e
+  achados ao vivo), **Análise forense** (filtros, detalhes, explicação, recomendações, evidências com local exato,
+  quarentena com SHA-256 conferido), **Histórico** e **Quarentena** (restaurar com confirmação e substituição
+  explícita, apagar, verificar o cofre); rótulos do catálogo de ameaças da instalação; tabela de varreduras
+  compartilhada com Relatórios.
 - **Tarefas do A assumidas pelo B (pedido do usuário)**: M13 `cpp/bridge` (serviços Qt de varredura, histórico,
   quarentena e integridade, com leitura somente leitura do banco no núcleo); motor de risco à prova de falha;
   `gk-cli` respeitando o `portable.flag`; interface compilada pela raiz com o endurecimento do núcleo; limite de

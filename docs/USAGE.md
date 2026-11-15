@@ -5,12 +5,43 @@ encontrou, onde (arquivo e posição), por que é suspeito e o que fazer. Nada q
 computador; a única execução possível é a análise comportamental, dentro de uma máquina virtual descartável sem
 rede, e só quando você confirma.
 
-> **Estado desta versão.** A interface gráfica já tem a Central de Atualização Offline, a análise comportamental,
-> os Relatórios forenses, Privacidade e rede e Configurações. A varredura, os resultados e a quarentena funcionam hoje pela linha de comando (`gk-cli`,
-> instalado junto). As telas de varredura entram na interface numa próxima versão. Limitações conhecidas:
+> **Estado desta versão.** A interface tem Painel, Segurança do jogo (varredura), Análise forense, Histórico,
+> Quarentena, Central de Atualização Offline, análise comportamental, Relatórios forenses, Privacidade e rede e
+> Configurações. Proteção em tempo real, monitor de desempenho e otimizador ainda não existem. Limitações conhecidas:
 > `docs/LIMITATIONS.md`.
 
 ## Interface (`GameKernel.exe`)
+
+### Painel
+A situação de tudo num relance: a última varredura (ameaças e suspeitos), as assinaturas (pacote instalado e se está
+desatualizado), a quarentena e a **integridade da instalação** (os arquivos do programa conferidos com o manifesto
+assinado). **Analisar uma pasta de jogo…** começa uma varredura direto daqui.
+
+### Segurança do jogo (varredura)
+1. **Adicionar pasta…** ou **Adicionar arquivo…**: a pasta do jogo, do crack, do repack ou do mod.
+2. Escolha **Completa** (todos os tipos, inclusive dentro de compactados) ou **Rápida** (executáveis e scripts).
+3. **Iniciar varredura**. A análise roda em processos isolados e só lê os arquivos: nada é executado, movido ou
+   apagado. Você pode **Pausar**, **Retomar** ou **Cancelar** (o que já foi analisado fica gravado).
+4. Os achados aparecem enquanto a varredura anda; no fim, **Abrir a análise completa**.
+
+### Análise forense
+Os resultados de uma varredura: para cada arquivo, risco, classificação, categoria, se é crack ou mod reconhecido e
+onde está (inclusive dentro de compactados). Ao escolher um arquivo, você vê caminho, SHA-256, assinatura digital,
+**por que** foi classificado assim, **o que fazer** e as **evidências** (fonte, regra, local exato como posição ou
+linha, e quando pode ser falso positivo).
+
+**Colocar em quarentena** pede confirmação e move o arquivo para um cofre criptografado (se o arquivo mudou desde a
+análise, a operação é recusada). Para um arquivo dentro de um compactado, o compactado inteiro vai para a
+quarentena. **Gerar relatório** abre a página de Relatórios já na varredura certa.
+
+### Histórico
+Todas as varreduras deste computador. **Abrir a análise** (ou clique duplo) e **Gerar relatório**.
+
+### Quarentena
+Os arquivos isolados, com quando, de onde, risco, detecção e motivo. **Restaurar no local original** ou
+**Restaurar em…** pedem confirmação e conferem o conteúdo com o registrado na entrada; se já houver um arquivo no
+destino, o programa pergunta antes de substituir. **Apagar definitivamente** pede confirmação e não pode ser
+desfeito. **Verificar cofre** autentica todos os itens.
 
 ### Central de Atualização Offline
 Mantém as assinaturas (regras YARA, indicadores e bancos ClamAV) em dia **sem internet**, com pacotes `.gkpkg`

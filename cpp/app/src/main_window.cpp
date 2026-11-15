@@ -1,6 +1,11 @@
 #include "main_window.hpp"
 
+#include "pages/dashboard_page.hpp"
 #include "pages/helper_pages.hpp"
+#include "pages/history_page.hpp"
+#include "pages/quarantine_page.hpp"
+#include "pages/results_page.hpp"
+#include "pages/scan_page.hpp"
 #include "pages/reports_page.hpp"
 #include "pages/settings_page.hpp"
 #include "pages/updates_page.hpp"
@@ -148,11 +153,26 @@ MainWindow::MainWindow(AppContext* ctx, QWidget* parent) : QMainWindow(parent), 
     root->addWidget(contentArea, 1);
     setCentralWidget(central);
 
+    dashboard_ = new DashboardPage(ctx_, stack_);
+    scan_ = new ScanPage(ctx_, stack_);
+    results_ = new ResultsPage(ctx_, stack_);
+    history_ = new HistoryPage(ctx_, stack_);
+    quarantine_ = new QuarantinePage(ctx_, stack_);
     updates_ = new UpdatesPage(ctx_, stack_);
     sandbox_ = new SandboxPage(ctx_, stack_);
     reports_ = new ReportsPage(ctx_, stack_);
     privacy_ = new PrivacyPage(ctx_, stack_);
     settings_ = new SettingsPage(ctx_, stack_);
+    addPage(dashboard_, QStringLiteral("home"), QStringLiteral("Painel"), QStringLiteral("Painel"),
+            QStringLiteral("A situação da proteção deste computador, sem nada sair dele."));
+    addPage(scan_, QStringLiteral("search"), QStringLiteral("Segurança do jogo"), QStringLiteral("Segurança do jogo"),
+            QStringLiteral("Analise a pasta de um jogo, crack, repack ou mod. Nada é executado."));
+    addPage(results_, QStringLiteral("file-search"), QStringLiteral("Análise forense"), QStringLiteral("Análise forense"),
+            QStringLiteral("O que foi encontrado, onde, por que é suspeito e o que fazer."));
+    addPage(history_, QStringLiteral("clock"), QStringLiteral("Histórico"), QStringLiteral("Histórico"),
+            QStringLiteral("Todas as varreduras feitas neste computador."));
+    addPage(quarantine_, QStringLiteral("archive"), QStringLiteral("Quarentena"), QStringLiteral("Quarentena"),
+            QStringLiteral("Arquivos isolados num cofre criptografado; restaure ou apague quando quiser."));
     addPage(updates_, QStringLiteral("package"), QStringLiteral("Atualização offline"), QStringLiteral("Central de Atualização Offline"),
             QStringLiteral("Importe pacotes assinados de assinaturas, regras e indicadores. Nada é baixado."));
     addPage(sandbox_, QStringLiteral("flask"), QStringLiteral("Análise comportamental"), QStringLiteral("Análise comportamental"),
@@ -169,6 +189,45 @@ MainWindow::MainWindow(AppContext* ctx, QWidget* parent) : QMainWindow(parent), 
         toasts_->show(level, title, text);
     });
     connect(nav_, &QListWidget::currentRowChanged, this, &MainWindow::showPage);
+
+    // Navigation between pages.
+    auto openResults = [this](qint64 scanId) {
+        results_->loadScan(scanId);
+        showPage(Results);
+    };
+    auto openReports = [this](qint64 scanId) {
+        reports_->focusScan(scanId);
+        showPage(Reports);
+    };
+    connect(dashboard_, &DashboardPage::requestScan, this, [this](const QString& folder) {
+        if (scan_->running()) {
+            showPage(Scan);
+            return;
+        }
+        scan_->clearTargets();
+        scan_->addTarget(folder);
+        scan_->start();
+        showPage(Scan);
+    });
+    connect(dashboard_, &DashboardPage::openResults, this, openResults);
+    connect(dashboard_, &DashboardPage::openUpdates, this, [this] { showPage(Updates); });
+    connect(dashboard_, &DashboardPage::openQuarantine, this, [this] { showPage(Quarantine); });
+    connect(dashboard_, &DashboardPage::openHistory, this, [this] { showPage(History); });
+    connect(scan_, &ScanPage::openResults, this, openResults);
+    connect(scan_, &ScanPage::scanFinished, this, [this] {
+        history_->refresh();
+        dashboard_->refresh();
+        reports_->refresh();
+    });
+    connect(history_, &HistoryPage::openResults, this, openResults);
+    connect(history_, &HistoryPage::openReports, this, openReports);
+    connect(results_, &ResultsPage::openReports, this, openReports);
+    connect(results_, &ResultsPage::quarantineFinished, this, [this] {
+        quarantine_->refresh();
+        dashboard_->refresh();
+    });
+    connect(quarantine_, &QuarantinePage::operationFinished, this, [this] { dashboard_->refresh(); });
+    results_->loadLatest();
     nav_->setCurrentRow(0);
 }
 

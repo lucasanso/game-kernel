@@ -6,7 +6,12 @@
 //   GK_SCREENSHOT_DIR (optional)    where window screenshots are written
 #include "app_context.hpp"
 #include "main_window.hpp"
+#include "pages/dashboard_page.hpp"
 #include "pages/helper_pages.hpp"
+#include "pages/history_page.hpp"
+#include "pages/quarantine_page.hpp"
+#include "pages/results_page.hpp"
+#include "pages/scan_page.hpp"
 #include "pages/reports_page.hpp"
 #include "pages/settings_page.hpp"
 #include "pages/updates_page.hpp"
@@ -18,6 +23,7 @@
 #include <QFileInfo>
 #include <QImage>
 #include <QJsonDocument>
+#include <QJsonObject>
 #include <QRegularExpression>
 #include <QSignalSpy>
 #include <QTemporaryDir>
@@ -59,6 +65,18 @@ class TestApp : public QObject {
             return raw->answer;
         };
         return env;
+    }
+
+    // A game folder with the EICAR test file (assembled at run time) and a harmless configuration file.
+    static QString makeGame(const QTemporaryDir& dir) {
+        const QString game = QDir(dir.path()).filePath(QStringLiteral("MeuJogo"));
+        QDir().mkpath(game);
+        QFile eicar(QDir(game).filePath(QStringLiteral("leia_eicar.com")));
+        if (eicar.open(QIODevice::WriteOnly))
+            eicar.write(QByteArray("X5O!P%@AP[4\\PZX54(P^)7CC)7}$") + "EICAR-STANDARD-ANTIVIRUS-" + "TEST-FILE!$H+H*");
+        QFile ini(QDir(game).filePath(QStringLiteral("config.ini")));
+        if (ini.open(QIODevice::WriteOnly)) ini.write("[video]\nfullscreen=1\n");
+        return game;
     }
 
     static bool waitFinished(QSignalSpy& spy, int ms = 30000) {
@@ -347,48 +365,186 @@ private slots:
         env->ctx->helper()->stop();
     }
 
+    void corePagesAgainstTheRealCore() {
+        auto env = makeEnv();
+        QTemporaryDir games;
+        const QString game = makeGame(games);
+        const QString eicarPath = QDir(game).filePath(QStringLiteral("leia_eicar.com"));
+        QFile original(eicarPath);
+        QVERIFY(original.open(QIODevice::ReadOnly));
+        const QByteArray eicarBytes = original.readAll();
+        original.close();
+
+        // Scan (isolated workers; the page only reads)
+        ScanPage scan(env->ctx.get());
+        QVERIFY(!scan.start());                                       // nothing to scan yet
+        scan.addTarget(game);
+        scan.addTarget(game);                                         // duplicates ignored
+        QCOMPARE(scan.targets().size(), 1);
+        QSignalSpy finished(&scan, &ScanPage::scanFinished);
+        QVERIFY(scan.start());
+        QVERIFY(!scan.start());                                       // one scan at a time
+        QVERIFY(waitFinished(finished, 180000));
+        const QJsonObject summary = finished.first().at(0).toJsonObject();
+        QVERIFY2(summary.value("status").toString() == QLatin1String("completed"),
+                 qPrintable(QString::fromUtf8(QJsonDocument(summary).toJson(QJsonDocument::Compact))));
+        const qint64 scanId = summary.value("scan_id").toInteger();
+        QVERIFY(scanId > 0);
+        QVERIFY(scan.findingsCount() >= 1);
+
+        // History and dashboard read the same database
+        HistoryPage history(env->ctx.get());
+        QSignalSpy historyLoaded(&history, &HistoryPage::loaded);
+        QVERIFY(waitFinished(historyLoaded));
+        QCOMPARE(history.scanCount(), 1);
+        QCOMPARE(history.selectedScan(), scanId);
+        DashboardPage dashboard(env->ctx.get());
+        QSignalSpy refreshed(&dashboard, &DashboardPage::refreshed);
+        QVERIFY(waitFinished(refreshed, 60000));
+        QVERIFY2(dashboard.lastScanText().contains(QStringLiteral("ameaça")), qPrintable(dashboard.lastScanText()));
+        QCOMPARE(dashboard.integrityStatus(), QStringLiteral("Sem manifesto"));   // development build
+        QCOMPARE(dashboard.quarantineText(), QStringLiteral("Vazia"));
+
+        // Forensic analysis: what, where, why, what to do
+        ResultsPage results(env->ctx.get());
+        QSignalSpy loaded(&results, &ResultsPage::loaded);
+        results.loadScan(scanId);
+        QVERIFY(waitFinished(loaded));
+        QVERIFY(results.findingsCount() >= 1);
+        QVERIFY(results.selectFile(QStringLiteral("leia_eicar.com")));
+        const QString detail = results.detailText();
+        for (const char* expected : {"Caminho", "SHA-256", "Por que", "O que fazer"})
+            QVERIFY2(detail.contains(QString::fromUtf8(expected)), qPrintable(detail));
+        results.setFilter(QStringLiteral("pua"));
+        QCOMPARE(results.findingsCount(), 0);
+        results.setFilter(QStringLiteral("malware"));
+        QVERIFY(results.selectFile(QStringLiteral("leia_eicar.com")));
+
+        // Quarantine from the analysis: declined first, then confirmed
+        QSignalSpy quarantined(&results, &ResultsPage::quarantineFinished);
+        env->answer = false;
+        QVERIFY(!results.quarantineSelected());
+        QVERIFY(QFileInfo::exists(eicarPath));
+        env->answer = true;
+        QVERIFY(results.quarantineSelected());
+        QVERIFY(waitFinished(quarantined, 60000));
+        QVERIFY2(quarantined.first().at(0).toBool(), qPrintable(quarantined.first().at(1).toString()));
+        QVERIFY(!QFileInfo::exists(eicarPath));
+
+        // Quarantine page: list, restore to the original place (content checked), verify the vault
+        QuarantinePage quarantine(env->ctx.get());
+        QSignalSpy listed(&quarantine, &QuarantinePage::listed);
+        QVERIFY(waitFinished(listed, 60000));
+        QCOMPARE(quarantine.itemCount(), 1);
+        QSignalSpy op(&quarantine, &QuarantinePage::operationFinished);
+        env->answer = false;
+        QVERIFY(!quarantine.restoreSelected());                      // declined: nothing sent
+        env->answer = true;
+        QVERIFY(quarantine.restoreSelected());
+        QVERIFY(waitFinished(op, 60000));
+        QCOMPARE(op.first().at(0).toString(), QStringLiteral("restore"));
+        QVERIFY2(op.first().at(1).toBool(), qPrintable(op.first().at(2).toString()));
+        QFile back(eicarPath);
+        QVERIFY(back.open(QIODevice::ReadOnly));
+        QCOMPARE(back.readAll(), eicarBytes);
+        op.clear();
+        quarantine.verifyVault();
+        QVERIFY(waitFinished(op, 60000));
+        QCOMPARE(op.first().at(0).toString(), QStringLiteral("verify"));
+        QVERIFY(op.first().at(1).toBool());
+        env->ctx->helper()->stop();
+    }
+
     void mainWindowNavigationNotificationsAndScreenshots() {
         auto env = makeEnv(true, true);
+        QTemporaryDir games;
+        const QString game = makeGame(games);
         MainWindow window(env->ctx.get());
         window.resize(1280, 820);
         window.show();
         QVERIFY(QTest::qWaitForWindowExposed(&window));
-        QCOMPARE(window.pageCount(), 5);
-        QCOMPARE(window.currentTitle(), QStringLiteral("Central de Atualização Offline"));
+        QCOMPARE(window.pageCount(), 10);
+        QCOMPARE(window.currentTitle(), QStringLiteral("Painel"));
 
+        // A real scan started from the scan page, then its analysis, history and quarantine.
+        window.showPage(MainWindow::Scan);
+        QCOMPARE(window.currentTitle(), QStringLiteral("Segurança do jogo"));
+        QSignalSpy scanned(window.scanPage(), &ScanPage::scanFinished);
+        window.scanPage()->addTarget(game);
+        QVERIFY(window.scanPage()->start());
+        QVERIFY(waitFinished(scanned, 180000));
+        const qint64 scanId = scanned.first().at(0).toJsonObject().value("scan_id").toInteger();
+        QTest::qWait(300);
+        screenshot(&window, QStringLiteral("02-varredura.png"));
+
+        QSignalSpy loaded(window.resultsPage(), &ResultsPage::loaded);
+        window.resultsPage()->loadScan(scanId);
+        window.showPage(MainWindow::Results);
+        QCOMPARE(window.currentTitle(), QStringLiteral("Análise forense"));
+        QVERIFY(waitFinished(loaded));                                // results of the requested scan, not earlier content
+        QCOMPARE(window.resultsPage()->scanId(), scanId);
+        QVERIFY(window.resultsPage()->findingsCount() >= 1);
+        QVERIFY(window.resultsPage()->selectFile(QStringLiteral("leia_eicar.com")));
+        QTest::qWait(300);
+        screenshot(&window, QStringLiteral("03-analise.png"));
+        QSignalSpy quarantined(window.resultsPage(), &ResultsPage::quarantineFinished);
+        QVERIFY(window.resultsPage()->quarantineSelected());
+        QVERIFY(waitFinished(quarantined, 60000));
+
+        window.showPage(MainWindow::History);
+        QCOMPARE(window.currentTitle(), QStringLiteral("Histórico"));
+        QTRY_VERIFY_WITH_TIMEOUT(window.historyPage()->scanCount() >= 2, 30000);   // Python-written scan + this one
+        QTest::qWait(200);
+        screenshot(&window, QStringLiteral("04-historico.png"));
+
+        window.showPage(MainWindow::Quarantine);
+        QCOMPARE(window.currentTitle(), QStringLiteral("Quarentena"));
+        QTRY_VERIFY_WITH_TIMEOUT(window.quarantinePage()->itemCount() == 1, 30000);
+        QTest::qWait(200);
+        screenshot(&window, QStringLiteral("05-quarentena.png"));
+
+        window.showPage(MainWindow::Dashboard);
+        QSignalSpy refreshed(window.dashboardPage(), &DashboardPage::refreshed);
+        window.dashboardPage()->refresh();
+        QVERIFY(waitFinished(refreshed, 60000));
+        QVERIFY(window.dashboardPage()->quarantineText().contains(QStringLiteral("1 item")));
+        QTest::qWait(200);
+        screenshot(&window, QStringLiteral("01-painel.png"));
+
+        window.showPage(MainWindow::Updates);
+        QCOMPARE(window.currentTitle(), QStringLiteral("Central de Atualização Offline"));
         QSignalSpy done(window.updatesPage(), &UpdatesPage::operationFinished);
         window.updatesPage()->importPackage(qEnvironmentVariable("GK_TEST_PKG_V1"));
         QVERIFY(waitFinished(done));
         QVERIFY(window.toasts()->visibleCount() >= 1);
         QVERIFY(window.toasts()->history().last().contains(QStringLiteral("2026.11.12.1")));
         QTest::qWait(200);
-        screenshot(&window, QStringLiteral("01-atualizacoes.png"));
+        screenshot(&window, QStringLiteral("06-atualizacoes.png"));
 
-        window.showPage(1);
+        window.showPage(MainWindow::Sandbox);
         QCOMPARE(window.currentTitle(), QStringLiteral("Análise comportamental"));
-        // The availability check starts when the window is built; it may already be done.
         QTRY_VERIFY_WITH_TIMEOUT(!window.sandboxPage()->availabilityReason().isEmpty(), 30000);
         QTest::qWait(200);
-        screenshot(&window, QStringLiteral("02-sandbox.png"));
+        screenshot(&window, QStringLiteral("07-sandbox.png"));
 
-        window.showPage(2);
+        window.showPage(MainWindow::Reports);
         QCOMPARE(window.currentTitle(), QStringLiteral("Relatórios forenses"));
         QTRY_VERIFY_WITH_TIMEOUT(window.reportsPage()->scanCount() >= 1, 30000);
         QTest::qWait(200);
-        screenshot(&window, QStringLiteral("03-relatorios.png"));
+        screenshot(&window, QStringLiteral("08-relatorios.png"));
 
-        window.showPage(3);
+        window.showPage(MainWindow::Privacy);
         QCOMPARE(window.currentTitle(), QStringLiteral("Privacidade e rede"));
         QSignalSpy selfTest(window.privacyPage(), &PrivacyPage::selfTestFinished);
         window.privacyPage()->runNetworkSelfTest();
         QVERIFY(waitFinished(selfTest));
         QTest::qWait(200);
-        screenshot(&window, QStringLiteral("04-privacidade.png"));
+        screenshot(&window, QStringLiteral("09-privacidade.png"));
 
-        window.showPage(4);
+        window.showPage(MainWindow::Settings);
         QCOMPARE(window.currentTitle(), QStringLiteral("Configurações"));
         QTest::qWait(200);
-        screenshot(&window, QStringLiteral("05-configuracoes.png"));
+        screenshot(&window, QStringLiteral("10-configuracoes.png"));
         env->ctx->helper()->stop();
     }
 };
