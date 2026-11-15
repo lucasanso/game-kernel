@@ -3,6 +3,7 @@
 
 #include <sqlite3.h>
 
+#include <algorithm>
 #include <chrono>
 #include <cmath>
 #include <cstdio>
@@ -477,11 +478,44 @@ json scan_row(Stmt& s, bool full) {
 
 }  // namespace
 
-json Database::list_scans(int limit) {
+json Database::list_scans(int limit, const std::string& exclude_origin) {
     json out = json::array();
-    Stmt s(db_, (std::string("SELECT ") + kScanColumns + " FROM scans ORDER BY started_at DESC, id DESC LIMIT ?").c_str());
-    s.bind(1, static_cast<std::int64_t>(std::max(1, limit)));
+    Stmt s(db_, (std::string("SELECT ") + kScanColumns +
+                 " FROM scans WHERE (? = '' OR COALESCE(origin, '') <> ?) ORDER BY started_at DESC, id DESC LIMIT ?").c_str());
+    s.bind(1, exclude_origin).bind(2, exclude_origin).bind(3, static_cast<std::int64_t>(std::max(1, limit)));
     while (s.step()) out.push_back(scan_row(s, false));
+    return out;
+}
+
+void Database::add_realtime_event(const RealtimeEvent& e) {
+    Stmt s(db_, "INSERT INTO realtime_events(at, path, event, sha256, risk, classification, scan_id, detail)"
+                " VALUES(?,?,?,?,?,?,?,?)");
+    s.bind(1, e.at > 0 ? e.at : now()).bind(2, e.path).bind(3, e.event).bind_opt(4, e.sha256);
+    s.bind(5, static_cast<std::int64_t>(std::clamp(e.risk, 0, 5)));
+    if (e.classification.empty()) s.bind_null(6);
+    else s.bind(6, e.classification);
+    if (e.scan_id) s.bind(7, *e.scan_id);
+    else s.bind_null(7);
+    s.bind(8, e.detail);
+    s.step();
+}
+
+json Database::list_realtime_events(int limit) {
+    json out = json::array();
+    Stmt s(db_, "SELECT id, at, path, event, sha256, risk, classification, scan_id, detail FROM realtime_events"
+                " ORDER BY at DESC, id DESC LIMIT ?");
+    s.bind(1, static_cast<std::int64_t>(std::max(1, limit)));
+    while (s.step()) {
+        out.push_back({{"id", s.integer(0)},
+                       {"at", s.real(1)},
+                       {"path", s.text(2)},
+                       {"event", s.text(3)},
+                       {"sha256", s.is_null(4) ? json(nullptr) : json(s.text(4))},
+                       {"risk", s.integer(5)},
+                       {"classification", s.is_null(6) ? json(nullptr) : json(s.text(6))},
+                       {"scan_id", s.is_null(7) ? json(nullptr) : json(s.integer(7))},
+                       {"detail", parse_or(s.text(8), json::object())}});
+    }
     return out;
 }
 

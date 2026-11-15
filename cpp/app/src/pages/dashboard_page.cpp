@@ -75,10 +75,16 @@ DashboardPage::DashboardPage(AppContext* ctx, QWidget* parent) : QWidget(parent)
     integrityText_ = integrity.text;
     auto* recheck = new QPushButton(icon(QStringLiteral("refresh")), QStringLiteral("Verificar de novo"), integrity.card);
     integrity.actions->addWidget(recheck);
+    Tile realtime = makeTile(QStringLiteral("Proteção em tempo real"), content);
+    realtimePill_ = realtime.pill;
+    realtimeText_ = realtime.text;
+    auto* openRealtime = new QPushButton(icon(QStringLiteral("eye")), QStringLiteral("Configurar"), realtime.card);
+    realtime.actions->addWidget(openRealtime);
     grid->addWidget(scan.card, 0, 0);
     grid->addWidget(sig.card, 0, 1);
     grid->addWidget(quarantine.card, 1, 0);
     grid->addWidget(integrity.card, 1, 1);
+    grid->addWidget(realtime.card, 2, 0, 1, 2);
     col->addLayout(grid);
 
     auto* quick = new Card(QStringLiteral("Ações rápidas"), content);
@@ -167,6 +173,8 @@ DashboardPage::DashboardPage(AppContext* ctx, QWidget* parent) : QWidget(parent)
     });
     connect(updates, &QPushButton::clicked, this, &DashboardPage::openUpdates);
     connect(openQ, &QPushButton::clicked, this, &DashboardPage::openQuarantine);
+    connect(openRealtime, &QPushButton::clicked, this, &DashboardPage::openRealtime);
+    connect(ctx_->realtime(), &gk::bridge::RealtimeService::statusChanged, this, &DashboardPage::showRealtime);
     connect(history, &QPushButton::clicked, this, &DashboardPage::openHistory);
     connect(recheck, &QPushButton::clicked, this, [this] {
         integrityPill_->set(QStringLiteral("Verificando…"), StatusPill::Tone::Neutral);
@@ -180,8 +188,31 @@ DashboardPage::DashboardPage(AppContext* ctx, QWidget* parent) : QWidget(parent)
     connect(ctx_, &AppContext::settingChanged, this, [this](const QString& key) {
         if (key == QLatin1String("updates.stale_after_days")) showSignatures();
     });
+    showRealtime(ctx_->realtime()->status());
     refresh();
 }
+
+void DashboardPage::showRealtime(const QJsonObject& st) {
+    int watching = 0, problems = 0;
+    for (const auto& v : st.value("folders").toArray()) (v.toObject().value("watching").toBool() ? watching : problems)++;
+    if (!st.value("enabled").toBool()) {
+        realtimePill_->set(QStringLiteral("Desativada"), StatusPill::Tone::Warning);
+        realtimeText_->setText(QStringLiteral("Ative para analisar automaticamente o que aparecer nas pastas dos seus jogos e downloads."));
+    } else if (!st.value("active").toBool()) {
+        realtimePill_->set(QStringLiteral("Nenhuma pasta observada"), StatusPill::Tone::Bad);
+        realtimeText_->setText(QStringLiteral("As pastas escolhidas não puderam ser observadas; veja a página Tempo real."));
+    } else {
+        realtimePill_->set(problems ? QStringLiteral("Ativa, com avisos") : QStringLiteral("Ativa"),
+                           problems ? StatusPill::Tone::Warning : StatusPill::Tone::Good);
+        realtimeText_->setText(QStringLiteral("%1 pasta(s) observada(s); %2 arquivo(s) analisado(s) e %3 achado(s) desde que o "
+                                              "programa abriu.")
+                                   .arg(watching)
+                                   .arg(st.value("files_scanned").toInteger())
+                                   .arg(st.value("detections").toInteger()));
+    }
+}
+
+QString DashboardPage::realtimeText() const { return realtimePill_->text() + QStringLiteral(" — ") + realtimeText_->text(); }
 
 void DashboardPage::refresh() {
     pending_ = 3;

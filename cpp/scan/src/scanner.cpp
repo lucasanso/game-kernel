@@ -712,9 +712,9 @@ void Scanner::finalize() {
 }
 
 void Scanner::emitProgress(bool force) {
-    static QElapsedTimer timer;
-    if (!timer.isValid()) timer.start();
-    const qint64 now = timer.elapsed();
+    // Per scanner: the application runs a manual scan and real-time protection at the same time.
+    if (!progressTimer_.isValid()) progressTimer_.start();
+    const qint64 now = progressTimer_.elapsed();
     if (!force && now - lastProgressMs_ < 100) return;
     lastProgressMs_ = now;
     progress_.paused = token_ && token_->paused();

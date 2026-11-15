@@ -6,6 +6,7 @@
 
 #include <QWidget>
 
+class QCheckBox;
 class QLabel;
 class QPushButton;
 class QTableWidget;
@@ -21,6 +22,7 @@ public:
     qint64 selectedScan() const;
     bool selectScan(qint64 scanId);
     QString emptyStateText() const;
+    void setIncludeRealtime(bool on);   // the small batches of real-time protection are hidden by default
 
 signals:
     void loaded(int count);
@@ -32,6 +34,7 @@ private:
 
     AppContext* ctx_;
     qint64 request_ = -1;
+    QCheckBox* includeRealtime_;
     QTableWidget* table_;
     QLabel* empty_;
     QPushButton* open_;

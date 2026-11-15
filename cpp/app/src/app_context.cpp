@@ -1,5 +1,7 @@
 #include "app_context.hpp"
 
+#include <algorithm>
+
 #include <QCoreApplication>
 #include <QDir>
 #include <QFile>
@@ -110,6 +112,43 @@ gk::bridge::QuarantineService* AppContext::quarantine() {
 gk::bridge::IntegrityService* AppContext::integrity() {
     if (!integrity_) integrity_ = new gk::bridge::IntegrityService(coreEnvironment(), this);
     return integrity_;
+}
+
+gk::bridge::RealtimeService* AppContext::realtime() {
+    if (!realtime_) {
+        realtime_ = new gk::bridge::RealtimeService(coreEnvironment(), this);
+        connect(this, &AppContext::settingChanged, realtime_, [this](const QString& key) {
+            if (key.startsWith(QLatin1String("realtime.")) || key == QLatin1String("scan.excluded_paths"))
+                realtime_->apply(realtimeSettings());
+        });
+    }
+    return realtime_;
+}
+
+gk::realtime::Settings AppContext::realtimeSettings() const {
+    const QJsonObject r = setting(QStringLiteral("realtime")).toObject();
+    auto clamp = [](const QJsonValue& v, int lo, int hi, int fallback) {
+        return v.isDouble() ? std::clamp(v.toInt(fallback), lo, hi) : fallback;
+    };
+    gk::realtime::Settings s;
+    s.enabled = r.value("enabled").toBool(false);
+    for (const auto& f : r.value("folders").toArray())
+        if (!f.toString().trimmed().isEmpty()) s.folders << f.toString();
+    static const QStringList levels{"INFO", "LOW", "MEDIUM", "HIGH", "CRITICAL"};
+    const int level = levels.indexOf(r.value("notify_min_risk").toString());
+    s.notifyMinRisk = level < 0 ? 3 : level + 1;
+    s.autoQuarantine = r.value("auto_quarantine").toBool(false);
+    s.batchSeconds = clamp(r.value("batch_seconds"), 2, 300, 8);
+    s.stableSeconds = clamp(r.value("stable_seconds"), 1, 60, 2);
+    s.workers = clamp(r.value("max_workers"), 1, 8, 1);
+    for (const auto& p : setting(QStringLiteral("scan.excluded_paths")).toArray())
+        if (!p.toString().trimmed().isEmpty()) s.excludedPaths << p.toString();
+    return s;
+}
+
+void AppContext::startRealtimeIfEnabled() {
+    const gk::realtime::Settings s = realtimeSettings();
+    if (s.enabled) realtime()->apply(s);
 }
 
 const gk::bridge::Catalog& AppContext::catalog() {

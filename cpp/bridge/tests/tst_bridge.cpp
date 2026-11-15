@@ -220,6 +220,58 @@ private slots:
         QCOMPARE(report.value("ok").toBool(), false);
         QVERIFY(!report.value("detail").toString().isEmpty());
     }
+    void realtimeProtectionThroughTheService() {
+        QTemporaryDir data, game;
+        RealtimeService rt(envFor(data));
+        QVERIFY(RealtimeService::supported());
+        QSignalSpy status(&rt, &RealtimeService::statusChanged);
+        QSignalSpy detected(&rt, &RealtimeService::detected);
+        QSignalSpy batches(&rt, &RealtimeService::batchFinished);
+        gk::realtime::Settings s;
+        s.enabled = true;
+        s.folders = {game.path()};
+        s.batchSeconds = 2;
+        s.stableSeconds = 1;
+        rt.apply(s);
+        QTRY_VERIFY_WITH_TIMEOUT(rt.active(), 10000);
+        QVERIFY(rt.status().value("folders").toArray().first().toObject().value("watching").toBool());
+        writeFile(game.filePath(QStringLiteral("downloads/leia_eicar.com")), eicar());
+        QVERIFY(wait(detected));
+        const QJsonObject d = detected.first().at(0).toJsonObject();
+        QCOMPARE(d.value("classification").toString(), QStringLiteral("malware"));
+        QCOMPARE(d.value("action").toString(), QStringLiteral("notified"));
+        QVERIFY(wait(batches));
+
+        QSignalSpy listed(&rt, &RealtimeService::eventsListed);
+        const qint64 req = rt.listEvents();
+        QVERIFY(wait(listed));
+        QCOMPARE(listed.first().at(0).toLongLong(), req);
+        const QJsonArray events = listed.first().at(1).toJsonArray();
+        QVERIFY(!events.isEmpty());
+        const QJsonObject e = events.first().toObject();
+        QCOMPARE(e.value("event").toString(), QStringLiteral("detected"));
+        QVERIFY(e.value("risk_level").toString() == QLatin1String("HIGH") || e.value("risk_level").toString() == QLatin1String("CRITICAL"));
+        QCOMPARE(e.value("detail").toObject().value("action").toString(), QStringLiteral("notified"));
+
+        // The history leaves the real-time batches out unless asked for them.
+        HistoryService history(envFor(data));
+        QSignalSpy scans(&history, &HistoryService::scansListed);
+        const qint64 hidden = history.listScans(50);
+        const qint64 shown = history.listScans(50, true);
+        QTRY_COMPARE_WITH_TIMEOUT(scans.count(), 2, 10000);
+        for (const auto& args : scans) {
+            const QJsonArray rows = args.at(1).toJsonArray();
+            if (args.at(0).toLongLong() == hidden) QVERIFY(rows.isEmpty());
+            if (args.at(0).toLongLong() == shown) {
+                QVERIFY(!rows.isEmpty());
+                QCOMPARE(rows.first().toObject().value("origin").toString(), QStringLiteral("realtime"));
+            }
+        }
+
+        s.enabled = false;
+        rt.apply(s);
+        QTRY_VERIFY_WITH_TIMEOUT(!rt.active(), 10000);
+    }
 };
 
 QTEST_MAIN(TestBridge)

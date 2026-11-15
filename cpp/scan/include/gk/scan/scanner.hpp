@@ -6,6 +6,7 @@
 // pause(), resume() and cancel() may be called from any thread.
 #pragma once
 
+#include <QElapsedTimer>
 #include <QJsonArray>
 #include <QJsonObject>
 #include <QObject>
@@ -132,6 +133,7 @@ private:
     qint64 scanId_ = 0;
     double startedAt_ = 0;
     Progress progress_;
+    QElapsedTimer progressTimer_;
     qint64 lastProgressMs_ = 0;
     bool running_ = false;
     bool cancelled_ = false;

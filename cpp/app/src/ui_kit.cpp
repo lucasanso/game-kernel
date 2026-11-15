@@ -50,6 +50,13 @@ const QHash<QString, QString>& iconPaths() {
         {"file-search", "<path d='M14 3H6v18h6'/><path d='M14 3v4h4v4'/><circle cx='16' cy='16' r='3'/><path d='M18.2 18.2L21 21'/>"},
         {"clock", "<circle cx='12' cy='12' r='9'/><path d='M12 7v5l3 2'/>"},
         {"archive", "<rect x='3' y='4' width='18' height='4' rx='1'/><path d='M5 8v11h14V8'/><path d='M10 12h4'/>"},
+        {"eye", "<path d='M2 12s3.5-7 10-7 10 7 10 7-3.5 7-10 7S2 12 2 12z'/><circle cx='12' cy='12' r='3'/>"},
+        {"activity", "<path d='M3 12h4l3-8 4 16 3-8h4'/>"},
+        {"gauge", "<path d='M4 18a8 8 0 1 1 16 0'/><path d='M12 18l4-6'/><path d='M7 18h.01'/><path d='M17 18h.01'/>"},
+        {"tool", "<path d='M14.5 6.5a4 4 0 0 0-5.3 5.3L4 17l3 3 5.2-5.2a4 4 0 0 0 5.3-5.3l-2.5 2.5-2.5-.5-.5-2.5z'/>"},
+        {"plus", "<path d='M12 5v14'/><path d='M5 12h14'/>"},
+        {"minus", "<path d='M5 12h14'/>"},
+        {"bell", "<path d='M6 16v-5a6 6 0 0 1 12 0v5l2 2H4z'/><path d='M10 21h4'/>"},
         {"sliders", "<path d='M4 6h9'/><path d='M17 6h3'/><circle cx='15' cy='6' r='2'/><path d='M4 12h3'/><path d='M11 12h9'/><circle cx='9' cy='12' r='2'/><path d='M4 18h11'/><path d='M19 18h1'/><circle cx='17' cy='18' r='2'/>"},
     };
     return paths;

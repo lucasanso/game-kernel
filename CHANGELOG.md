@@ -61,6 +61,17 @@
 ## Agente B — Python, integração e ferramentas
 
 ### [não lançado]
+- **Proteção em tempo real (M11, tarefa do A assumida pelo B)**: `cpp/realtime` — observador recursivo nativo
+  (ReadDirectoryChangesW no Windows; inotify no Linux para desenvolvimento e CI), lotes só com arquivos que pararam de
+  mudar (estabilidade, leitura possível, janela de agrupamento, remoções e renomeações descartadas, perda de eventos
+  vira nova verificação da pasta), monitor que analisa no modo rápido com o `gk_scan` (origem `realtime`), registra
+  em `realtime_events`, avisa a partir do nível escolhido e, só quando o usuário liga, coloca em quarentena ameaças
+  confirmadas por assinatura (`gk::risk::confirmed_by_signature`, a mesma regra do motor de risco) — nunca um arquivo
+  que o usuário restaurou. A pasta de dados do programa nunca é observada. `RealtimeService` no `cpp/bridge`; página
+  **Tempo real**, bloco no Painel, ícone na área de notificação (fechar a janela mantém a proteção) e Histórico sem os
+  lotes automáticos por padrão. Banco: `add_realtime_event`/`list_realtime_events` e filtro de origem em `list_scans`.
+  Corrigido: o temporizador de progresso do `Scanner` era compartilhado entre instâncias (duas varreduras em *threads*
+  diferentes).
 - Interface: páginas do núcleo sobre o `cpp/bridge` — **Painel** (última varredura, assinaturas, quarentena,
   integridade da instalação, ações rápidas), **Segurança do jogo** (varredura com progresso, pausa, cancelamento e
   achados ao vivo), **Análise forense** (filtros, detalhes, explicação, recomendações, evidências com local exato,

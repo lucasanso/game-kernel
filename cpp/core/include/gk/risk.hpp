@@ -59,6 +59,19 @@ void assess(FileResult& result, const FileContext& context, const Catalog& catal
 // Convenience: derive context for all results and assess each of them.
 void assess_all(std::vector<FileResult>& files, const ComponentDb& db, const Catalog& catalog);
 
+// What the evidence of a result says about known threats (step 3 of `assess`). `known_threat` comes only from
+// a signature, a YARA family/test rule, a local IOC or decisive behaviour: never from heuristics.
+struct EvidenceVerdict {
+    bool known_threat = false;      // malware (or the EICAR test file) identified with certainty
+    bool by_signature = false;      // ... by a signature, YARA rule or local IOC (static evidence)
+    bool pua = false, test_file = false, good_reputation = false;
+};
+EvidenceVerdict evidence_verdict(const std::vector<Evidence>& evidences);
+
+// A threat confirmed by a signature, YARA rule or local IOC, on an assessed result: what real-time
+// protection may quarantine on its own when the user turned that on (heuristics never qualify).
+bool confirmed_by_signature(const FileResult& assessed);
+
 // Glob matching used by the component database (case-insensitive, '*' and '?').
 bool glob_match(std::string_view pattern, std::string_view text);
 

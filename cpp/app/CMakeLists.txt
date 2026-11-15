@@ -30,6 +30,7 @@ add_library(gk_app_lib STATIC
   src/pages/scan_page.hpp src/pages/scan_page.cpp
   src/pages/results_page.hpp src/pages/results_page.cpp
   src/pages/history_page.hpp src/pages/history_page.cpp
+  src/pages/realtime_page.hpp src/pages/realtime_page.cpp
   src/pages/quarantine_page.hpp src/pages/quarantine_page.cpp
   src/pages/settings_page.hpp src/pages/settings_page.cpp
 )

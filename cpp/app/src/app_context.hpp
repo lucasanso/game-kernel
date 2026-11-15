@@ -55,7 +55,13 @@ public:
     gk::bridge::HistoryService* history();
     gk::bridge::QuarantineService* quarantine();
     gk::bridge::IntegrityService* integrity();
+    gk::bridge::RealtimeService* realtime();
     const gk::bridge::Catalog& catalog();
+    // realtime.* and scan.excluded_paths from settings.json, with the ranges of gamekernel/config.py.
+    gk::realtime::Settings realtimeSettings() const;
+    // Starts real-time protection when settings.json has it on (called once at start-up); afterwards every
+    // change to realtime.* or scan.excluded_paths is applied by itself.
+    void startRealtimeIfEnabled();
     std::unique_ptr<gk::updates::Installer> makeInstaller() const;
 
     // Every destructive or security-relevant action asks through this (tests replace it).
@@ -74,6 +80,7 @@ private:
     gk::bridge::HistoryService* history_ = nullptr;
     gk::bridge::QuarantineService* quarantine_ = nullptr;
     gk::bridge::IntegrityService* integrity_ = nullptr;
+    gk::bridge::RealtimeService* realtime_ = nullptr;
     std::unique_ptr<gk::bridge::Catalog> catalog_;
     gk::ipc::HelperClient* helper_;
 };

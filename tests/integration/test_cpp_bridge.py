@@ -20,4 +20,4 @@ def test_bridge_services_against_the_real_core(isolated_data_dir):
     totals = re.search(r"Totals: (\d+) passed, (\d+) failed, (\d+) skipped", report)
     assert code == 0 and totals, report
     passed, failed, skipped = map(int, totals.groups())
-    assert failed == 0 and skipped == 0 and passed >= 6, report
+    assert failed == 0 and skipped == 0 and passed >= 7, report

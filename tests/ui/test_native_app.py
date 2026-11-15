@@ -73,4 +73,5 @@ def test_desktop_application(isolated_data_dir, tmp_path):
     assert passed >= 10, report
     assert sorted(p.name for p in shots.glob("*.png")) == [
         "01-painel.png", "02-varredura.png", "03-analise.png", "04-historico.png", "05-quarentena.png",
-        "06-atualizacoes.png", "07-sandbox.png", "08-relatorios.png", "09-privacidade.png", "10-configuracoes.png"]
+        "06-tempo-real.png", "07-atualizacoes.png", "08-sandbox.png", "09-relatorios.png", "10-privacidade.png",
+        "11-configuracoes.png"]

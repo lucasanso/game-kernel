@@ -15,7 +15,8 @@ rede, e só quando você confirma.
 ### Painel
 A situação de tudo num relance: a última varredura (ameaças e suspeitos), as assinaturas (pacote instalado e se está
 desatualizado), a quarentena e a **integridade da instalação** (os arquivos do programa conferidos com o manifesto
-assinado). **Analisar uma pasta de jogo…** começa uma varredura direto daqui.
+assinado), além do estado da **proteção em tempo real**. **Analisar uma pasta de jogo…** começa uma varredura
+direto daqui.
 
 ### Segurança do jogo (varredura)
 1. **Adicionar pasta…** ou **Adicionar arquivo…**: a pasta do jogo, do crack, do repack ou do mod.
@@ -35,13 +36,32 @@ análise, a operação é recusada). Para um arquivo dentro de um compactado, o 
 quarentena. **Gerar relatório** abre a página de Relatórios já na varredura certa.
 
 ### Histórico
-Todas as varreduras deste computador. **Abrir a análise** (ou clique duplo) e **Gerar relatório**.
+Todas as varreduras deste computador. **Abrir a análise** (ou clique duplo) e **Gerar relatório**. As análises
+automáticas da proteção em tempo real aparecem ao marcar a opção correspondente.
 
 ### Quarentena
 Os arquivos isolados, com quando, de onde, risco, detecção e motivo. **Restaurar no local original** ou
 **Restaurar em…** pedem confirmação e conferem o conteúdo com o registrado na entrada; se já houver um arquivo no
 destino, o programa pergunta antes de substituir. **Apagar definitivamente** pede confirmação e não pode ser
 desfeito. **Verificar cofre** autentica todos os itens.
+
+### Proteção em tempo real
+Escolha as pastas que o Game Kernel deve observar (jogos, downloads, mods) e **Ative a proteção**. Cada arquivo novo
+ou alterado é analisado assim que termina de ser gravado (o programa espera o arquivo parar de mudar e junta as
+alterações de alguns segundos num lote só, por exemplo ao extrair um *repack*), no modo rápido e com o mesmo motor da
+varredura. Subpastas também são observadas; a pasta de dados do Game Kernel e as exclusões da varredura ficam de fora.
+
+* **Avisar a partir do risco**: achados nesse nível ou acima geram aviso na janela (e na área de notificação, se a
+  janela estiver fechada). Todos ficam em **Eventos recentes**, com **Ver análise** para a análise forense do lote.
+* **Quarentena automática** (desligada por padrão; pede confirmação): só ameaças **confirmadas por assinatura** —
+  assinatura, regra YARA de família ou indicador local — vão para a quarentena sem perguntar. Suspeitas por heurística
+  só avisam. Um arquivo que você restaurar da quarentena não é isolado de novo.
+* Limites, ditos também na página: a proteção **não impede** que um programa seja aberto antes de a análise terminar
+  (isso exigiria um *driver* do sistema) e funciona enquanto o Game Kernel estiver aberto. Ao fechar a janela com a
+  proteção ativa, o programa continua na área de notificação; **Sair** no menu do ícone encerra.
+* As análises do tempo real ficam no Histórico (marque **Incluir as análises feitas pela proteção em tempo real**).
+  O ClamAV não é usado nesses lotes pequenos (carregar a base a cada lote custaria mais que o lote); as varreduras
+  manuais o usam.
 
 ### Central de Atualização Offline
 Mantém as assinaturas (regras YARA, indicadores e bancos ClamAV) em dia **sem internet**, com pacotes `.gkpkg`

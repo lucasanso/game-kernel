@@ -200,6 +200,36 @@ Com o A indisponível, o usuário pediu ao B que assumisse as tarefas dele (regi
   explicitamente; no Windows, programas de uma árvore de build do Visual Studio (`cpp/<x>/Release/`) não achavam o
   `gk-scanworker`.
 
+### M11 — proteção em tempo real (`cpp/realtime`)
+
+* **Observador** (`gk::realtime::DirectoryWatcher`): Windows — `ReadDirectoryChangesW` com E/S sobreposta, subárvore
+  inteira, uma *thread* para até 63 pastas, nomes curtos 8.3 convertidos, *buffer* estourado → pedido de nova
+  verificação da pasta (`overflow`), pasta removida/inacessível → `failed` com o motivo do sistema. Linux (só
+  desenvolvimento e CI) — inotify com uma *watch* por pasta, subpastas novas acompanhadas. Pastas inexistentes são
+  recusadas com o motivo; pastas dentro de outra pedida não são observadas duas vezes.
+* **Lotes** (`ChangeBatcher`, lógica pura com relógio e sonda injetados): só sai o arquivo que parou de mudar (sem
+  evento por `stable_seconds`, duas sondagens iguais de tamanho e data, e abrível para leitura; o que nunca assenta
+  sai após 2 min, marcado como "ainda em gravação"); alterações juntadas por `batch_seconds`; removidos e renomeados
+  descartados (downloads `.part` → nome final); pasta só entra quando aparece (movida/copiada), nunca porque o conteúdo
+  mudou; exclusões (pasta de dados do programa, `scan.excluded_paths`); muitas alterações → nova verificação das
+  pastas observadas (o cache da varredura torna barato).
+* **Monitor**: varredura no modo rápido com o `gk_scan` (origem `realtime`, sem ClamAV nos lotes), eventos em
+  `realtime_events` (mesma tabela do `db.py`), aviso a partir de `notify_min_risk`, quarentena automática opcional só
+  para ameaças confirmadas por assinatura — a regra foi extraída do motor de risco (`gk::risk::evidence_verdict`,
+  `confirmed_by_signature`) para não haver duas — com o SHA-256 analisado conferido, e nunca para um arquivo que o
+  usuário restaurou.
+* **Interface**: `RealtimeService` (monitor numa *thread* própria), página **Tempo real** (pastas com estado real,
+  nível de aviso, quarentena automática com confirmação, tempos, eventos com "Ver análise"), bloco no Painel, ícone na
+  área de notificação com menu (fechar a janela mantém a proteção quando ela está ativa), avisos na janela e na área de
+  notificação, Histórico sem os lotes automáticos por padrão (opção para incluir). As chaves são as `realtime.*` do
+  `config.py`, aplicadas na hora.
+* Testes: `tests/integration/test_cpp_realtime.py` → `tst_realtime.cpp` (12 casos: regras de lote, observador real,
+  monitor de ponta a ponta com EICAR gerado no teste, quarentena automática e restauração, pasta de dados ignorada,
+  pasta inexistente), `tst_bridge.cpp` (serviço) e `tst_app.cpp` (página e janela, captura `06-tempo-real.png`);
+  limpos sob ASan/UBSan com detecção de vazamentos.
+* Achado pelo caminho: o temporizador de progresso do `Scanner` era `static` (compartilhado entre a varredura manual
+  e a do tempo real, em *threads* diferentes); passou a ser por instância.
+
 ## B9 — páginas que não dependem do A (2026-11-15)
 
 * **Relatórios forenses**: lista as varreduras do banco pelo novo método `reports.scans` do auxiliar (somente

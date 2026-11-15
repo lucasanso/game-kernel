@@ -13,6 +13,7 @@
 
 #include <memory>
 
+#include "gk/realtime/monitor.hpp"
 #include "gk/scan/scanner.hpp"
 
 namespace gk::bridge {
@@ -90,7 +91,8 @@ public:
 
     // Asynchronous; each returns a request id echoed by the signals. A missing database is not an error
     // (fresh installation): the lists are empty.
-    qint64 listScans(int limit = 200);
+    // Real-time protection scans small batches every few seconds: they are left out unless asked for.
+    qint64 listScans(int limit = 200, bool includeRealtime = false);
     qint64 loadScan(qint64 scanId, bool findingsOnly = true, int limit = 5000);
 
 signals:
@@ -152,6 +154,38 @@ signals:
 private:
     Environment env_;
     QThreadPool pool_;
+};
+
+// Real-time protection (gk::realtime::Monitor in its own thread). apply() takes the realtime.* settings;
+// status and findings come back as signals. The event log is read from SQLite in the background.
+class RealtimeService : public QObject {
+    Q_OBJECT
+public:
+    explicit RealtimeService(Environment env, QObject* parent = nullptr);
+    ~RealtimeService() override;
+    static bool supported();
+
+    void apply(const gk::realtime::Settings& settings);
+    [[nodiscard]] QJsonObject status() const { return status_; }   // last status reported by the monitor
+    [[nodiscard]] bool active() const { return status_.value("active").toBool(); }
+    qint64 listEvents(int limit = 500);
+
+signals:
+    void statusChanged(const QJsonObject& status);
+    void detected(const QJsonObject& detection);
+    void eventRecorded(const QJsonObject& event);
+    void batchFinished(const QJsonObject& summary);
+    void logMessage(const QString& level, const QString& message);
+    void eventsListed(qint64 request, const QJsonArray& events);
+    void failed(qint64 request, const QString& message);
+
+private:
+    Environment env_;
+    QThread thread_;
+    gk::realtime::Monitor* monitor_;
+    QJsonObject status_;
+    QThreadPool pool_;
+    qint64 next_ = 1;
 };
 
 }  // namespace gk::bridge

@@ -48,6 +48,17 @@ struct QuarantineRecord {
     nlohmann::json meta = nlohmann::json::object();
 };
 
+// Row of `realtime_events` (what real-time protection found or did; same columns as db.py).
+struct RealtimeEvent {
+    double at = 0;                         // 0 = now
+    std::string path, event;               // event: detected | quarantined | quarantine_failed | overflow | error
+    std::optional<std::string> sha256;
+    int risk = 0;                          // RiskLevel integer
+    std::string classification;
+    std::optional<std::int64_t> scan_id;
+    std::string detail;                    // JSON object as text (detection, category, message)
+};
+
 // Quarantine row as JSON (gk-cli and the user interface show the same fields).
 nlohmann::json to_json(const QuarantineRecord& record);
 
@@ -85,13 +96,19 @@ public:
     // Newest first: {scan_id, started_at, finished_at, mode, origin, label, targets[], status, files_found,
     // files_analyzed, files_skipped, files_errors, members_analyzed, threats, suspicious, pua, bytes_scanned,
     // max_risk (RiskLevel integer), error}.
-    nlohmann::json list_scans(int limit);
+    // `exclude_origin` leaves out scans of one origin (the history hides the many small real-time batches).
+    nlohmann::json list_scans(int limit, const std::string& exclude_origin = {});
     // Same fields plus "options" and "summary" (the ScanSummary written at the end); nullopt when unknown.
     std::optional<nlohmann::json> scan(std::int64_t scan_id);
     // FileResult documents of a scan, highest risk first. findings_only keeps what a user must look at:
     // risk >= INFO, classification other than known_legit/unknown, incomplete analysis, crack status or a
     // possible false positive (same rule as the report engine).
     nlohmann::json file_results(std::int64_t scan_id, bool findings_only, int limit);
+
+    // Real-time protection log.
+    void add_realtime_event(const RealtimeEvent& event);
+    // Newest first: {id, at, path, event, sha256, risk, classification, scan_id, detail (parsed JSON)}.
+    nlohmann::json list_realtime_events(int limit);
 
     // Quarantine bookkeeping (the encrypted items themselves live in gk::quarantine::Vault).
     void add_quarantine_item(const QuarantineRecord& record);

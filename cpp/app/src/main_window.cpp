@@ -4,6 +4,7 @@
 #include "pages/helper_pages.hpp"
 #include "pages/history_page.hpp"
 #include "pages/quarantine_page.hpp"
+#include "pages/realtime_page.hpp"
 #include "pages/results_page.hpp"
 #include "pages/scan_page.hpp"
 #include "pages/reports_page.hpp"
@@ -11,12 +12,20 @@
 #include "pages/updates_page.hpp"
 #include "ui_kit.hpp"
 
+#include <QAction>
+#include <QApplication>
+#include <QCloseEvent>
+#include <QDir>
 #include <QEvent>
+#include <QFileInfo>
+#include <QMenu>
 #include <QHBoxLayout>
+#include <QJsonObject>
 #include <QLabel>
 #include <QListWidget>
 #include <QPointer>
 #include <QStackedWidget>
+#include <QSystemTrayIcon>
 #include <QTimer>
 #include <QVBoxLayout>
 
@@ -158,6 +167,7 @@ MainWindow::MainWindow(AppContext* ctx, QWidget* parent) : QMainWindow(parent), 
     results_ = new ResultsPage(ctx_, stack_);
     history_ = new HistoryPage(ctx_, stack_);
     quarantine_ = new QuarantinePage(ctx_, stack_);
+    realtime_ = new RealtimePage(ctx_, stack_);
     updates_ = new UpdatesPage(ctx_, stack_);
     sandbox_ = new SandboxPage(ctx_, stack_);
     reports_ = new ReportsPage(ctx_, stack_);
@@ -173,6 +183,8 @@ MainWindow::MainWindow(AppContext* ctx, QWidget* parent) : QMainWindow(parent), 
             QStringLiteral("Todas as varreduras feitas neste computador."));
     addPage(quarantine_, QStringLiteral("archive"), QStringLiteral("Quarentena"), QStringLiteral("Quarentena"),
             QStringLiteral("Arquivos isolados num cofre criptografado; restaure ou apague quando quiser."));
+    addPage(realtime_, QStringLiteral("eye"), QStringLiteral("Tempo real"), QStringLiteral("Proteção em tempo real"),
+            QStringLiteral("Analisa o que aparece ou muda nas pastas dos seus jogos e downloads assim que é gravado."));
     addPage(updates_, QStringLiteral("package"), QStringLiteral("Atualização offline"), QStringLiteral("Central de Atualização Offline"),
             QStringLiteral("Importe pacotes assinados de assinaturas, regras e indicadores. Nada é baixado."));
     addPage(sandbox_, QStringLiteral("flask"), QStringLiteral("Análise comportamental"), QStringLiteral("Análise comportamental"),
@@ -213,6 +225,7 @@ MainWindow::MainWindow(AppContext* ctx, QWidget* parent) : QMainWindow(parent), 
     connect(dashboard_, &DashboardPage::openUpdates, this, [this] { showPage(Updates); });
     connect(dashboard_, &DashboardPage::openQuarantine, this, [this] { showPage(Quarantine); });
     connect(dashboard_, &DashboardPage::openHistory, this, [this] { showPage(History); });
+    connect(dashboard_, &DashboardPage::openRealtime, this, [this] { showPage(Realtime); });
     connect(scan_, &ScanPage::openResults, this, openResults);
     connect(scan_, &ScanPage::scanFinished, this, [this] {
         history_->refresh();
@@ -227,8 +240,85 @@ MainWindow::MainWindow(AppContext* ctx, QWidget* parent) : QMainWindow(parent), 
         dashboard_->refresh();
     });
     connect(quarantine_, &QuarantinePage::operationFinished, this, [this] { dashboard_->refresh(); });
+    connect(realtime_, &RealtimePage::openResults, this, openResults);
+
+    // Real-time findings: a notification in the window and, when it is hidden, in the notification area.
+    auto* rt = ctx_->realtime();
+    connect(rt, &gk::bridge::RealtimeService::detected, this, [this](const QJsonObject& d) {
+        const QString file = QFileInfo(d.value("path").toString()).fileName();
+        const QString what = d.value("detection").toString();
+        const QString text = QStringLiteral("%1 — %2 (risco %3). %4")
+                                 .arg(file, what.isEmpty() ? ctx_->catalog().classification(d.value("classification").toString()) : what,
+                                      riskLabel(d.value("risk_level").toString()).toLower(), d.value("message").toString());
+        const bool severe = d.value("risk").toInt() >= 4;
+        emit ctx_->notify(severe ? AppContext::Level::Error : AppContext::Level::Warning, QStringLiteral("Proteção em tempo real"), text);
+        if (tray_ && (!isVisible() || isMinimized()))
+            tray_->showMessage(QStringLiteral("Game Kernel — tempo real"), text,
+                               severe ? QSystemTrayIcon::Critical : QSystemTrayIcon::Warning, 10000);
+        if (d.value("action").toString() == QLatin1String("quarantined")) quarantine_->refresh();
+        dashboard_->refresh();
+    });
+    connect(rt, &gk::bridge::RealtimeService::statusChanged, this, [this](const QJsonObject& st) {
+        if (tray_)
+            tray_->setToolTip(st.value("active").toBool() ? QStringLiteral("Game Kernel — proteção em tempo real ativa")
+                                                          : QStringLiteral("Game Kernel"));
+    });
+    setupTray();
+    ctx_->startRealtimeIfEnabled();
     results_->loadLatest();
     nav_->setCurrentRow(0);
+}
+
+void MainWindow::setupTray() {
+    if (!QSystemTrayIcon::isSystemTrayAvailable()) return;
+    tray_ = new QSystemTrayIcon(appIcon(), this);
+    tray_->setToolTip(AppContext::productName());
+    auto* menu = new QMenu(this);
+    QAction* open = menu->addAction(QStringLiteral("Abrir o Game Kernel"));
+    QAction* realtime = menu->addAction(QStringLiteral("Proteção em tempo real…"));
+    menu->addSeparator();
+    QAction* quit = menu->addAction(QStringLiteral("Sair"));
+    connect(open, &QAction::triggered, this, &MainWindow::showFromTray);
+    connect(realtime, &QAction::triggered, this, [this] {
+        showFromTray();
+        showPage(Realtime);
+    });
+    connect(quit, &QAction::triggered, this, [this] {
+        quitting_ = true;
+        close();
+        QApplication::quit();
+    });
+    connect(tray_, &QSystemTrayIcon::activated, this, [this](QSystemTrayIcon::ActivationReason reason) {
+        if (reason == QSystemTrayIcon::Trigger || reason == QSystemTrayIcon::DoubleClick) showFromTray();
+    });
+    tray_->setContextMenu(menu);
+    tray_->show();
+}
+
+void MainWindow::showFromTray() {
+    showNormal();
+    raise();
+    activateWindow();
+}
+
+bool MainWindow::keepsRunningInTray() const {
+    return tray_ && ctx_->realtime()->active() && ctx_->setting(QStringLiteral("ui.minimize_to_tray"), true).toBool(true);
+}
+
+void MainWindow::closeEvent(QCloseEvent* event) {
+    if (!quitting_ && keepsRunningInTray()) {
+        hide();
+        event->ignore();
+        if (!trayHintShown_) {
+            trayHintShown_ = true;
+            tray_->showMessage(QStringLiteral("Game Kernel continua protegendo"),
+                               QStringLiteral("A proteção em tempo real segue ativa na área de notificação. Para encerrar, "
+                                              "use \"Sair\" no menu do ícone."),
+                               QSystemTrayIcon::Information, 8000);
+        }
+        return;
+    }
+    QMainWindow::closeEvent(event);
 }
 
 void MainWindow::addPage(QWidget* page, const QString& iconName, const QString& navLabel, const QString& title,

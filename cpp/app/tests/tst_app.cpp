@@ -10,6 +10,7 @@
 #include "pages/helper_pages.hpp"
 #include "pages/history_page.hpp"
 #include "pages/quarantine_page.hpp"
+#include "pages/realtime_page.hpp"
 #include "pages/results_page.hpp"
 #include "pages/scan_page.hpp"
 #include "pages/reports_page.hpp"
@@ -26,6 +27,7 @@
 #include <QJsonObject>
 #include <QRegularExpression>
 #include <QSignalSpy>
+#include <QSystemTrayIcon>
 #include <QTemporaryDir>
 #include <QtTest>
 
@@ -455,6 +457,55 @@ private slots:
         env->ctx->helper()->stop();
     }
 
+    void realtimePageAgainstTheRealMonitor() {
+        auto env = makeEnv();
+        RealtimePage page(env->ctx.get());
+        QSignalSpy shown(&page, &RealtimePage::statusShown);
+        QVERIFY(page.statusText().startsWith(QStringLiteral("Desativada")));
+        QVERIFY(!page.setProtectionEnabled(true));                    // nothing to watch yet
+        QVERIFY(page.lastError().contains(QStringLiteral("pasta")));
+        QTemporaryDir games;
+        QVERIFY(!page.addFolder(QDir(games.path()).filePath(QStringLiteral("nao-existe"))));
+        QVERIFY(!page.addFolder(env->data.path()));                   // the program's own data is never watched
+        QVERIFY(page.addFolder(games.path()));
+        QVERIFY(!page.addFolder(games.path()));                       // already listed
+        QCOMPARE(page.folders().size(), 1);
+        QVERIFY(!page.setBatchSeconds(1));
+        QVERIFY(page.setBatchSeconds(2));
+        QVERIFY(page.setStableSeconds(1));
+        QVERIFY(!page.setNotifyMinRisk(QStringLiteral("ALTO")));
+        QVERIFY(page.setNotifyMinRisk(QStringLiteral("HIGH")));
+        env->answer = false;
+        QVERIFY(!page.setAutoQuarantine(true));                       // declined: stays off
+        QCOMPARE(env->ctx->setting(QStringLiteral("realtime.auto_quarantine"), false).toBool(), false);
+        // settings.json holds exactly the keys gamekernel/config.py validates
+        QCOMPARE(env->ctx->setting(QStringLiteral("realtime.notify_min_risk")).toString(), QStringLiteral("HIGH"));
+        QCOMPARE(env->ctx->setting(QStringLiteral("realtime.batch_seconds")).toInt(), 2);
+        QCOMPARE(env->ctx->realtimeSettings().notifyMinRisk, 4);
+
+        QVERIFY(page.setProtectionEnabled(true));
+        QTRY_VERIFY_WITH_TIMEOUT(page.statusText().startsWith(QStringLiteral("Ativa")), 15000);
+        QVERIFY2(page.folderState(0).endsWith(QStringLiteral("observada")), qPrintable(page.folderState(0)));
+        QFile sample(QDir(games.path()).filePath(QStringLiteral("trainer/leia_eicar.com")));
+        QVERIFY(QDir().mkpath(QFileInfo(sample).absolutePath()));
+        QVERIFY(sample.open(QIODevice::WriteOnly));
+        sample.write(QByteArray("X5O!P%@AP[4\\PZX54(P^)7CC)7}$") + "EICAR-STANDARD-ANTIVIRUS-" + "TEST-FILE!$H+H*");
+        sample.close();
+        QTRY_VERIFY_WITH_TIMEOUT(page.eventCount() >= 1, 120000);
+        QVERIFY(QFileInfo::exists(sample.fileName()));                // automatic quarantine is off
+        QVERIFY2(page.statusText().contains(QStringLiteral("1 achado")), qPrintable(page.statusText()));
+        QSignalSpy open(&page, &RealtimePage::openResults);
+        QVERIFY(page.openSelectedEvent());
+        QVERIFY(open.first().at(0).toLongLong() > 0);
+
+        // Removing the last folder turns the protection off, so what is shown stays true.
+        QVERIFY(page.removeFolder(page.folders().first()));
+        QVERIFY(page.folders().isEmpty());
+        QTRY_VERIFY_WITH_TIMEOUT(page.statusText().startsWith(QStringLiteral("Desativada")), 15000);
+        QVERIFY(!env->ctx->realtime()->active());
+        env->ctx->helper()->stop();
+    }
+
     void mainWindowNavigationNotificationsAndScreenshots() {
         auto env = makeEnv(true, true);
         QTemporaryDir games;
@@ -463,7 +514,9 @@ private slots:
         window.resize(1280, 820);
         window.show();
         QVERIFY(QTest::qWaitForWindowExposed(&window));
-        QCOMPARE(window.pageCount(), 10);
+        QCOMPARE(window.pageCount(), 11);
+        // Without a notification area (offscreen tests) closing the window ends the program as usual.
+        QVERIFY(!window.keepsRunningInTray() || QSystemTrayIcon::isSystemTrayAvailable());
         QCOMPARE(window.currentTitle(), QStringLiteral("Painel"));
 
         // A real scan started from the scan page, then its analysis, history and quarantine.
@@ -503,7 +556,31 @@ private slots:
         QTest::qWait(200);
         screenshot(&window, QStringLiteral("05-quarentena.png"));
 
+        // Real-time protection on a downloads folder: a new threat is reported in the window.
+        QTemporaryDir downloads;
+        window.showPage(MainWindow::Realtime);
+        QCOMPARE(window.currentTitle(), QStringLiteral("Proteção em tempo real"));
+        RealtimePage* rt = window.realtimePage();
+        QVERIFY(rt->addFolder(downloads.path()));
+        QVERIFY(rt->setBatchSeconds(2));
+        QVERIFY(rt->setStableSeconds(1));
+        QVERIFY(rt->setProtectionEnabled(true));
+        QTRY_VERIFY_WITH_TIMEOUT(rt->statusText().startsWith(QStringLiteral("Ativa")), 15000);
+        QFile fresh(QDir(downloads.path()).filePath(QStringLiteral("trainer_v1.2/leia_eicar.com")));
+        QVERIFY(QDir().mkpath(QFileInfo(fresh).absolutePath()));
+        QVERIFY(fresh.open(QIODevice::WriteOnly));
+        fresh.write(QByteArray("X5O!P%@AP[4\\PZX54(P^)7CC)7}$") + "EICAR-STANDARD-ANTIVIRUS-" + "TEST-FILE!$H+H*");
+        fresh.close();
+        QTRY_VERIFY_WITH_TIMEOUT(rt->eventCount() >= 1, 120000);
+        QTRY_VERIFY_WITH_TIMEOUT(
+            std::any_of(window.toasts()->history().begin(), window.toasts()->history().end(),
+                        [](const QString& t) { return t.startsWith(QStringLiteral("Proteção em tempo real: leia_eicar.com")); }),
+            10000);
+        QTest::qWait(300);
+        screenshot(&window, QStringLiteral("06-tempo-real.png"));
+
         window.showPage(MainWindow::Dashboard);
+        QVERIFY2(window.dashboardPage()->realtimeText().startsWith(QStringLiteral("Ativa")), qPrintable(window.dashboardPage()->realtimeText()));
         QSignalSpy refreshed(window.dashboardPage(), &DashboardPage::refreshed);
         window.dashboardPage()->refresh();
         QVERIFY(waitFinished(refreshed, 60000));
@@ -519,19 +596,19 @@ private slots:
         QVERIFY(window.toasts()->visibleCount() >= 1);
         QVERIFY(window.toasts()->history().last().contains(QStringLiteral("2026.11.12.1")));
         QTest::qWait(200);
-        screenshot(&window, QStringLiteral("06-atualizacoes.png"));
+        screenshot(&window, QStringLiteral("07-atualizacoes.png"));
 
         window.showPage(MainWindow::Sandbox);
         QCOMPARE(window.currentTitle(), QStringLiteral("Análise comportamental"));
         QTRY_VERIFY_WITH_TIMEOUT(!window.sandboxPage()->availabilityReason().isEmpty(), 30000);
         QTest::qWait(200);
-        screenshot(&window, QStringLiteral("07-sandbox.png"));
+        screenshot(&window, QStringLiteral("08-sandbox.png"));
 
         window.showPage(MainWindow::Reports);
         QCOMPARE(window.currentTitle(), QStringLiteral("Relatórios forenses"));
         QTRY_VERIFY_WITH_TIMEOUT(window.reportsPage()->scanCount() >= 1, 30000);
         QTest::qWait(200);
-        screenshot(&window, QStringLiteral("08-relatorios.png"));
+        screenshot(&window, QStringLiteral("09-relatorios.png"));
 
         window.showPage(MainWindow::Privacy);
         QCOMPARE(window.currentTitle(), QStringLiteral("Privacidade e rede"));
@@ -539,12 +616,12 @@ private slots:
         window.privacyPage()->runNetworkSelfTest();
         QVERIFY(waitFinished(selfTest));
         QTest::qWait(200);
-        screenshot(&window, QStringLiteral("09-privacidade.png"));
+        screenshot(&window, QStringLiteral("10-privacidade.png"));
 
         window.showPage(MainWindow::Settings);
         QCOMPARE(window.currentTitle(), QStringLiteral("Configurações"));
         QTest::qWait(200);
-        screenshot(&window, QStringLiteral("10-configuracoes.png"));
+        screenshot(&window, QStringLiteral("11-configuracoes.png"));
         env->ctx->helper()->stop();
     }
 };

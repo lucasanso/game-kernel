@@ -83,7 +83,12 @@ cpp/core/       gk_core — núcleo sem Qt: hash, tipo real, PE, YARA, compactad
 cpp/bindings/   gk_native — módulo pybind11 do núcleo (A)
 cpp/ipc/        gk_ipc — cliente gk-ipc v1 em C++/Qt (escrito pelo B, mantido pelo A)
 cpp/updates/    gk_updates + gk-update — verificação Ed25519 e instalação atômica de pacotes (escrito pelo B, mantido pelo A)
-cpp/worker, cpp/cli, cpp/quarantine, cpp/realtime, cpp/perf, cpp/sysopt, cpp/bridge   (A, próximos passos)
+cpp/worker/     gk-scanworker — análise em processo isolado (A)
+cpp/scan/, cpp/cli/   orquestrador de varredura (Qt Core) e gk-cli (A)
+cpp/realtime/   gk_realtime — proteção em tempo real (M11): ReadDirectoryChangesW (Windows) / inotify (Linux,
+                desenvolvimento), regras de lote e o monitor sobre o gk_scan (escrito pelo B a pedido do usuário)
+cpp/bridge/     gk_bridge — serviços Qt para a interface (M13; escrito pelo B a pedido do usuário)
+cpp/perf, cpp/sysopt   (M12, próximos passos)
 cpp/app/        interface Qt 6 C++ (B)
 contracts/      schema.sql, update_package.md, helper_methods.md
 gamekernel/     Python: fundação (A); helper, reports, sandbox, intel, rules, updates (B)

@@ -6,7 +6,7 @@ find_package(Qt6 6.4 REQUIRED COMPONENTS Core)
 
 add_library(gk_bridge STATIC include/gk/bridge/services.hpp src/services.cpp)
 target_include_directories(gk_bridge PUBLIC ${CMAKE_CURRENT_SOURCE_DIR}/include)
-target_link_libraries(gk_bridge PUBLIC gk_scan Qt6::Core)
+target_link_libraries(gk_bridge PUBLIC gk_scan gk_realtime Qt6::Core)
 gk_apply_options(gk_bridge)
 
 option(GK_BRIDGE_BUILD_TESTS "Build gk_bridge_tests (driven by tests/integration/test_cpp_bridge.py)" ON)

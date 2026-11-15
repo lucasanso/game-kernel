@@ -3,6 +3,7 @@
 #include "../ui_kit.hpp"
 #include "scan_table.hpp"
 
+#include <QCheckBox>
 #include <QHBoxLayout>
 #include <QLabel>
 #include <QPushButton>
@@ -22,6 +23,8 @@ HistoryPage::HistoryPage(AppContext* ctx, QWidget* parent) : QWidget(parent), ct
     auto* refreshButton = new QPushButton(icon(QStringLiteral("refresh")), QStringLiteral("Atualizar"), card);
     header->addWidget(refreshButton, 0, Qt::AlignTop);
     card->body()->addLayout(header);
+    includeRealtime_ = new QCheckBox(QStringLiteral("Incluir as análises feitas pela proteção em tempo real"), card);
+    card->body()->addWidget(includeRealtime_);
     table_ = makeScanTable(card);
     card->body()->addWidget(table_);
     empty_ = mutedLabel(QString(), card);
@@ -59,6 +62,7 @@ HistoryPage::HistoryPage(AppContext* ctx, QWidget* parent) : QWidget(parent), ct
         emit loaded(0);
     });
     connect(refreshButton, &QPushButton::clicked, this, &HistoryPage::refresh);
+    connect(includeRealtime_, &QCheckBox::toggled, this, &HistoryPage::refresh);
     connect(table_, &QTableWidget::itemSelectionChanged, this, &HistoryPage::updateButtons);
     connect(table_, &QTableWidget::cellDoubleClicked, this, [this] {
         if (selectedScan() > 0) emit openResults(selectedScan());
@@ -74,8 +78,11 @@ HistoryPage::HistoryPage(AppContext* ctx, QWidget* parent) : QWidget(parent), ct
 }
 
 void HistoryPage::refresh() {
-    if (request_ < 0) request_ = ctx_->history()->listScans(500);
+    // A newer request replaces one still running (its answer is ignored), so a toggle is never lost.
+    request_ = ctx_->history()->listScans(500, includeRealtime_->isChecked());
 }
+
+void HistoryPage::setIncludeRealtime(bool on) { includeRealtime_->setChecked(on); }
 
 int HistoryPage::scanCount() const { return table_->rowCount(); }
 qint64 HistoryPage::selectedScan() const { return selectedScanId(table_); }

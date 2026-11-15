@@ -152,15 +152,17 @@ HistoryService::HistoryService(Environment env, QObject* parent) : QObject(paren
 
 HistoryService::~HistoryService() { pool_.waitForDone(); }
 
-qint64 HistoryService::listScans(int limit) {
+qint64 HistoryService::listScans(int limit, bool includeRealtime) {
     const qint64 request = next_++;
     const QString file = env_.databaseFile();
-    pool_.start([this, request, file, limit] {
+    pool_.start([this, request, file, limit, includeRealtime] {
         QJsonArray scans;
         QString error;
         try {
             if (QFileInfo::exists(file))   // a fresh installation has no database yet: nothing to list
-                scans = withRiskNames(toQt(gk::db::Database::open_readonly(native(file))->list_scans(limit)).toArray());
+                scans = withRiskNames(toQt(gk::db::Database::open_readonly(native(file))
+                                               ->list_scans(limit, includeRealtime ? std::string() : std::string("realtime")))
+                                          .toArray());
         } catch (const std::exception& e) {
             error = messageOf(e);
         }
@@ -370,6 +372,67 @@ void IntegrityService::check() {
         }
         QMetaObject::invokeMethod(this, [this, out] { emit checked(out); }, Qt::QueuedConnection);
     });
+}
+
+// ======================================================================================== real time
+RealtimeService::RealtimeService(Environment env, QObject* parent) : QObject(parent), env_(std::move(env)) {
+    qRegisterMetaType<gk::realtime::Settings>();
+    pool_.setMaxThreadCount(1);
+    monitor_ = new gk::realtime::Monitor(env_.scanConfig(), env_.quarantineDir());
+    monitor_->moveToThread(&thread_);
+    connect(&thread_, &QThread::finished, monitor_, &QObject::deleteLater);
+    connect(monitor_, &gk::realtime::Monitor::statusChanged, this, [this](const QJsonObject& s) {
+        status_ = s;
+        emit statusChanged(s);
+    });
+    connect(monitor_, &gk::realtime::Monitor::detected, this, &RealtimeService::detected);
+    connect(monitor_, &gk::realtime::Monitor::eventRecorded, this, &RealtimeService::eventRecorded);
+    connect(monitor_, &gk::realtime::Monitor::batchFinished, this, &RealtimeService::batchFinished);
+    connect(monitor_, &gk::realtime::Monitor::logMessage, this, &RealtimeService::logMessage);
+    status_ = QJsonObject{{"enabled", false}, {"active", false}, {"supported", supported()}, {"folders", QJsonArray()},
+                          {"pending", 0}, {"scanning", false}, {"batches", 0}, {"files_scanned", 0}, {"detections", 0},
+                          {"quarantined", 0}};
+    thread_.setObjectName(QStringLiteral("gk-realtime"));
+    thread_.start();
+}
+
+RealtimeService::~RealtimeService() {
+    // The monitor stops its watcher and cancels a running batch when it is destroyed in its own thread.
+    thread_.quit();
+    thread_.wait();
+    pool_.waitForDone();
+}
+
+bool RealtimeService::supported() { return gk::realtime::DirectoryWatcher::supported(); }
+
+void RealtimeService::apply(const gk::realtime::Settings& settings) {
+    gk::realtime::Monitor* monitor = monitor_;
+    QMetaObject::invokeMethod(monitor_, [monitor, settings] { monitor->apply(settings); }, Qt::QueuedConnection);
+}
+
+qint64 RealtimeService::listEvents(int limit) {
+    const qint64 request = next_++;
+    const QString file = env_.databaseFile();
+    pool_.start([this, request, file, limit] {
+        QJsonArray events;
+        QString error;
+        try {
+            if (QFileInfo::exists(file)) {
+                for (const auto& e : gk::db::Database::open_readonly(native(file))->list_realtime_events(limit)) {
+                    QJsonObject o = toQt(e).toObject();
+                    o.insert(QStringLiteral("risk_level"), QString::fromLatin1(riskName(o.value("risk").toInteger())));
+                    events.append(o);
+                }
+            }
+        } catch (const std::exception& e) {
+            error = messageOf(e);
+        }
+        QMetaObject::invokeMethod(this, [this, request, events, error] {
+            if (error.isEmpty()) emit eventsListed(request, events);
+            else emit failed(request, error);
+        }, Qt::QueuedConnection);
+    });
+    return request;
 }
 
 }  // namespace gk::bridge

@@ -330,6 +330,36 @@ std::vector<FileContext> derive_context(const std::vector<FileResult>& files, co
     return ctx;
 }
 
+EvidenceVerdict evidence_verdict(const std::vector<Evidence>& evidences) {
+    EvidenceVerdict v;
+    for (const auto& e : evidences) {
+        const std::string verdict = verdict_of(e);
+        if (e.source == Source::Signature || e.source == Source::Reputation) {
+            if (verdict == "pua") {
+                v.pua = true;
+            } else if (verdict == "good" || verdict == "known_good") {
+                v.good_reputation = true;
+            } else if (verdict == "test") {
+                v.known_threat = v.by_signature = v.test_file = true;
+            } else {
+                v.known_threat = v.by_signature = true;
+            }
+        } else if (e.source == Source::Yara) {
+            if (verdict == "malware") v.known_threat = v.by_signature = true;
+            if (verdict == "test") v.known_threat = v.by_signature = v.test_file = true;
+            if (verdict == "pua") v.pua = true;
+        } else if (e.source == Source::Behavioral && e.effective() >= Risk::Critical) {
+            v.known_threat = true;
+        }
+    }
+    return v;
+}
+
+bool confirmed_by_signature(const FileResult& assessed) {
+    return assessed.classification == Classification::Malware && !assessed.possible_false_positive &&
+           evidence_verdict(assessed.evidences).by_signature;
+}
+
 void assess(FileResult& r, const FileContext& ctx, const Catalog& catalog) {
     for (const auto& e : ctx.evidences) {
         const bool present = std::any_of(r.evidences.begin(), r.evidences.end(),
@@ -357,27 +387,9 @@ void assess(FileResult& r, const FileContext& ctx, const Catalog& catalog) {
     for (const auto& e : r.evidences) risk = std::max(risk, e.effective());
 
     // 3. Classification.
-    bool malware = false, pua = false, test_file = false, good_reputation = false;
-    for (const auto& e : r.evidences) {
-        const std::string verdict = verdict_of(e);
-        if (e.source == Source::Signature || e.source == Source::Reputation) {
-            if (verdict == "pua") {
-                pua = true;
-            } else if (verdict == "good" || verdict == "known_good") {
-                good_reputation = true;
-            } else if (verdict == "test") {
-                malware = test_file = true;
-            } else {
-                malware = true;
-            }
-        } else if (e.source == Source::Yara) {
-            if (verdict == "malware") malware = true;
-            if (verdict == "test") malware = test_file = true;
-            if (verdict == "pua") pua = true;
-        } else if (e.source == Source::Behavioral && e.effective() >= Risk::Critical) {
-            malware = true;
-        }
-    }
+    const EvidenceVerdict verdict = evidence_verdict(r.evidences);
+    const bool malware = verdict.known_threat, pua = verdict.pua, test_file = verdict.test_file,
+               good_reputation = verdict.good_reputation;
     const bool partial = r.status == AnalysisStatus::Partial || r.status == AnalysisStatus::Error ||
                          r.status == AnalysisStatus::Skipped;
     std::string why;

@@ -4,6 +4,7 @@
 
 #include "../app_context.hpp"
 
+#include <QJsonObject>
 #include <QWidget>
 
 class QLabel;
@@ -23,6 +24,7 @@ public:
     QString quarantineText() const;
     QString integrityText() const;
     QString integrityStatus() const;   // badge text
+    QString realtimeText() const;
 
 signals:
     void refreshed();
@@ -31,9 +33,11 @@ signals:
     void openUpdates();
     void openQuarantine();
     void openHistory();
+    void openRealtime();
 
 private:
     void showSignatures();
+    void showRealtime(const QJsonObject& status);
 
     AppContext* ctx_;
     qint64 scansRequest_ = -1;
@@ -49,6 +53,8 @@ private:
     QLabel* quarantineText_;
     StatusPill* integrityPill_;
     QLabel* integrityText_;
+    StatusPill* realtimePill_;
+    QLabel* realtimeText_;
 };
 
 }  // namespace gk::app
