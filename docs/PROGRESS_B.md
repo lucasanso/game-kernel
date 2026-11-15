@@ -37,8 +37,8 @@ passagem para o B).
 | B6 | Usar `gk_native` (A) nos testes de integração | em andamento conforme o A amplia a API |
 | B7 | Sandbox (Windows Sandbox sem rede) no auxiliar | ✅ (sem VM no Linux; `monitor.ps1` com sintaxe verificada na CI Windows) |
 | B8 | CI Linux + Windows/MSVC, auxiliar congelado | ✅ |
-| B9 | Interface Qt 6 C++ (`cpp/app`) | 🔄 parte 1 ✅ (esqueleto + 3 páginas com serviços reais); páginas do núcleo aguardam `cpp/bridge` (A, M13) |
-| B10 | Instalador (Inno Setup), versão portátil, docs de usuário (INSTALL, USAGE) | 🔄 implementado e testado localmente (Linux); validação do instalador real no job `windows-package` da CI |
+| B9 | Interface Qt 6 C++ (`cpp/app`) | 🔄 5 páginas com serviços reais (Atualização offline, Análise comportamental, Relatórios forenses, Privacidade e rede, Configurações); páginas do núcleo aguardam `cpp/bridge` (A, M13), M11 e M12 |
+| B10 | Instalador (Inno Setup), versão portátil, docs de usuário (INSTALL, USAGE) | ✅ validado na CI Windows (`c0af4d5`, execução 43656278389): produto compilado com MSVC, instalador gerado, instalação silenciosa, 17 testes do produto instalado e 17 do portátil sem pulos, desinstalação preservando os dados |
 
 ## Mesclagem da rev. 4 (esta etapa)
 
@@ -144,9 +144,26 @@ válido e em dia com o SVG e, no Windows, ícone e `VERSIONINFO` lidos do `GameK
 * `docs/INSTALL.md` e `docs/USAGE.md` descrevem só o que existe (varredura e quarentena pela linha de comando até a
   interface ganhar essas páginas).
 
+Achados da CI Windows no empacotamento, corrigidos: o `windeployqt` implantava o `Qt6Network.dll` por causa dos
+plugins "generic" do Qt (toque TUIO por UDP), que o programa não usa — agora `--skip-plugin-types generic`, e a
+montagem recusa qualquer DLL de rede; o `Qt6Core.dll` importa `WSAStartup`/`WSACleanup`/`WSAAsyncSelect` para o
+laço de eventos (sem resolver nomes nem conectar): exceção estreita e testada na auditoria, documentada em
+`docs/PRIVACY.md`.
+
 Defeitos encontrados e corrigidos pelo caminho (todos do B): o `gk-helper.exe` congelado não tinha os métodos
 `sandbox.*` nem o `monitor.ps1`, e o `system.info` não mostrava serviços que falharam ao carregar (agora mostra
 `unavailable_services`); a distribuição não levava o `contracts/threat_catalog.json`.
+
+## B9 — páginas que não dependem do A (2026-11-15)
+
+* **Relatórios forenses**: lista as varreduras do banco pelo novo método `reports.scans` do auxiliar (somente
+  leitura; o banco nunca é criado), gera HTML/JSON/PDF com as opções de privacidade e lista os relatórios gerados.
+  Hoje as varreduras vêm do `gk-cli`; as da interface entram pelo mesmo banco quando houver `cpp/bridge`.
+* **Configurações**: só chaves que algum componente lê hoje (o núcleo C++ ainda não lê o `settings.json`, então
+  opções de varredura, motores, tempo real e quarentena ficam fora para não haver controle sem efeito). Validação
+  com as faixas do `config.py`, escrita atômica preservando as demais chaves, propagação para as outras páginas
+  (`AppContext::settingChanged`) e leitura confirmada pelo auxiliar Python.
+* `scrollingPage`/`mutedLabel` foram para o `ui_kit` (estavam duplicados).
 
 ## Resposta às anotações de passagem do A (`WORK_SPLIT.md` §6, `398a4d1`)
 
@@ -161,7 +178,7 @@ Defeitos encontrados e corrigidos pelo caminho (todos do B): o `gk-helper.exe` c
 
 ## Pendências
 
-1. **P1 — Nome do produto** (usuário): "Game Kernel" ou "OFFLINE GAME GUARD". Mantido *Game Kernel*.
+1. **P1 — Nome do produto: decidido pelo usuário em 2026-11-15 — "Game Kernel".** (Para o A: atualizar o §4 da `WORK_SPLIT.md`; `gk::kProductName` e a interface já usam esse nome.)
 2. **P2 — Interface com o B** (usuário): proposta dos dois agentes, sem objeção até agora.
 3. **Para o A — `add_subdirectory(cpp/app)`** no `CMakeLists.txt` da raiz quando Qt 6 Widgets e Svg estiverem
    disponíveis. O app já compila sozinho (`cmake -S cpp/app`).

@@ -149,6 +149,9 @@ UpdatesPage::UpdatesPage(AppContext* ctx, QWidget* parent) : QWidget(parent), ct
         const int row = keys_->currentRow();
         removeKeyButton_->setEnabled(row >= 0 && keys_->item(row, 1)->text() == QStringLiteral("Adicionada pelo usuário"));
     });
+    connect(ctx_, &AppContext::settingChanged, this, [this](const QString& key) {
+        if (key == QLatin1String("updates.stale_after_days")) refresh();   // staleness threshold changed
+    });
     refresh();
 }
 

@@ -69,6 +69,10 @@
   comportamental (`sandbox.*`: disponibilidade com o motivo, ativação gravada em `settings.json`, confirmação com as
   limitações, progresso, cancelamento, evidências) e Privacidade e rede (`system.info`, autoteste de rede, reinício
   do auxiliar). As páginas do núcleo entram com o `cpp/bridge` (A), sem telas provisórias.
+- Interface: página **Configurações** só com opções que têm efeito hoje (padrões de privacidade dos relatórios, aviso
+  de assinaturas desatualizadas, análise comportamental com Sysmon opcional, pasta de dados), validadas com as faixas
+  do `config.py`, gravadas de forma atômica preservando as demais chaves e propagadas na hora para as outras páginas
+  (`AppContext::settingChanged`); o auxiliar Python lê o que a interface grava (testado).
 - Interface: página **Relatórios forenses** (varreduras do banco pelo novo método `reports.scans` do auxiliar, só
   leitura; geração em HTML, JSON e PDF com as opções de privacidade; progresso; relatórios gerados com abertura do
   arquivo ou da pasta). Utilitários de página (`scrollingPage`, `mutedLabel`) movidos para o `ui_kit`.

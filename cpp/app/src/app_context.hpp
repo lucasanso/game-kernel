@@ -54,6 +54,8 @@ public:
 
 signals:
     void notify(gk::app::AppContext::Level level, const QString& title, const QString& text);
+    // After a successful setSetting(): pages showing the same option refresh themselves.
+    void settingChanged(const QString& dotted);
 
 private:
     QString dataDir_;

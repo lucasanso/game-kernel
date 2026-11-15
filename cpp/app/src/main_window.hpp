@@ -19,6 +19,7 @@ class UpdatesPage;
 class SandboxPage;
 class PrivacyPage;
 class ReportsPage;
+class SettingsPage;
 
 class ToastArea : public QWidget {
     Q_OBJECT
@@ -49,6 +50,7 @@ public:
     SandboxPage* sandboxPage() const { return sandbox_; }
     PrivacyPage* privacyPage() const { return privacy_; }
     ReportsPage* reportsPage() const { return reports_; }
+    SettingsPage* settingsPage() const { return settings_; }
     ToastArea* toasts() const { return toasts_; }
 
 private:
@@ -67,6 +69,7 @@ private:
     SandboxPage* sandbox_ = nullptr;
     PrivacyPage* privacy_ = nullptr;
     ReportsPage* reports_ = nullptr;
+    SettingsPage* settings_ = nullptr;
 };
 
 }  // namespace gk::app

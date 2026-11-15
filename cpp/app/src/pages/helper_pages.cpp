@@ -12,6 +12,7 @@
 #include <QLabel>
 #include <QProgressBar>
 #include <QPushButton>
+#include <QSignalBlocker>
 #include <QSpinBox>
 #include <QTableWidget>
 
@@ -98,11 +99,21 @@ SandboxPage::SandboxPage(AppContext* ctx, QWidget* parent) : QWidget(parent), ct
         updateButtons();
     });
     connect(timeout_, &QSpinBox::valueChanged, this, [this](int v) { ctx_->setSetting(QStringLiteral("sandbox.timeout_seconds"), v); });
+    connect(ctx_, &AppContext::settingChanged, this, [this](const QString& key) {
+        if (!key.startsWith(QLatin1String("sandbox."))) return;
+        const QSignalBlocker blockEnable(enable_);
+        const QSignalBlocker blockTimeout(timeout_);
+        enable_->setChecked(ctx_->setting(QStringLiteral("sandbox.enabled"), false).toBool());
+        timeout_->setValue(ctx_->setting(QStringLiteral("sandbox.timeout_seconds"), 120).toInt(120));
+        updateButtons();
+    });
     connect(analyzeButton_, &QPushButton::clicked, this, &SandboxPage::analyze);
     connect(cancelButton_, &QPushButton::clicked, this, &SandboxPage::cancel);
     updateButtons();
     checkAvailability();
 }
+
+bool SandboxPage::analysisEnabled() const { return enable_->isChecked(); }
 
 bool SandboxPage::canAnalyze() const {
     return available_ && enable_->isChecked() && !sample_.isEmpty() && analyzeCall_ < 0;

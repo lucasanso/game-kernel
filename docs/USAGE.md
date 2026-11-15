@@ -6,7 +6,7 @@ computador; a única execução possível é a análise comportamental, dentro d
 rede, e só quando você confirma.
 
 > **Estado desta versão.** A interface gráfica já tem a Central de Atualização Offline, a análise comportamental,
-> os Relatórios forenses e Privacidade e rede. A varredura, os resultados e a quarentena funcionam hoje pela linha de comando (`gk-cli`,
+> os Relatórios forenses, Privacidade e rede e Configurações. A varredura, os resultados e a quarentena funcionam hoje pela linha de comando (`gk-cli`,
 > instalado junto). As telas de varredura entram na interface numa próxima versão. Limitações conhecidas:
 > `docs/LIMITATIONS.md`.
 
@@ -61,6 +61,17 @@ limitações...) e um relatório individual para cada crack encontrado.
 * **Executar autoteste** (Autoteste de rede): tenta de verdade resolver um nome (DNS) e abrir uma conexão de saída e mostra que as
   duas tentativas foram bloqueadas. Nenhum dado sai do computador.
 * Lista as tentativas de rede bloqueadas nesta sessão e permite reiniciar o processo auxiliar.
+
+### Configurações
+* **Relatórios forenses**: padrões de privacidade (ocultar o nome de usuário, incluir o nome do computador).
+* **Atualização offline**: depois de quantos dias (1 a 365) o programa avisa que as assinaturas estão
+  desatualizadas.
+* **Análise comportamental**: ativar, tempo de observação padrão (30 a 1800 s) e, opcionalmente, o `Sysmon64.exe`
+  da Microsoft Sysinternals, que você precisa ter (ele não pode ser redistribuído).
+* **Dados neste computador**: onde ficam o banco, os relatórios, as configurações e a quarentena.
+
+Só aparecem opções que já têm efeito. As mudanças valem na hora para as outras páginas; **Restaurar padrões desta
+página** pede confirmação e nunca apaga arquivos.
 
 ## Linha de comando (`gk-cli`)
 

@@ -29,6 +29,7 @@ public:
     void cancel();
     bool available() const { return available_; }
     bool canAnalyze() const;
+    bool analysisEnabled() const;                // the switch, kept in sync with settings.json
     QString availabilityReason() const { return reason_; }
 
 signals:

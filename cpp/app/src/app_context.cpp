@@ -77,6 +77,7 @@ bool AppContext::setSetting(const QString& dotted, const QJsonValue& value, QStr
         if (error) *error = f.errorString();
         return false;
     }
+    emit settingChanged(dotted);
     return true;
 }
 

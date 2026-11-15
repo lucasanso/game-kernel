@@ -2,6 +2,7 @@
 
 #include "pages/helper_pages.hpp"
 #include "pages/reports_page.hpp"
+#include "pages/settings_page.hpp"
 #include "pages/updates_page.hpp"
 #include "ui_kit.hpp"
 
@@ -151,6 +152,7 @@ MainWindow::MainWindow(AppContext* ctx, QWidget* parent) : QMainWindow(parent), 
     sandbox_ = new SandboxPage(ctx_, stack_);
     reports_ = new ReportsPage(ctx_, stack_);
     privacy_ = new PrivacyPage(ctx_, stack_);
+    settings_ = new SettingsPage(ctx_, stack_);
     addPage(updates_, QStringLiteral("package"), QStringLiteral("Atualização offline"), QStringLiteral("Central de Atualização Offline"),
             QStringLiteral("Importe pacotes assinados de assinaturas, regras e indicadores. Nada é baixado."));
     addPage(sandbox_, QStringLiteral("flask"), QStringLiteral("Análise comportamental"), QStringLiteral("Análise comportamental"),
@@ -159,6 +161,8 @@ MainWindow::MainWindow(AppContext* ctx, QWidget* parent) : QMainWindow(parent), 
             QStringLiteral("Gere relatórios em HTML, JSON ou PDF das varreduras registradas neste computador."));
     addPage(privacy_, QStringLiteral("lock"), QStringLiteral("Privacidade e rede"), QStringLiteral("Privacidade e rede"),
             QStringLiteral("Confira que o Game Kernel funciona offline e o que fica armazenado neste computador."));
+    addPage(settings_, QStringLiteral("sliders"), QStringLiteral("Configurações"), QStringLiteral("Configurações"),
+            QStringLiteral("Padrões dos relatórios, aviso de atualização e análise comportamental."));
 
     toasts_ = new ToastArea(centralWidget());
     connect(ctx_, &AppContext::notify, this, [this](AppContext::Level level, const QString& title, const QString& text) {

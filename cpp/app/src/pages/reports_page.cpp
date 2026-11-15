@@ -156,6 +156,12 @@ ReportsPage::ReportsPage(AppContext* ctx, QWidget* parent) : QWidget(parent), ct
         if (auto* item = files_->item(row, 0)) openLocal(item->data(Qt::UserRole).toString());
     });
     connect(scans_, &QTableWidget::itemSelectionChanged, this, &ReportsPage::updateButtons);
+    connect(ctx_, &AppContext::settingChanged, this, [this](const QString& key) {   // new defaults from Configurações
+        if (key == QLatin1String("reports.redact_username"))
+            keepUsername_->setChecked(!ctx_->setting(key, true).toBool());
+        else if (key == QLatin1String("reports.include_hostname"))
+            includeHostname_->setChecked(ctx_->setting(key, false).toBool());
+    });
     for (QCheckBox* c : {html_, json_, pdf_}) connect(c, &QCheckBox::toggled, this, &ReportsPage::updateButtons);
     updateButtons();
     refresh();

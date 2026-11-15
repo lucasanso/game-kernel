@@ -8,6 +8,7 @@
 #include "main_window.hpp"
 #include "pages/helper_pages.hpp"
 #include "pages/reports_page.hpp"
+#include "pages/settings_page.hpp"
 #include "pages/updates_page.hpp"
 #include "ui_kit.hpp"
 
@@ -276,13 +277,67 @@ private slots:
         env->ctx->helper()->stop();
     }
 
+    void settingsAreValidatedSharedAndReadByTheHelper() {
+        auto env = makeEnv();
+        QVERIFY(env->ctx->setSetting(QStringLiteral("scan.max_workers"), 3));     // a key this page does not own
+        SettingsPage settings(env->ctx.get());
+        SandboxPage sandbox(env->ctx.get());
+        QSignalSpy checked(&sandbox, &SandboxPage::availabilityChecked);
+        QVERIFY(waitFinished(checked));
+
+        QVERIFY(settings.setRedactUsername(false));
+        QVERIFY(settings.setIncludeHostname(true));
+        QVERIFY(settings.setStaleAfterDays(30));
+        QVERIFY(!settings.setStaleAfterDays(0));                                  // config.py range 1..365
+        QVERIFY(settings.lastError().contains(QStringLiteral("365")));
+        QVERIFY(!settings.setSandboxTimeout(10));                                 // 30..1800
+        QVERIFY(settings.setSandboxTimeout(600));
+        QVERIFY(settings.setSandboxEnabled(true));
+        QVERIFY(!settings.setSysmonPath(QDir(env->data.path()).filePath(QStringLiteral("nao-existe.exe"))));
+        QTemporaryDir tools;
+        const QString sysmon = QDir(tools.path()).filePath(QStringLiteral("Sysmon64.exe"));
+        { QFile f(sysmon); QVERIFY(f.open(QIODevice::WriteOnly)); f.write("MZ"); }
+        const QString impostor = QDir(tools.path()).filePath(QStringLiteral("ferramenta.exe"));
+        { QFile f(impostor); QVERIFY(f.open(QIODevice::WriteOnly)); f.write("MZ"); }
+        QVERIFY(!settings.setSysmonPath(impostor));                               // manager.py accepts only Sysmon
+        QVERIFY(settings.setSysmonPath(sysmon));
+
+        const auto& ctx = *env->ctx;
+        QCOMPARE(ctx.setting(QStringLiteral("reports.redact_username")).toBool(), false);
+        QCOMPARE(ctx.setting(QStringLiteral("reports.include_hostname")).toBool(), true);
+        QCOMPARE(ctx.setting(QStringLiteral("updates.stale_after_days")).toInt(), 30);
+        QCOMPARE(ctx.setting(QStringLiteral("sandbox.timeout_seconds")).toInt(), 600);
+        QCOMPARE(ctx.setting(QStringLiteral("sandbox.sysmon_path")).toString(), QFileInfo(sysmon).absoluteFilePath());
+        QCOMPARE(ctx.setting(QStringLiteral("scan.max_workers")).toInt(), 3);     // preserved
+        QVERIFY(sandbox.analysisEnabled());                                       // the sandbox page followed the switch
+
+        // The Python helper reads the file written by the C++ page (gamekernel/config.py validation included).
+        const auto availability = env->ctx->helper()->callBlocking(QStringLiteral("sandbox.availability"));
+        QVERIFY2(availability.ok, qPrintable(availability.error.message));
+        QCOMPARE(availability.value.toObject().value("enabled_in_settings").toBool(), true);
+
+        env->answer = false;
+        QVERIFY(!settings.restoreDefaults());                                     // declined: nothing changes
+        QCOMPARE(ctx.setting(QStringLiteral("sandbox.enabled")).toBool(), true);
+        env->answer = true;
+        QVERIFY(settings.restoreDefaults());
+        QCOMPARE(ctx.setting(QStringLiteral("sandbox.enabled")).toBool(), false);
+        QVERIFY(!sandbox.analysisEnabled());
+        QCOMPARE(ctx.setting(QStringLiteral("updates.stale_after_days")).toInt(), 7);
+        QCOMPARE(ctx.setting(QStringLiteral("reports.redact_username")).toBool(), true);
+        QCOMPARE(ctx.setting(QStringLiteral("sandbox.sysmon_path")).toString(), QString());
+        QCOMPARE(ctx.setting(QStringLiteral("scan.max_workers")).toInt(), 3);
+        QVERIFY(QFileInfo::exists(sysmon));                                       // forgetting never deletes the file
+        env->ctx->helper()->stop();
+    }
+
     void mainWindowNavigationNotificationsAndScreenshots() {
         auto env = makeEnv(true, true);
         MainWindow window(env->ctx.get());
         window.resize(1280, 820);
         window.show();
         QVERIFY(QTest::qWaitForWindowExposed(&window));
-        QCOMPARE(window.pageCount(), 4);
+        QCOMPARE(window.pageCount(), 5);
         QCOMPARE(window.currentTitle(), QStringLiteral("Central de Atualização Offline"));
 
         QSignalSpy done(window.updatesPage(), &UpdatesPage::operationFinished);
@@ -313,6 +368,11 @@ private slots:
         QVERIFY(waitFinished(selfTest));
         QTest::qWait(200);
         screenshot(&window, QStringLiteral("04-privacidade.png"));
+
+        window.showPage(4);
+        QCOMPARE(window.currentTitle(), QStringLiteral("Configurações"));
+        QTest::qWait(200);
+        screenshot(&window, QStringLiteral("05-configuracoes.png"));
         env->ctx->helper()->stop();
     }
 };

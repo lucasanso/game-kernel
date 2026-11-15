@@ -4,8 +4,9 @@ Antivírus **offline** especializado em jogos para Windows 10/11 (64 bits): inve
 repacks, mods e launchers, explica **o que** foi encontrado, **onde** (arquivo e posição dentro dele), **por que**
 é suspeito e **o que fazer**, sem nunca enviar nada para a internet.
 
-> **Estado: em desenvolvimento.** O instalador e a versão portátil para Windows estão implementados e em validação
-> na CI (ver `docs/INSTALL.md`). A interface (Qt 6 C++) tem as páginas de atualização offline, análise comportamental e
+> **Estado: em desenvolvimento.** Já há instalador e versão portátil para Windows, gerados e testados de ponta a
+> ponta na CI (instalação silenciosa, integridade assinada, varredura real, relatório e desinstalação; ver
+> `docs/INSTALL.md`). A interface (Qt 6 C++) tem as páginas de atualização offline, análise comportamental e
 > privacidade; a varredura e a quarentena funcionam pela linha de comando (`gk-cli`) e chegam à interface com os
 > serviços do núcleo (`cpp/bridge`). Uso: `docs/USAGE.md`. Abaixo está o que existe e foi testado. O progresso detalhado está em `docs/PROGRESS_A.md` (núcleo) e `docs/PROGRESS_B.md`
 > (integração, ferramentas, interface e distribuição).
@@ -35,8 +36,9 @@ Detalhes: `docs/ARCHITECTURE.md`, `docs/INTEGRATION.md`, `docs/CORE_API.md`, `do
   contra o auxiliar real no Linux e no Windows (MSVC).
 * **Interface (B)**: aplicativo Qt 6 C++ (`cpp/app`) com tema escuro, menu lateral e notificações internas. Já tem a
   Central de Atualização Offline (importar, conferir publicador e chave, instalar, reverter, chaves confiáveis), a
-  análise comportamental (disponibilidade real da sandbox, confirmação, progresso, evidências) e Privacidade e rede
-  (autoteste que tenta DNS e conexão de saída e comprova o bloqueio). Sem telas ou botões sem função.
+  análise comportamental (disponibilidade real da sandbox, confirmação, progresso, evidências), os Relatórios
+  forenses (varreduras do banco, HTML/JSON/PDF com opções de privacidade), Privacidade e rede (autoteste que tenta
+  DNS e conexão de saída e comprova o bloqueio) e Configurações. Sem telas ou botões sem função.
 * **Relatórios forenses (B)**: JSON, HTML autocontido (sem JavaScript) e PDF, com as 15 seções exigidas e um relatório
   individual por crack; nome de usuário e nome do computador omitidos por padrão.
 * **Atualização offline (B)**: pacotes `.gkpkg` assinados com Ed25519, verificação em C++ (libsodium) e instalação

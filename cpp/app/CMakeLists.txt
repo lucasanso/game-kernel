@@ -28,6 +28,7 @@ add_library(gk_app_lib STATIC
   src/pages/updates_page.hpp src/pages/updates_page.cpp
   src/pages/helper_pages.hpp src/pages/helper_pages.cpp
   src/pages/reports_page.hpp src/pages/reports_page.cpp
+  src/pages/settings_page.hpp src/pages/settings_page.cpp
 )
 target_include_directories(gk_app_lib PUBLIC ${CMAKE_CURRENT_SOURCE_DIR}/src)
 # Single version source for the UI (AppContext::appVersion) and the Windows version resource.
