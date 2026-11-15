@@ -125,6 +125,16 @@ gk::bridge::RealtimeService* AppContext::realtime() {
     return realtime_;
 }
 
+gk::bridge::PerformanceService* AppContext::performance() {
+    if (!performance_) performance_ = new gk::bridge::PerformanceService(this);
+    return performance_;
+}
+
+gk::bridge::OptimizerService* AppContext::optimizer() {
+    if (!optimizer_) optimizer_ = new gk::bridge::OptimizerService(coreEnvironment(), this);
+    return optimizer_;
+}
+
 gk::realtime::Settings AppContext::realtimeSettings() const {
     const QJsonObject r = setting(QStringLiteral("realtime")).toObject();
     auto clamp = [](const QJsonValue& v, int lo, int hi, int fallback) {

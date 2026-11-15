@@ -1,6 +1,6 @@
 // Main window: sidebar navigation, page header, page stack, in-app notifications (toasts) and the icon in the
 // notification area that keeps real-time protection running when the window is closed.
-// Only pages backed by working services are listed (performance and optimizer pages join with M12).
+// Only pages backed by working services are listed.
 #pragma once
 
 #include "app_context.hpp"
@@ -23,6 +23,8 @@ class ResultsPage;
 class HistoryPage;
 class QuarantinePage;
 class RealtimePage;
+class PerformancePage;
+class OptimizerPage;
 class UpdatesPage;
 class SandboxPage;
 class PrivacyPage;
@@ -55,13 +57,17 @@ public:
     void showPage(int index);
     QString currentTitle() const;
     // Page indices, in sidebar order.
-    enum Page { Dashboard, Scan, Results, History, Quarantine, Realtime, Updates, Sandbox, Reports, Privacy, Settings };
+    enum Page {
+        Dashboard, Scan, Results, History, Quarantine, Realtime, Performance, Optimizer, Updates, Sandbox, Reports, Privacy, Settings
+    };
     DashboardPage* dashboardPage() const { return dashboard_; }
     ScanPage* scanPage() const { return scan_; }
     ResultsPage* resultsPage() const { return results_; }
     HistoryPage* historyPage() const { return history_; }
     QuarantinePage* quarantinePage() const { return quarantine_; }
     RealtimePage* realtimePage() const { return realtime_; }
+    PerformancePage* performancePage() const { return performance_; }
+    OptimizerPage* optimizerPage() const { return optimizer_; }
     UpdatesPage* updatesPage() const { return updates_; }
     SandboxPage* sandboxPage() const { return sandbox_; }
     PrivacyPage* privacyPage() const { return privacy_; }
@@ -95,6 +101,8 @@ private:
     HistoryPage* history_ = nullptr;
     QuarantinePage* quarantine_ = nullptr;
     RealtimePage* realtime_ = nullptr;
+    PerformancePage* performance_ = nullptr;
+    OptimizerPage* optimizer_ = nullptr;
     UpdatesPage* updates_ = nullptr;
     SandboxPage* sandbox_ = nullptr;
     PrivacyPage* privacy_ = nullptr;

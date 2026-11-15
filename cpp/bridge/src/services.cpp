@@ -435,4 +435,104 @@ qint64 RealtimeService::listEvents(int limit) {
     return request;
 }
 
+// ===================================================================================== performance
+PerformanceService::PerformanceService(QObject* parent) : QObject(parent) {
+    timer_ = new QTimer;
+    timer_->moveToThread(&thread_);
+    auto sampler = std::make_shared<gk::perf::Sampler>(8);
+    tick_ = std::make_shared<std::function<void()>>([this, sampler] {   // runs in thread_
+        const QJsonObject sample = gk::perf::toJson(sampler->sample());
+        QMetaObject::invokeMethod(this, [this, sample] {
+            if (running_) emit sampled(sample);
+        }, Qt::QueuedConnection);
+    });
+    connect(timer_, &QTimer::timeout, timer_, [tick = tick_] { (*tick)(); });
+    connect(&thread_, &QThread::finished, timer_, &QObject::deleteLater);
+    thread_.setObjectName(QStringLiteral("gk-perf"));
+    thread_.start();
+}
+
+PerformanceService::~PerformanceService() {
+    stop();
+    thread_.quit();
+    thread_.wait();
+}
+
+void PerformanceService::start(int intervalMs) {
+    running_ = true;
+    QTimer* timer = timer_;
+    const int interval = std::clamp(intervalMs, 250, 60000);
+    QMetaObject::invokeMethod(timer_, [timer, interval, tick = tick_] {
+        timer->start(interval);
+        (*tick)();   // first sample right away
+    }, Qt::QueuedConnection);
+}
+
+void PerformanceService::stop() {
+    running_ = false;
+    QTimer* timer = timer_;
+    QMetaObject::invokeMethod(timer_, [timer] { timer->stop(); }, Qt::QueuedConnection);
+}
+
+// ======================================================================================= optimizer
+OptimizerService::OptimizerService(Environment env, QObject* parent) : QObject(parent), env_(std::move(env)) {
+    pool_.setMaxThreadCount(1);   // one operation at a time: a clean-up never runs beside an analysis
+}
+
+OptimizerService::~OptimizerService() {
+    cancel_->store(true);
+    pool_.waitForDone();
+}
+
+QStringList OptimizerService::tempRoots() const { return gk::sysopt::defaultTempRoots(env_.dataDir); }
+
+qint64 OptimizerService::diagnose(const QStringList& folders) {
+    const qint64 request = next_++;
+    pool_.start([this, request, folders] {
+        QJsonArray checks;
+        for (const auto& c : gk::sysopt::diagnose(folders)) checks.append(gk::sysopt::toJson(c));
+        QMetaObject::invokeMethod(this, [this, request, checks] { emit diagnosed(request, checks); }, Qt::QueuedConnection);
+    });
+    return request;
+}
+
+qint64 OptimizerService::analyzeTemp(int minAgeHours) {
+    const qint64 request = next_++;
+    plan_.reset();   // a clean-up always follows the analysis the user just saw
+    pool_.start([this, request, minAgeHours, roots = tempRoots(), cancel = cancel_] {
+        auto plan = std::make_shared<const gk::sysopt::TempPlan>(gk::sysopt::analyzeTemp(roots, minAgeHours, cancel.get()));
+        const QJsonObject summary = gk::sysopt::toJson(*plan);
+        QMetaObject::invokeMethod(this, [this, request, plan, summary] {
+            plan_ = plan;
+            emit tempAnalyzed(request, summary);
+        }, Qt::QueuedConnection);
+    });
+    return request;
+}
+
+qint64 OptimizerService::cleanTemp() {
+    const qint64 request = next_++;
+    if (!plan_) {
+        QMetaObject::invokeMethod(this, [this, request] {
+            emit failed(request, QStringLiteral("analise os arquivos temporários antes de limpar"));
+        }, Qt::QueuedConnection);
+        return request;
+    }
+    std::shared_ptr<const gk::sysopt::TempPlan> plan = std::move(plan_);   // used once
+    plan_.reset();
+    pool_.start([this, request, plan, file = env_.databaseFile(), cancel = cancel_] {
+        const gk::sysopt::CleanResult r = gk::sysopt::cleanTemp(*plan, cancel.get());
+        QJsonObject result = gk::sysopt::toJson(r);
+        try {
+            const nlohmann::json detail{{"deleted", r.deleted}, {"bytes_freed", r.bytesFreed}, {"in_use", r.inUse},
+                                        {"changed", r.changed}, {"dirs_removed", r.dirsRemoved}};
+            gk::db::Database::open(native(file))->append_audit("optimizer.temp_clean", detail.dump(), "user");
+        } catch (const std::exception& e) {
+            result.insert(QStringLiteral("audit_error"), messageOf(e));
+        }
+        QMetaObject::invokeMethod(this, [this, request, result] { emit tempCleaned(request, result); }, Qt::QueuedConnection);
+    });
+    return request;
+}
+
 }  // namespace gk::bridge

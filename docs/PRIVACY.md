@@ -26,6 +26,11 @@ Esta página descreve o comportamento dos componentes já implementados e é atu
 | Assinaturas instaladas | `…\GameKernel\signatures\` | Com histórico de instalação |
 | Relatórios da sandbox | `…\GameKernel\sandbox\reports\` | Observações da máquina virtual |
 | Logs | `…\GameKernel\logs\` | Locais e rotativos |
+| Eventos da proteção em tempo real | `gamekernel.db` (`realtime_events`) | Caminho, SHA-256, risco e ação de cada achado nas pastas observadas |
+
+O monitor de desempenho e o otimizador só **leem** dados locais (contadores do Windows, lista de processos, valores
+do registro sobre energia e jogos, espaço livre) para mostrar na tela; nada disso é gravado, exceto o registro de
+auditoria de cada limpeza de temporários (quantos arquivos e bytes).
 
 ## Relatórios
 

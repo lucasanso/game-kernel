@@ -34,6 +34,8 @@ if(GK_BUILD_QT_COMPONENTS)
     add_subdirectory(cpp/scan)
     add_subdirectory(cpp/cli)
     add_subdirectory(cpp/realtime)
+    add_subdirectory(cpp/perf)
+    add_subdirectory(cpp/sysopt)
     add_subdirectory(cpp/bridge)
     # Desktop application (Agent B): needs Qt Widgets and Svg on top of Core.
     find_package(Qt6 6.4 QUIET COMPONENTS Widgets Svg Concurrent)

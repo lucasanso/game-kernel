@@ -10,11 +10,16 @@
 #include <QStringList>
 #include <QThread>
 #include <QThreadPool>
+#include <QTimer>
 
+#include <atomic>
+#include <functional>
 #include <memory>
 
+#include "gk/perf/sampler.hpp"
 #include "gk/realtime/monitor.hpp"
 #include "gk/scan/scanner.hpp"
+#include "gk/sysopt/optimizer.hpp"
 
 namespace gk::bridge {
 
@@ -185,6 +190,53 @@ private:
     gk::realtime::Monitor* monitor_;
     QJsonObject status_;
     QThreadPool pool_;
+    qint64 next_ = 1;
+};
+
+// Performance Monitor: samples taken in a thread of their own while someone looks at them.
+class PerformanceService : public QObject {
+    Q_OBJECT
+public:
+    explicit PerformanceService(QObject* parent = nullptr);
+    ~PerformanceService() override;
+    void start(int intervalMs = 1000);   // one sample now (no rates yet), then one per interval
+    void stop();
+    [[nodiscard]] bool running() const { return running_; }
+
+signals:
+    void sampled(const QJsonObject& sample);   // gk::perf::toJson
+
+private:
+    QThread thread_;
+    QTimer* timer_;   // lives in thread_
+    std::shared_ptr<std::function<void()>> tick_;
+    bool running_ = false;
+};
+
+// System Optimizer: read-only diagnostics, and the temporary-file clean-up in two steps — analyzeTemp() keeps
+// the list it found, cleanTemp() deletes exactly that list (once) after the user confirmed.
+class OptimizerService : public QObject {
+    Q_OBJECT
+public:
+    explicit OptimizerService(Environment env, QObject* parent = nullptr);
+    ~OptimizerService() override;
+    qint64 diagnose(const QStringList& folders = {});
+    qint64 analyzeTemp(int minAgeHours = 24);
+    qint64 cleanTemp();                  // refused (failed) without a fresh analysis
+    [[nodiscard]] bool hasPlan() const { return plan_ != nullptr; }
+    [[nodiscard]] QStringList tempRoots() const;
+
+signals:
+    void diagnosed(qint64 request, const QJsonArray& checks);
+    void tempAnalyzed(qint64 request, const QJsonObject& summary);
+    void tempCleaned(qint64 request, const QJsonObject& result);
+    void failed(qint64 request, const QString& message);
+
+private:
+    Environment env_;
+    QThreadPool pool_;
+    std::shared_ptr<const gk::sysopt::TempPlan> plan_;
+    std::shared_ptr<std::atomic<bool>> cancel_ = std::make_shared<std::atomic<bool>>(false);
     qint64 next_ = 1;
 };
 

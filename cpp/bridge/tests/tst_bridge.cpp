@@ -5,6 +5,7 @@
 
 #include <QCoreApplication>
 #include <QCryptographicHash>
+#include <QDateTime>
 #include <QDir>
 #include <QFile>
 #include <QFileInfo>
@@ -272,6 +273,60 @@ private slots:
         rt.apply(s);
         QTRY_VERIFY_WITH_TIMEOUT(!rt.active(), 10000);
     }
+    void performanceAndOptimizerServices() {
+        PerformanceService perf;
+        QSignalSpy samples(&perf, &PerformanceService::sampled);
+        perf.start(300);
+        QTRY_VERIFY_WITH_TIMEOUT(samples.count() >= 2, 10000);
+        QVERIFY(samples.first().at(0).toJsonObject().value("cpu_percent").isNull());   // first sample: no rates yet
+        const QJsonObject s = samples.at(1).at(0).toJsonObject();
+        QVERIFY(s.value("cpu_percent").isDouble());
+        QVERIFY(s.value("memory_total").toInteger() > 0);
+        QCOMPARE(s.value("self").toObject().value("pid").toInteger(), QCoreApplication::applicationPid());
+        perf.stop();
+        QTest::qWait(400);
+        const int afterStop = samples.count();
+        QTest::qWait(900);
+        QCOMPARE(samples.count(), afterStop);
+
+        QTemporaryDir data;
+        OptimizerService opt(envFor(data));
+        QVERIFY(opt.tempRoots().contains(QDir(data.path()).filePath(QStringLiteral("temp"))));
+        QSignalSpy diagnosed(&opt, &OptimizerService::diagnosed);
+        opt.diagnose({data.path()});
+        QVERIFY(wait(diagnosed));
+        QVERIFY(diagnosed.first().at(1).toJsonArray().size() >= 5);
+
+        QSignalSpy failed(&opt, &OptimizerService::failed);
+        opt.cleanTemp();   // nothing analysed: refused
+        QVERIFY(wait(failed));
+        const QString old = QDir(data.path()).filePath(QStringLiteral("temp/sessao-antiga.tmp"));
+        writeFile(old, QByteArray(4096, 'x'));
+        {
+            QFile f(old);
+            QVERIFY(f.open(QIODevice::ReadWrite));
+            QVERIFY(f.setFileTime(QDateTime::currentDateTime().addDays(-3), QFileDevice::FileModificationTime));
+        }
+        writeFile(QDir(data.path()).filePath(QStringLiteral("temp/em-uso.tmp")), "recente");
+        QSignalSpy analyzed(&opt, &OptimizerService::tempAnalyzed);
+        opt.analyzeTemp(24);
+        QVERIFY(wait(analyzed));
+        QVERIFY(opt.hasPlan());
+        const QJsonObject plan = analyzed.first().at(1).toJsonObject();
+        QVERIFY(plan.value("files").toInteger() >= 1);
+        QVERIFY(plan.value("bytes").toInteger() >= 4096);
+        QVERIFY(plan.value("recent").toInteger() >= 1);
+        QSignalSpy cleaned(&opt, &OptimizerService::tempCleaned);
+        opt.cleanTemp();
+        QVERIFY(!opt.hasPlan());   // a plan is used once
+        QVERIFY(wait(cleaned));
+        const QJsonObject r = cleaned.first().at(1).toJsonObject();
+        QVERIFY(r.value("deleted").toInt() >= 1);
+        QVERIFY(!r.contains("audit_error"));
+        QVERIFY(!QFileInfo::exists(old));
+        QVERIFY(QFileInfo::exists(QDir(data.path()).filePath(QStringLiteral("temp/em-uso.tmp"))));
+    }
+
 };
 
 QTEST_MAIN(TestBridge)

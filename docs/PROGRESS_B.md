@@ -230,6 +230,32 @@ Com o A indisponível, o usuário pediu ao B que assumisse as tarefas dele (regi
 * Achado pelo caminho: o temporizador de progresso do `Scanner` era `static` (compartilhado entre a varredura manual
   e a do tempo real, em *threads* diferentes); passou a ser por instância.
 
+### M12 — Performance Monitor e System Optimizer (`cpp/perf`, `cpp/sysopt`)
+
+* **Monitor** (`gk::perf::Sampler`): Windows — CPU por `GetSystemTimes`; memória por `GlobalMemoryStatusEx`; disco
+  e GPU por contadores PDH adicionados com `PdhAddEnglishCounterW` (`PhysicalDisk(_Total)`, `GPU Engine(*)\Utilization
+  Percentage` somado por tipo de mecanismo — a GPU vale o tipo mais ocupado, como o Gerenciador de Tarefas —, `GPU
+  Adapter Memory(*)\Dedicated/Shared Usage`); placas e memória de vídeo total pelo DXGI (adaptadores de software
+  ignorados, casados com os contadores pelo LUID); processos por Toolhelp + `GetProcessTimes`/`GetProcessMemoryInfo`
+  (os protegidos são contados como "não medidos"). Linux (desenvolvimento): `/proc` e `/sys/block`; GPU declarada
+  indisponível. Taxas vêm da diferença entre duas amostras.
+* **Otimizador** (`gk::sysopt`): diagnóstico só de leitura (registro, `PowerGetActiveScheme`, `GetSystemPowerStatus`,
+  `QStorageInfo`), cada item com valor e, quando pede atenção, onde ajustar no Windows; nenhuma configuração do sistema
+  é alterada. Limpeza de temporários em duas etapas: `analyzeTemp` (arquivos com mais de 24 h em `%TEMP%` e
+  `<dados>/temp`, sem seguir links/junções, raízes inseguras recusadas) e `cleanTemp` (apaga só o listado e ainda
+  igual em tamanho e data, e ainda dentro da pasta — uma pasta trocada por link entre as etapas é detectada; pastas
+  antigas que ficam vazias são removidas). Fora do Windows, o `/tmp` compartilhado não é tocado.
+* **Interface**: `PerformanceService` (amostras numa *thread* própria só enquanto a página Desempenho está na tela),
+  `OptimizerService` (diagnóstico e limpeza em segundo plano; plano usado uma vez; auditoria
+  `optimizer.temp_clean`); páginas **Desempenho** (blocos com o último minuto em gráfico, processos por processador,
+  memória ou placa de vídeo, consumo do próprio programa) e **Otimizador** (diagnóstico, analisar → confirmar →
+  limpar). Menu com 13 páginas.
+* Testes: `tests/integration/test_cpp_perf.py` → `tst_perf.cpp` (uma *thread* ocupada tem de aparecer no consumo
+  deste processo; GPU e disco medidos ou explicados) e `tst_sysopt.cpp` (diagnóstico; limpeza com arquivos antigos,
+  recentes, alterados depois da análise, em uso no Windows, links e pasta trocada por link apontando para dados do
+  usuário); casos no `tst_bridge.cpp` e no `tst_app.cpp` (capturas `07-desempenho.png` e `08-otimizador.png`); limpos
+  sob ASan/UBSan.
+
 ## B9 — páginas que não dependem do A (2026-11-15)
 
 * **Relatórios forenses**: lista as varreduras do banco pelo novo método `reports.scans` do auxiliar (somente

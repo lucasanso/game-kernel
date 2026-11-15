@@ -31,7 +31,8 @@ SANITIZER_FLAGS = "-fsanitize=address,undefined -fno-omit-frame-pointer -fno-san
 
 
 # The product is built from the repository root (core, bridge, UI and their tests in one CMake project).
-ROOT_BUILD_ARGS = ["-DGK_BUILD_BINDINGS=OFF", "-DGK_APP_BUILD_TESTS=ON", "-DGK_BRIDGE_BUILD_TESTS=ON", "-DGK_REALTIME_BUILD_TESTS=ON"]
+ROOT_BUILD_ARGS = ["-DGK_BUILD_BINDINGS=OFF", "-DGK_APP_BUILD_TESTS=ON", "-DGK_BRIDGE_BUILD_TESTS=ON", "-DGK_REALTIME_BUILD_TESTS=ON",
+                   "-DGK_PERF_BUILD_TESTS=ON"]
 
 
 def build_root_target(target: str) -> Path:

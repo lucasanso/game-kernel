@@ -88,7 +88,10 @@ cpp/scan/, cpp/cli/   orquestrador de varredura (Qt Core) e gk-cli (A)
 cpp/realtime/   gk_realtime — proteção em tempo real (M11): ReadDirectoryChangesW (Windows) / inotify (Linux,
                 desenvolvimento), regras de lote e o monitor sobre o gk_scan (escrito pelo B a pedido do usuário)
 cpp/bridge/     gk_bridge — serviços Qt para a interface (M13; escrito pelo B a pedido do usuário)
-cpp/perf, cpp/sysopt   (M12, próximos passos)
+cpp/perf/       gk_perf — Performance Monitor (M12): GetSystemTimes, contadores PDH por nome em inglês, DXGI,
+                Toolhelp (Windows); /proc e /sys (Linux, desenvolvimento) (escrito pelo B a pedido do usuário)
+cpp/sysopt/     gk_sysopt — System Optimizer (M12): diagnóstico só de leitura e limpeza de temporários em duas
+                etapas (escrito pelo B a pedido do usuário)
 cpp/app/        interface Qt 6 C++ (B)
 contracts/      schema.sql, update_package.md, helper_methods.md
 gamekernel/     Python: fundação (A); helper, reports, sandbox, intel, rules, updates (B)

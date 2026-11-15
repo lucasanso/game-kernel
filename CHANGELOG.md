@@ -61,6 +61,15 @@
 ## Agente B — Python, integração e ferramentas
 
 ### [não lançado]
+- **Monitor de desempenho e otimizador (M12, tarefa do A assumida pelo B)**: `cpp/perf` — processador
+  (GetSystemTimes), memória, disco e GPU por mecanismo / memória de vídeo por contadores PDH adicionados pelo nome em
+  inglês (independem do idioma do Windows), placas de vídeo pelo DXGI, processos que mais usam processador, memória
+  e placa de vídeo (Toolhelp); `/proc` no Linux. `cpp/sysopt` — diagnóstico só de leitura (plano de energia e bateria,
+  Modo de Jogo, gravação em segundo plano, agendamento de GPU, memória, espaço livre, programas de inicialização,
+  reinicialização pendente), cada item com o que ajustar no Windows; limpeza de temporários em duas etapas (só o que
+  a análise listou e não mudou; links nunca seguidos; arquivos em uso mantidos; auditoria). Serviços
+  `PerformanceService` (amostragem só com a página aberta) e `OptimizerService`; páginas **Desempenho** e
+  **Otimizador**.
 - **Proteção em tempo real (M11, tarefa do A assumida pelo B)**: `cpp/realtime` — observador recursivo nativo
   (ReadDirectoryChangesW no Windows; inotify no Linux para desenvolvimento e CI), lotes só com arquivos que pararam de
   mudar (estabilidade, leitura possível, janela de agrupamento, remoções e renomeações descartadas, perda de eventos

@@ -6,9 +6,9 @@ repacks, mods e launchers, explica **o que** foi encontrado, **onde** (arquivo e
 
 > **Estado: em desenvolvimento.** Já há instalador e versão portátil para Windows, gerados e testados de ponta a
 > ponta na CI (instalação silenciosa, integridade assinada, varredura real, relatório e desinstalação; ver
-> `docs/INSTALL.md`). A interface (Qt 6 C++) já faz varredura, análise forense, quarentena, proteção em tempo real,
-> atualização offline, análise comportamental, relatórios e privacidade; falta o monitor de desempenho e o otimizador
-> (M12). Uso: `docs/USAGE.md`. Abaixo está o que existe e foi testado. O progresso detalhado está em `docs/PROGRESS_A.md` (núcleo) e `docs/PROGRESS_B.md`
+> `docs/INSTALL.md`). A interface (Qt 6 C++) faz varredura, análise forense, quarentena, proteção em tempo real,
+> monitor de desempenho, otimizador, atualização offline, análise comportamental, relatórios e privacidade.
+> Uso: `docs/USAGE.md`. Abaixo está o que existe e foi testado. O progresso detalhado está em `docs/PROGRESS_A.md` (núcleo) e `docs/PROGRESS_B.md`
 > (integração, ferramentas, interface e distribuição).
 
 ## Arquitetura (híbrida C++20 / Python)
@@ -18,6 +18,7 @@ repacks, mods e launchers, explica **o que** foi encontrado, **onde** (arquivo e
 | Interface desktop (`cpp/app`) | Qt 6, C++ | Agente B (em construção) |
 | Serviços para a interface (`cpp/bridge`) | Qt 6, C++ | Agente A (escrito pelo B a pedido do usuário) |
 | Proteção em tempo real (`cpp/realtime`) | Qt 6 Core, C++, ReadDirectoryChangesW | Agente A (escrito pelo B a pedido do usuário) |
+| Monitor de desempenho e otimizador (`cpp/perf`, `cpp/sysopt`) | Qt 6 Core, C++, PDH, DXGI | Agente A (escrito pelo B a pedido do usuário) |
 | Núcleo de análise, quarentena, tempo real, monitor de desempenho (`cpp/core`) | C++20, libyara, libarchive, libsodium, WinAPI | Agente A |
 | Cliente do processo auxiliar e atualização offline (`cpp/ipc`, `cpp/updates`) | Qt 6 Core, C++, libsodium | Agente A (escritos pelo B) |
 | Processo auxiliar `gk-helper` (relatórios, sandbox) | Python 3, isolado em processo próprio | Agente B |
@@ -41,7 +42,10 @@ Detalhes: `docs/ARCHITECTURE.md`, `docs/INTEGRATION.md`, `docs/CORE_API.md`, `do
   Histórico, Quarentena (cofre criptografado: colocar, restaurar conferindo o conteúdo, apagar, verificar),
   **Proteção em tempo real** (pastas escolhidas observadas pelo sistema; cada arquivo novo é analisado quando termina
   de ser gravado, com aviso na janela e na área de notificação e quarentena automática opcional só para ameaças
-  confirmadas por assinatura; não bloqueia a execução antes da análise, o que exigiria um *driver*), a
+  confirmadas por assinatura; não bloqueia a execução antes da análise, o que exigiria um *driver*), **Desempenho**
+  (processador, memória, placa de vídeo e memória de vídeo, disco e os programas que mais consomem, medidos pelo
+  Windows), **Otimizador** (diagnóstico só de leitura com o que ajustar no próprio Windows e limpeza de temporários
+  antigos com confirmação), a
   Central de Atualização Offline (importar, conferir publicador e chave, instalar, reverter, chaves confiáveis), a
   análise comportamental (disponibilidade real da sandbox, confirmação, progresso, evidências), os Relatórios
   forenses (varreduras do banco, HTML/JSON/PDF com opções de privacidade), Privacidade e rede (autoteste que tenta

@@ -63,6 +63,24 @@ varredura. Subpastas também são observadas; a pasta de dados do Game Kernel e 
   O ClamAV não é usado nesses lotes pequenos (carregar a base a cada lote custaria mais que o lote); as varreduras
   manuais o usam.
 
+### Desempenho
+O que o computador está gastando agora, medido pelo próprio Windows a cada segundo enquanto a página está aberta:
+processador, memória, placa de vídeo (uso do mecanismo mais ocupado e memória de vídeo usada/total) e disco
+(leitura e gravação), com o último minuto em gráfico, e os programas que mais usam processador, memória ou placa de
+vídeo. Mostra também quanto o próprio Game Kernel usa. Uma medição que o sistema não fornece aparece como
+"Indisponível", com o motivo. Nada é alterado.
+
+### Otimizador
+* **Diagnóstico para jogos** (só leitura): plano de energia (e se o notebook está na bateria), Modo de Jogo, gravação
+  em segundo plano do Xbox Game Bar, agendamento de GPU acelerado por hardware, memória livre, espaço livre no disco
+  do sistema e nos das pastas protegidas, programas que iniciam com o Windows e reinicialização pendente. Cada item diz
+  o que foi encontrado e, quando pede atenção, **onde ajustar no próprio Windows**. O Game Kernel não muda nenhuma
+  configuração do sistema.
+* **Arquivos temporários**: **Analisar** lista os arquivos com mais de 24 horas sem alteração na pasta temporária do
+  Windows (`%TEMP%`) e na do Game Kernel; **Limpar** pede confirmação e apaga exatamente o que a análise listou e que
+  não mudou desde então. Arquivos em uso ficam; links e junções nunca são seguidos. Não pode ser desfeito (a
+  operação fica no registro de auditoria).
+
 ### Central de Atualização Offline
 Mantém as assinaturas (regras YARA, indicadores e bancos ClamAV) em dia **sem internet**, com pacotes `.gkpkg`
 recebidos de quem publica as atualizações.

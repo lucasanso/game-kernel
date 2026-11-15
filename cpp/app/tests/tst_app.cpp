@@ -9,6 +9,8 @@
 #include "pages/dashboard_page.hpp"
 #include "pages/helper_pages.hpp"
 #include "pages/history_page.hpp"
+#include "pages/optimizer_page.hpp"
+#include "pages/performance_page.hpp"
 #include "pages/quarantine_page.hpp"
 #include "pages/realtime_page.hpp"
 #include "pages/results_page.hpp"
@@ -506,6 +508,63 @@ private slots:
         env->ctx->helper()->stop();
     }
 
+    void performanceAndOptimizerPages() {
+        auto env = makeEnv();
+        PerformancePage perf(env->ctx.get());
+        perf.setSampling(true);
+        QTRY_VERIFY_WITH_TIMEOUT(perf.sampleCount() >= 2, 15000);
+        QVERIFY2(perf.cpuText().contains(QStringLiteral("%")), qPrintable(perf.cpuText()));
+        QVERIFY2(perf.memoryText().contains(QStringLiteral("em uso de")), qPrintable(perf.memoryText()));
+        QVERIFY2(perf.notesText().contains(QStringLiteral("O Game Kernel usa")), qPrintable(perf.notesText()));
+        // An idle machine may have no process using the processor in the last second: then the page says so.
+        QVERIFY(perf.processRows() >= 1 || perf.processesEmptyText().contains(QStringLiteral("processador")));
+        perf.sortProcessesBy(QStringLiteral("memory"));
+        QVERIFY(perf.processRows() >= 1);   // something always uses memory
+#ifndef _WIN32
+        QVERIFY2(perf.gpuText().contains(QStringLiteral("Indisponível")), qPrintable(perf.gpuText()));
+#endif
+        perf.setSampling(false);
+        QTest::qWait(1500);
+        const int stopped = perf.sampleCount();
+        QTest::qWait(1500);
+        QCOMPARE(perf.sampleCount(), stopped);   // nothing measured while nobody looks
+
+        OptimizerPage opt(env->ctx.get());
+        QSignalSpy diagnosed(&opt, &OptimizerPage::diagnosed);
+        QVERIFY(waitFinished(diagnosed));
+        QVERIFY(opt.checkCount() >= 7);
+        QVERIFY(!opt.checkStatus(QStringLiteral("memory")).isEmpty());
+#ifndef _WIN32
+        QCOMPARE(opt.checkStatus(QStringLiteral("power_plan")), QStringLiteral("unavailable"));
+#endif
+        QVERIFY(!opt.cleanTemp());   // nothing analysed yet
+        const QString old = QDir(env->data.path()).filePath(QStringLiteral("temp/relatorio-antigo.tmp"));
+        QVERIFY(QDir().mkpath(QFileInfo(old).absolutePath()));
+        {
+            QFile f(old);
+            QVERIFY(f.open(QIODevice::WriteOnly));
+            f.write(QByteArray(8192, 'x'));
+            QVERIFY(f.flush());   // otherwise the buffered write at close() sets the time to now again
+            QVERIFY(f.setFileTime(QDateTime::currentDateTime().addDays(-2), QFileDevice::FileModificationTime));
+        }
+        QSignalSpy analyzed(&opt, &OptimizerPage::tempAnalyzed);
+        opt.analyzeTemp();
+        QVERIFY(waitFinished(analyzed));
+        QVERIFY(opt.canClean());
+        QVERIFY2(opt.tempText().contains(QStringLiteral("podem ser apagados")), qPrintable(opt.tempText()));
+        env->answer = false;
+        QVERIFY(!opt.cleanTemp());   // declined: nothing deleted
+        QVERIFY(QFileInfo::exists(old));
+        env->answer = true;
+        QSignalSpy cleaned(&opt, &OptimizerPage::tempCleaned);
+        QVERIFY(opt.cleanTemp());
+        QVERIFY(waitFinished(cleaned));
+        QVERIFY(!QFileInfo::exists(old));
+        QVERIFY2(opt.tempText().contains(QStringLiteral("apagado")), qPrintable(opt.tempText()));
+        QVERIFY(!opt.canClean());   // a new analysis is needed before another clean-up
+        env->ctx->helper()->stop();
+    }
+
     void mainWindowNavigationNotificationsAndScreenshots() {
         auto env = makeEnv(true, true);
         QTemporaryDir games;
@@ -514,7 +573,7 @@ private slots:
         window.resize(1280, 820);
         window.show();
         QVERIFY(QTest::qWaitForWindowExposed(&window));
-        QCOMPARE(window.pageCount(), 11);
+        QCOMPARE(window.pageCount(), 13);
         // Without a notification area (offscreen tests) closing the window ends the program as usual.
         QVERIFY(!window.keepsRunningInTray() || QSystemTrayIcon::isSystemTrayAvailable());
         QCOMPARE(window.currentTitle(), QStringLiteral("Painel"));
@@ -588,6 +647,18 @@ private slots:
         QTest::qWait(200);
         screenshot(&window, QStringLiteral("01-painel.png"));
 
+        window.showPage(MainWindow::Performance);
+        QCOMPARE(window.currentTitle(), QStringLiteral("Desempenho"));
+        QTRY_VERIFY_WITH_TIMEOUT(window.performancePage()->sampling() && window.performancePage()->sampleCount() >= 3, 20000);
+        screenshot(&window, QStringLiteral("07-desempenho.png"));
+
+        window.showPage(MainWindow::Optimizer);
+        QCOMPARE(window.currentTitle(), QStringLiteral("Otimizador"));
+        QVERIFY(!window.performancePage()->sampling());   // stops when its page is left
+        QTRY_VERIFY_WITH_TIMEOUT(window.optimizerPage()->checkCount() >= 7, 30000);
+        QTest::qWait(200);
+        screenshot(&window, QStringLiteral("08-otimizador.png"));
+
         window.showPage(MainWindow::Updates);
         QCOMPARE(window.currentTitle(), QStringLiteral("Central de Atualização Offline"));
         QSignalSpy done(window.updatesPage(), &UpdatesPage::operationFinished);
@@ -596,19 +667,19 @@ private slots:
         QVERIFY(window.toasts()->visibleCount() >= 1);
         QVERIFY(window.toasts()->history().last().contains(QStringLiteral("2026.11.12.1")));
         QTest::qWait(200);
-        screenshot(&window, QStringLiteral("07-atualizacoes.png"));
+        screenshot(&window, QStringLiteral("09-atualizacoes.png"));
 
         window.showPage(MainWindow::Sandbox);
         QCOMPARE(window.currentTitle(), QStringLiteral("Análise comportamental"));
         QTRY_VERIFY_WITH_TIMEOUT(!window.sandboxPage()->availabilityReason().isEmpty(), 30000);
         QTest::qWait(200);
-        screenshot(&window, QStringLiteral("08-sandbox.png"));
+        screenshot(&window, QStringLiteral("10-sandbox.png"));
 
         window.showPage(MainWindow::Reports);
         QCOMPARE(window.currentTitle(), QStringLiteral("Relatórios forenses"));
         QTRY_VERIFY_WITH_TIMEOUT(window.reportsPage()->scanCount() >= 1, 30000);
         QTest::qWait(200);
-        screenshot(&window, QStringLiteral("09-relatorios.png"));
+        screenshot(&window, QStringLiteral("11-relatorios.png"));
 
         window.showPage(MainWindow::Privacy);
         QCOMPARE(window.currentTitle(), QStringLiteral("Privacidade e rede"));
@@ -616,12 +687,12 @@ private slots:
         window.privacyPage()->runNetworkSelfTest();
         QVERIFY(waitFinished(selfTest));
         QTest::qWait(200);
-        screenshot(&window, QStringLiteral("10-privacidade.png"));
+        screenshot(&window, QStringLiteral("12-privacidade.png"));
 
         window.showPage(MainWindow::Settings);
         QCOMPARE(window.currentTitle(), QStringLiteral("Configurações"));
         QTest::qWait(200);
-        screenshot(&window, QStringLiteral("11-configuracoes.png"));
+        screenshot(&window, QStringLiteral("13-configuracoes.png"));
         env->ctx->helper()->stop();
     }
 };

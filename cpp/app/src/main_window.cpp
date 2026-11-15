@@ -3,6 +3,8 @@
 #include "pages/dashboard_page.hpp"
 #include "pages/helper_pages.hpp"
 #include "pages/history_page.hpp"
+#include "pages/optimizer_page.hpp"
+#include "pages/performance_page.hpp"
 #include "pages/quarantine_page.hpp"
 #include "pages/realtime_page.hpp"
 #include "pages/results_page.hpp"
@@ -168,6 +170,8 @@ MainWindow::MainWindow(AppContext* ctx, QWidget* parent) : QMainWindow(parent), 
     history_ = new HistoryPage(ctx_, stack_);
     quarantine_ = new QuarantinePage(ctx_, stack_);
     realtime_ = new RealtimePage(ctx_, stack_);
+    performance_ = new PerformancePage(ctx_, stack_);
+    optimizer_ = new OptimizerPage(ctx_, stack_);
     updates_ = new UpdatesPage(ctx_, stack_);
     sandbox_ = new SandboxPage(ctx_, stack_);
     reports_ = new ReportsPage(ctx_, stack_);
@@ -185,6 +189,10 @@ MainWindow::MainWindow(AppContext* ctx, QWidget* parent) : QMainWindow(parent), 
             QStringLiteral("Arquivos isolados num cofre criptografado; restaure ou apague quando quiser."));
     addPage(realtime_, QStringLiteral("eye"), QStringLiteral("Tempo real"), QStringLiteral("Proteção em tempo real"),
             QStringLiteral("Analisa o que aparece ou muda nas pastas dos seus jogos e downloads assim que é gravado."));
+    addPage(performance_, QStringLiteral("activity"), QStringLiteral("Desempenho"), QStringLiteral("Desempenho"),
+            QStringLiteral("O que o computador está gastando agora: processador, memória, placa de vídeo e disco."));
+    addPage(optimizer_, QStringLiteral("tool"), QStringLiteral("Otimizador"), QStringLiteral("Otimizador"),
+            QStringLiteral("O que vale ajustar no Windows para jogar e limpeza segura de arquivos temporários."));
     addPage(updates_, QStringLiteral("package"), QStringLiteral("Atualização offline"), QStringLiteral("Central de Atualização Offline"),
             QStringLiteral("Importe pacotes assinados de assinaturas, regras e indicadores. Nada é baixado."));
     addPage(sandbox_, QStringLiteral("flask"), QStringLiteral("Análise comportamental"), QStringLiteral("Análise comportamental"),
@@ -325,7 +333,7 @@ void MainWindow::addPage(QWidget* page, const QString& iconName, const QString& 
                          const QString& subtitle) {
     stack_->addWidget(page);
     auto* item = new QListWidgetItem(icon(iconName, palette::Muted), navLabel, nav_);
-    item->setSizeHint(QSize(0, 42));
+    item->setSizeHint(QSize(0, 38));
     pages_.append({title, subtitle});
 }
 
