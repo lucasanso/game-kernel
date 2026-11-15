@@ -35,6 +35,7 @@ struct Config {
     QString resourceDir;             // signatures/, contracts/, third_party/ of the installation
     QString workerProgram;           // gk-scanworker(.exe)
     QString clamscan;                // empty = ClamAV unavailable
+    bool clamavDisabled = false;     // turned off in the settings (not missing from the installation)
     QString installDir;              // root of the integrity manifest (defaults to resourceDir)
     int workers = 2;
     qint64 workerMemoryLimit = qint64(2) * 1024 * 1024 * 1024;

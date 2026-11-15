@@ -372,6 +372,7 @@ private slots:
         QSignalSpy recorded(&m, &Monitor::eventRecorded);
         Settings s = settingsFor({game.path()});
         s.autoQuarantine = true;
+        s.notifyMinRisk = 5;   // CRITICAL: the notification level must not stop a confirmed (HIGH) threat being isolated
         m.apply(s);
         const QString sample = game.filePath("trainer/leia_eicar.com");
         QVERIFY(writeFile(sample, eicar()));

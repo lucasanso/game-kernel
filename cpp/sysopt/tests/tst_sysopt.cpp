@@ -92,8 +92,9 @@ private slots:
         QVERIFY(QFile::link(outside, root + "/atalho-para-fora"));          // never followed
         QVERIFY(QFile::link(outside + "/save.dat", root + "/save-link"));  // never deleted
 #endif
-        // Unsafe roots are refused.
+        // Unsafe roots are refused, including an ordinary folder full of old files (%TEMP% pointed at it).
         QVERIFY(analyzeTemp({QDir::rootPath(), QDir::homePath()}).roots.isEmpty());
+        QVERIFY(analyzeTemp({outside}).roots.isEmpty());
         std::atomic<bool> cancel{true};
         QVERIFY(analyzeTemp({root}, 24, &cancel).files.isEmpty());
 

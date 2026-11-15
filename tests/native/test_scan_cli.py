@@ -265,6 +265,9 @@ def test_settings_json_is_honoured(cli, game, tmp_path):
         assert r[name]["status"] == "skipped" and "excluído nas configurações" in r[name]["status_reasons"], name
     clamav = next(e for e in report["summary"]["engines"] if e["key"] == "clamav")
     assert clamav["available"] is False
+    # The summary says why: turned off by the user, not missing from the installation.
+    assert any("ClamAV desativado nas configurações" in item for item in report["summary"]["limitations"])
+    assert not any("indisponível nesta instalação" in item for item in report["summary"]["limitations"])
 
     def workers_of_last_scan():
         with sqlite3.connect(data / "gamekernel.db") as db:

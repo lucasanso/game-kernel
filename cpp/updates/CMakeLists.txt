@@ -88,3 +88,13 @@ if(GK_UPDATES_BUILD_CLI)
     target_compile_options(gk-update PRIVATE /utf-8)
   endif()
 endif()
+
+# Built from the repository root (product): same hardening, warnings policy and sanitizers as every other
+# Game Kernel binary. Required with GK_SANITIZE, since gk_core is then instrumented and the executable must
+# link the sanitizer runtimes.
+if(COMMAND gk_apply_options)
+  gk_apply_options(gk_updates)
+  if(TARGET gk-update)
+    gk_apply_options(gk-update)
+  endif()
+endif()

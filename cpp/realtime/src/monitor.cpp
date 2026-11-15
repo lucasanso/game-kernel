@@ -272,7 +272,11 @@ void Monitor::onBatchFinished(const QJsonObject& summary) {
 }
 
 void Monitor::handle(const Top& top, qint64 scanId) {
-    if (top.risk < settings_.notifyMinRisk) return;   // kept in the batch's scan record only
+    // Below the notification level the finding stays in the batch's scan record only — unless it is a threat
+    // confirmed by a signature and the user turned automatic quarantine on: the notification level must not
+    // decide whether a confirmed threat is isolated (an EICAR or a known trojan is HIGH, not CRITICAL).
+    const bool autoQuarantineApplies = settings_.autoQuarantine && top.confirmed;
+    if (top.risk < settings_.notifyMinRisk && !autoQuarantineApplies) return;
     const QJsonObject& w = top.worst;
     const QString sha = top.self.value("sha256").toString();
     const QString classification = w.value("classification").toString();
@@ -290,7 +294,7 @@ void Monitor::handle(const Top& top, qint64 scanId) {
     QString action = QStringLiteral("notified");
     QString message;
     QString quarantineId;
-    if (settings_.autoQuarantine && top.confirmed) {
+    if (autoQuarantineApplies) {
         if (restoredBefore(sha)) {
             action = QStringLiteral("restored_before");
             message = QStringLiteral("Você já restaurou este arquivo da quarentena; ele não foi isolado de novo.");

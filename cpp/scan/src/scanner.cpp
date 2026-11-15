@@ -155,7 +155,10 @@ void Config::applySettings(const QJsonObject& settings) {
     type("shortcuts", &enumeration.types.shortcuts);
     type("data_sniffing", &enumeration.types.data_sniffing);
     const QJsonObject clamav = settings.value("engines").toObject().value("clamav").toObject();
-    if (clamav.value("enabled").isBool() && !clamav.value("enabled").toBool()) clamscan.clear();
+    if (clamav.value("enabled").isBool() && !clamav.value("enabled").toBool()) {
+        clamscan.clear();
+        clamavDisabled = true;
+    }
     if (clamav.value("batch_size").isDouble()) clamavBatch = std::clamp(clamav.value("batch_size").toInt(), 10, 5000);
 }
 
@@ -535,7 +538,9 @@ void Scanner::finishAnalysis() {
 void Scanner::runClamav() {
     if (cancelled_) return;
     if (config_.clamscan.isEmpty()) {
-        limitations_.push_back("ClamAV indisponível nesta instalação: arquivos não verificados por assinaturas do ClamAV.");
+        limitations_.push_back(config_.clamavDisabled
+                                   ? "ClamAV desativado nas configurações: arquivos não verificados por assinaturas do ClamAV."
+                                   : "ClamAV indisponível nesta instalação: arquivos não verificados por assinaturas do ClamAV.");
         return;
     }
     if (integrity_) {

@@ -106,6 +106,19 @@
   no_new_privs. O estado real vai no handshake; `test_worker_hardening.py` conversa com o worker real pelo gk-ipc e
   confere também que a verificação de assinaturas (incluindo catálogos) funciona com o token restrito no Windows.
 
+## Mesclagem do trabalho do Agente B (2026-11-15) ✅
+* O B assumiu, a pedido do usuário, M11 (tempo real), M12 (desempenho/otimizador) e M13 (`cpp/bridge`), além da
+  interface (B9) e da distribuição (B10). Branch dele avançado sobre o meu (sem conflitos: ele já tinha mesclado
+  tudo); compilação completa com warnings como erro; suíte 594 passed / 15 skipped (só testes de outra
+  plataforma); ASan/UBSan da suíte nativa sem nenhum erro de memória.
+* Revisão das mudanças dele no núcleo: refatoração do motor de risco sem mudança de comportamento; correção de um
+  bug meu (excluir a pasta `Foo` excluía `FooBar`); validação YARA dos pacotes pelo núcleo quando compilado da raiz
+  (resolve minha pendência sem quebrar o build isolado); SQL novo todo parametrizado e leitura com conexão
+  somente-leitura; motor de risco com falha segura; exceção do Qt Core na auditoria de rede justificada e estreita.
+* Corrigido: `gk-update` sem as opções do projeto (quebrava o build ASan do `core-ci`); raiz da limpeza de
+  temporários aceitava qualquer pasta apontada por `%TEMP%`; quarentena automática do tempo real bloqueada pelo
+  nível de notificação (teste do B passou a cobrir: falhava antes, passa depois); texto do ClamAV desativado.
+
 ## Correções de CI (rodada atual)
 * `signatures/data/game_components.json` não estava versionado (padrão `data/` do `.gitignore`).
 * `gk_native` derrubava o Python na saída no Windows (objetos Python em `static`); teste de ciclo de vida.

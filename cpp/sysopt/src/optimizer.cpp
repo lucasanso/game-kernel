@@ -46,9 +46,17 @@ bool under(const QString& path, const QString& folder) {
 
 bool isLink(const QFileInfo& info) { return info.isSymbolicLink() || info.isJunction(); }
 
-// A temporary folder must be a real folder, not a drive root or the user's home.
+// A temporary folder must be a real folder, not a drive root or the user's home, and must be named like one
+// ("Temp"/"Tmp"). The Windows root comes from %TMP%/%TEMP%: if those variables point at Documents, Downloads or
+// a game library (misconfiguration, or a program trying to get the user's own click to delete files), the
+// folder is refused instead of having every file older than the cut-off offered for deletion.
 bool safeRoot(const QString& canonical) {
     if (canonical.size() < 4 || QDir(canonical).isRoot()) return false;
+    const QString name = QFileInfo(canonical).fileName();
+    if (name.compare(QLatin1String("temp"), Qt::CaseInsensitive) != 0 &&
+        name.compare(QLatin1String("tmp"), Qt::CaseInsensitive) != 0) {
+        return false;
+    }
     const QString home = QFileInfo(QDir::homePath()).canonicalFilePath();
     return canonical.compare(home, pathCase()) != 0;
 }
