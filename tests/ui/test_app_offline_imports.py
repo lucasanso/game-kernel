@@ -14,7 +14,7 @@ from __future__ import annotations
 import sys
 from pathlib import Path
 
-from tests.integration.native_build import ROOT, build_project
+from tests.integration.native_build import ROOT, build_root_target
 from tests.native.test_offline_imports import FORBIDDEN_DLLS, WS2_ALLOWED, _elf_violations
 
 
@@ -77,7 +77,7 @@ def _load_closure(exe) -> dict[str, str]:
 
 
 def test_desktop_application_imports_no_network_code():
-    exe = build_project("native-app", ROOT / "cpp" / "app", "GameKernel")
+    exe = build_root_target("GameKernel")
     if sys.platform == "win32":
         closure = _load_closure(exe)
         assert "qt6widgets.dll" in closure and "qt6svg.dll" in closure, sorted(closure)

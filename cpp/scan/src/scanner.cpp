@@ -61,6 +61,18 @@ QString exe(const QString& base) {
 Config Config::defaults(const QString& appDir, const QString& dataDir) {
     Config c;
     c.dataDir = dataDir;
+#if defined(__SANITIZE_ADDRESS__)
+#define GK_ADDRESS_SANITIZER 1
+#elif defined(__has_feature)
+#if __has_feature(address_sanitizer)
+#define GK_ADDRESS_SANITIZER 1
+#endif
+#endif
+#ifdef GK_ADDRESS_SANITIZER
+    // Sanitizer test builds only: AddressSanitizer reserves terabytes of virtual address space when the worker
+    // starts, so an RLIMIT_AS cap kills it before it analyses anything. Product builds keep the limit.
+    c.workerMemoryLimit = 0;
+#endif
     // Installed layout keeps resources next to the executable; a build tree finds them in a parent folder.
     QDir probe(appDir);
     for (int i = 0; i < 6; ++i) {

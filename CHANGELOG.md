@@ -61,6 +61,10 @@
 ## Agente B — Python, integração e ferramentas
 
 ### [não lançado]
+- **Tarefas do A assumidas pelo B (pedido do usuário)**: M13 `cpp/bridge` (serviços Qt de varredura, histórico,
+  quarentena e integridade, com leitura somente leitura do banco no núcleo); motor de risco à prova de falha;
+  `gk-cli` respeitando o `portable.flag`; interface compilada pela raiz com o endurecimento do núcleo; limite de
+  memória do *worker* desligado só em builds com AddressSanitizer.
 - Interface Qt 6 C++ (`cpp/app`, etapa B9 parte 1): janela com menu lateral, cabeçalho por página, notificações
   internas, instância única, tema escuro grafite com destaques em azul e verde e cores de risco, ícones SVG e logotipo
   próprios. Páginas com serviço real: Central de Atualização Offline (`cpp/updates`: conjunto ativo e aviso de

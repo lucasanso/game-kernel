@@ -168,6 +168,25 @@ Com o A indisponível, o usuário pediu ao B que assumisse as tarefas dele (regi
   interface recebe o mesmo endurecimento e os mesmos avisos do núcleo (`gk_apply_options`). Corrigidos os avisos
   `-Wshadow` que isso revelou. A CI do instalador passa a tirar o `GameKernel.exe` desse mesmo build.
 
+### M13 — `cpp/bridge` (serviços Qt para a interface)
+
+* `gk::bridge::ScanService`: o `Scanner` do núcleo numa *thread* própria; `start`/`pause`/`resume`/`cancel`, sinais
+  de progresso, resultado por arquivo e resumo (uma varredura por vez).
+* `HistoryService`: varreduras e resultados lidos do SQLite em segundo plano, por uma conexão **somente leitura**
+  nova no núcleo (`Database::open_readonly`, `list_scans`, `scan`, `file_results`); instalação nova sem banco dá
+  listas vazias e não cria o banco.
+* `QuarantineService`: cofre criptografado + banco + auditoria (`gk::quarantine::Manager`), uma operação por vez em
+  segundo plano: colocar (com SHA-256 esperado), listar, restaurar, apagar, verificar. `gk::db::to_json` dos itens
+  da quarentena passou para o núcleo (o `gk-cli` usa o mesmo).
+* `IntegrityService`: `gk::integrity::Verifier` em segundo plano, mesmo relatório do `gk-cli integrity`.
+* A interface passa a ser compilada só pela raiz do repositório (usa o *bridge*); os testes compilam a raiz em
+  `build/native-root`. A CI instala as dependências do núcleo nos jobs de teste (Linux e Windows, vcpkg clássico com
+  a libyara do *overlay*).
+* Testes: `tests/integration/test_cpp_bridge.py` → `cpp/bridge/tests/tst_bridge.cpp` contra o núcleo real
+  (varredura com *workers* isolados e EICAR gerado no teste, histórico, pausa/cancelamento, quarentena completa,
+  instalação nova, integridade), também sob ASan/UBSan. Achado: sob ASan o `gk-scanworker` não iniciava por causa do
+  limite `RLIMIT_AS` (o ASan reserva terabytes de endereços); nas builds com sanitizador o limite é desligado.
+
 ## B9 — páginas que não dependem do A (2026-11-15)
 
 * **Relatórios forenses**: lista as varreduras do banco pelo novo método `reports.scans` do auxiliar (somente

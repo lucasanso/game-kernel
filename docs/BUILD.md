@@ -53,12 +53,15 @@ cmake -S cpp/ipc -B build/native-ipc -G Ninja && cmake --build build/native-ipc 
 No Windows: `-DCMAKE_TOOLCHAIN_FILE=%VCPKG_ROOT%/scripts/buildsystems/vcpkg.cmake -DCMAKE_PREFIX_PATH=C:/Qt/6.8.3/msvc2022_64`
 (libsodium e yara pelo vcpkg).
 
-### Interface (`cpp/app`)
+### Interface (`cpp/app`) e camada de serviços (`cpp/bridge`)
 ```bash
-sudo apt-get install -y qt6-base-dev libqt6svg6-dev   # Linux; no Windows o Qt 6.8 do aqtinstall já inclui Svg
-cmake -S cpp/app -B build/native-app -G Ninja && cmake --build build/native-app --target GameKernel
+sudo apt-get install -y qt6-base-dev libqt6svg6-dev   # além das dependências do núcleo; no Windows o Qt do aqtinstall já inclui Svg
+cmake --preset linux-debug -DPython_EXECUTABLE=$PWD/.venv/bin/python && cmake --build --preset linux-debug --target GameKernel
 ```
-Também compila `cpp/ipc` e `cpp/updates` quando construída sozinha. Executável: `GameKernel(.exe)`. Em
+A interface é compilada a partir da raiz do repositório: ela usa o núcleo pelo `cpp/bridge` (serviços Qt de
+varredura, histórico, quarentena e integridade, M13). O alvo `GameKernel` também compila o `gk-scanworker`, que roda
+ao lado do programa. Os testes compilam a raiz em `build/native-root` (`GK_APP_BUILD_TESTS` e
+`GK_BRIDGE_BUILD_TESTS` ligados, `gk_native` desligado). Executável: `GameKernel(.exe)`. Em
 desenvolvimento, o processo auxiliar vem de `GK_DEV_REPO` (raiz do repositório) e `GK_DEV_PYTHON` (ou `python3` no
 PATH); instalado, de `<app>/helper/gk-helper(.exe)`. Sem nenhum dos dois, as páginas que dependem do auxiliar
 mostram "indisponível" com o motivo.
@@ -80,7 +83,6 @@ Nenhum segredo é usado; a chave privada de *release* nunca chega à CI.
    `cmake --build --preset windows-release --target gk-cli gk-scanworker gk-update GameKernel` (com Qt Widgets e
    Svg, a raiz também compila a varredura, a CLI, o `gk-update` e a interface, todos com as mesmas dependências
    estáticas e o mesmo endurecimento: CFG, CET, ASLR e avisos como erro).
-2. (A interface também compila sozinha, `cmake -S cpp/app`, para desenvolvimento e testes.)
 3. Auxiliar: `pyinstaller installer/gk_helper.spec --distpath dist --workpath build/pyinstaller`.
 4. Pasta do produto, manifesto e ZIP portátil: `python tools/make_distribution.py --app … --bin gk-cli.exe
    --bin gk-scanworker.exe --bin gk-update.exe --helper dist/gk-helper --crt-dir <Microsoft.VC143.CRT>

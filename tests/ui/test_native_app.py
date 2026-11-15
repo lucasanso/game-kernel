@@ -2,7 +2,7 @@
 
 Real signed packages and a trusted key are produced with the Python publisher code, the C++ UI
 installs/rolls them back through cpp/updates, and helper-backed pages talk to the real Python
-helper. Screenshots of every page are written to build/native-app/screenshots for inspection.
+helper. Screenshots of every page are written to build/screenshots for inspection.
 """
 
 from __future__ import annotations
@@ -18,7 +18,7 @@ from cryptography.hazmat.primitives.asymmetric.ed25519 import Ed25519PrivateKey
 from gamekernel.database.db import Database
 from gamekernel.updates import package as pkg
 from tests.corpus import sample_scan
-from tests.integration.native_build import BUILD_ROOT, ROOT, build_project, run_qtest
+from tests.integration.native_build import BUILD_ROOT, ROOT, build_root_target, run_qtest
 
 YARA_RULE = '''rule GK_UI_Test
 {
@@ -47,7 +47,7 @@ def _components(base, tag: str) -> dict:
 
 
 def test_desktop_application(isolated_data_dir, tmp_path):
-    exe = build_project("native-app", ROOT / "cpp" / "app", "gk_app_tests")
+    exe = build_root_target("gk_app_tests")
     private = Ed25519PrivateKey.generate()
     key = tmp_path / "release.pub"
     key.write_bytes(private.public_key().public_bytes(serialization.Encoding.PEM,
@@ -60,7 +60,7 @@ def test_desktop_application(isolated_data_dir, tmp_path):
     db = Database()                                   # realistic scan for the reports page (GK_TEST_DB)
     scan_id = sample_scan.build(db)
     db.close()
-    shots = BUILD_ROOT / "native-app" / "screenshots"
+    shots = BUILD_ROOT / "screenshots"
     shutil.rmtree(shots, ignore_errors=True)          # only this run's screenshots are compared
     code, report = run_qtest(exe, {"GK_PYTHON": sys.executable, "GK_REPO": str(ROOT), "GK_TEST_KEY": str(key),
                                    "GK_SCREENSHOT_DIR": str(shots), "GAMEKERNEL_DATA_DIR": str(isolated_data_dir),

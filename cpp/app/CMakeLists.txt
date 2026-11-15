@@ -1,6 +1,5 @@
-# Game Kernel desktop application (Agent B): Qt 6 Widgets, C++20.
-# Buildable standalone (cmake -S cpp/app) — it then also builds cpp/ipc and cpp/updates (Agent A) —
-# or from the root build via add_subdirectory(cpp/app).
+# Game Kernel desktop application (Agent B): Qt 6 Widgets, C++20. Built from the repository root
+# (add_subdirectory(cpp/app)): it uses the core through the service layer cpp/bridge (M13).
 cmake_minimum_required(VERSION 3.21)
 project(gk_app VERSION 1.0.0 LANGUAGES CXX)
 
@@ -14,11 +13,9 @@ option(GK_APP_BUILD_TESTS "Build the gk_app_tests executable" ${PROJECT_IS_TOP_L
 
 find_package(Qt6 6.4 REQUIRED COMPONENTS Widgets Svg Concurrent)
 
-if(NOT TARGET gk::ipc)
-  add_subdirectory(${CMAKE_CURRENT_SOURCE_DIR}/../ipc ${CMAKE_CURRENT_BINARY_DIR}/gk_ipc)
-endif()
-if(NOT TARGET gk::updates)
-  add_subdirectory(${CMAKE_CURRENT_SOURCE_DIR}/../updates ${CMAKE_CURRENT_BINARY_DIR}/gk_updates)
+if(NOT TARGET gk_bridge OR NOT TARGET gk::updates)
+  message(FATAL_ERROR "cpp/app é compilado a partir da raiz do repositório (cmake -S . ou um preset): "
+                      "ele usa o núcleo pelo cpp/bridge")
 endif()
 
 add_library(gk_app_lib STATIC
@@ -36,7 +33,7 @@ target_compile_definitions(gk_app_lib PUBLIC GK_APP_VERSION="${PROJECT_VERSION}"
 # The logo lives in assets/ (one source for the window icon and assets/gamekernel.ico).
 set(GK_ASSETS_DIR ${CMAKE_CURRENT_SOURCE_DIR}/../../assets)
 qt_add_resources(gk_app_lib "gk_app_assets" PREFIX "/gk" BASE ${GK_ASSETS_DIR} FILES ${GK_ASSETS_DIR}/gamekernel.svg)
-target_link_libraries(gk_app_lib PUBLIC Qt6::Widgets Qt6::Svg Qt6::Concurrent gk::ipc gk::updates)
+target_link_libraries(gk_app_lib PUBLIC Qt6::Widgets Qt6::Svg Qt6::Concurrent gk_bridge gk::ipc gk::updates)
 if(MSVC)
   target_compile_options(gk_app_lib PRIVATE /W4 /permissive- /utf-8)
 else()
@@ -52,6 +49,7 @@ if(WIN32)
   target_sources(GameKernel PRIVATE ${CMAKE_CURRENT_BINARY_DIR}/gamekernel.rc)
 endif()
 target_link_libraries(GameKernel PRIVATE gk_app_lib)
+add_dependencies(GameKernel gk-scanworker)   # scans run in isolated worker processes next to the program
 if(MSVC)
   target_compile_options(GameKernel PRIVATE /utf-8)
 endif()
@@ -68,6 +66,7 @@ if(GK_APP_BUILD_TESTS)
   find_package(Qt6 6.4 REQUIRED COMPONENTS Test)
   add_executable(gk_app_tests tests/tst_app.cpp)
   target_link_libraries(gk_app_tests PRIVATE gk_app_lib Qt6::Test)
+  add_dependencies(gk_app_tests gk-scanworker)
   if(MSVC)
     target_compile_options(gk_app_tests PRIVATE /utf-8)
   endif()

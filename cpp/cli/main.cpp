@@ -71,13 +71,6 @@ bool write_json(const QString& file, const QJsonValue& value, QTextStream& err) 
     return true;
 }
 
-nlohmann::json record_json(const gk::db::QuarantineRecord& r) {
-    return {{"id", r.id},         {"original_path", r.original_path}, {"sha256", r.sha256},
-            {"size", r.size},     {"quarantined_at", r.quarantined_at}, {"reason", r.reason},
-            {"risk", r.risk},     {"classification", r.classification}, {"detection", r.detection},
-            {"status", r.status}, {"stored_name", r.stored_name}};
-}
-
 struct QuarantineOptions {
     QString to, expectSha256, reason, json;
     bool overwrite = false, all = false;
@@ -117,7 +110,7 @@ int run_quarantine(const QStringList& positional, const QString& data, const Qua
             for (const auto& r : db->list_quarantine(opt.all ? std::string() : std::string("quarantined"))) {
                 out << QString::fromStdString(r.id) << "  " << QString::fromStdString(r.status) << "  "
                     << QString::fromStdString(r.original_path) << "\n";
-                rows.append(to_qjson(record_json(r)));
+                rows.append(to_qjson(gk::db::to_json(r)));
             }
             if (!opt.json.isEmpty() && !write_json(opt.json, rows, err)) return 2;
             return 0;

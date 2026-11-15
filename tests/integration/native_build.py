@@ -30,6 +30,15 @@ def _unavailable(reason: str):
 SANITIZER_FLAGS = "-fsanitize=address,undefined -fno-omit-frame-pointer -fno-sanitize-recover=undefined"
 
 
+# The product is built from the repository root (core, bridge, UI and their tests in one CMake project).
+ROOT_BUILD_ARGS = ["-DGK_BUILD_BINDINGS=OFF", "-DGK_APP_BUILD_TESTS=ON", "-DGK_BRIDGE_BUILD_TESTS=ON"]
+
+
+def build_root_target(target: str) -> Path:
+    """Build ``target`` of the root project (build/native-root) and return the executable."""
+    return build_project("native-root", ROOT, target, ROOT_BUILD_ARGS)
+
+
 def build_project(name: str, source: Path, target: str, extra_args: list[str] | None = None) -> Path:
     """Configure/build ``target``. ``GK_NATIVE_SANITIZE=1`` builds a separate ASan+UBSan variant
     (GCC/Clang), so the whole Python-driven suite exercises instrumented C++ code."""
@@ -68,7 +77,8 @@ def build_project(name: str, source: Path, target: str, extra_args: list[str] | 
     if proc.returncode != 0:
         pytest.fail(f"compilação de {target} falhou:\n{proc.stdout[-6000:]}\n{proc.stderr[-3000:]}")
     exe = target + (".exe" if sys.platform == "win32" else "")
-    for candidate in (build_dir / exe, build_dir / config / exe):
+    nested = sorted(p for p in build_dir.rglob(exe) if "CMakeFiles" not in p.parts)   # root project: cpp/<x>/
+    for candidate in (build_dir / exe, build_dir / config / exe, *nested):
         if candidate.exists():
             _deploy_qt_runtime(candidate)
             return candidate

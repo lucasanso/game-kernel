@@ -16,7 +16,7 @@ import sys
 import pytest
 from PIL import Image, ImageChops, ImageStat
 
-from tests.integration.native_build import ROOT, build_project
+from tests.integration.native_build import ROOT, build_root_target
 from tools import make_app_icon
 
 ICO = ROOT / "assets" / "gamekernel.ico"
@@ -74,7 +74,7 @@ def test_build_ico_layout_round_trips():
 def test_windows_executable_has_icon_and_version():
     import pefile
 
-    exe = build_project("native-app", ROOT / "cpp" / "app", "GameKernel")
+    exe = build_root_target("GameKernel")
     pe = pefile.PE(str(exe))
     try:
         strings = {}

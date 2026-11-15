@@ -410,4 +410,102 @@ void Database::add_quarantine_event(const std::string& id, const std::string& ac
     s.step();
 }
 
+json to_json(const QuarantineRecord& r) {
+    return {{"id", r.id},         {"original_path", r.original_path}, {"sha256", r.sha256},
+            {"size", r.size},     {"quarantined_at", r.quarantined_at}, {"reason", r.reason},
+            {"risk", r.risk},     {"classification", r.classification}, {"detection", r.detection},
+            {"status", r.status}, {"stored_name", r.stored_name},
+            {"scan_id", r.scan_id ? json(*r.scan_id) : json(nullptr)}};
+}
+
+std::unique_ptr<Database> Database::open_readonly(const std::filesystem::path& file) {
+    std::error_code ec;
+    if (!std::filesystem::is_regular_file(file, ec)) {
+        throw Error(ErrorCode::FileAccess, "banco de dados não encontrado: " + text::path_utf8(file));
+    }
+    sqlite3* db = nullptr;
+    if (sqlite3_open_v2(text::path_utf8(file).c_str(), &db, SQLITE_OPEN_READONLY | SQLITE_OPEN_FULLMUTEX, nullptr) !=
+        SQLITE_OK) {
+        const std::string message = db ? sqlite3_errmsg(db) : "sem memória";
+        sqlite3_close(db);
+        throw Error(ErrorCode::FileAccess, "banco de dados ilegível: " + message);
+    }
+    sqlite3_busy_timeout(db, 30000);
+    std::unique_ptr<Database> out(new Database(db));
+    out->exec("PRAGMA query_only=ON");
+    return out;
+}
+
+namespace {
+
+constexpr const char* kScanColumns =
+    "id, started_at, finished_at, mode, origin, label, targets, status, files_found, files_analyzed, files_skipped,"
+    " files_errors, members_analyzed, threats, suspicious, pua, bytes_scanned, max_risk, error, options, summary";
+
+json parse_or(const std::string& text, json fallback) {
+    if (text.empty()) return fallback;
+    json j = json::parse(text, nullptr, false);
+    return j.is_discarded() ? fallback : j;
+}
+
+json scan_row(Stmt& s, bool full) {
+    json j{{"scan_id", s.integer(0)},
+           {"started_at", s.real(1)},
+           {"finished_at", s.is_null(2) ? json(nullptr) : json(s.real(2))},
+           {"mode", s.text(3)},
+           {"origin", s.text(4)},
+           {"label", s.is_null(5) ? json(nullptr) : json(s.text(5))},
+           {"targets", parse_or(s.text(6), json::array())},
+           {"status", s.text(7)},
+           {"files_found", s.integer(8)},
+           {"files_analyzed", s.integer(9)},
+           {"files_skipped", s.integer(10)},
+           {"files_errors", s.integer(11)},
+           {"members_analyzed", s.integer(12)},
+           {"threats", s.integer(13)},
+           {"suspicious", s.integer(14)},
+           {"pua", s.integer(15)},
+           {"bytes_scanned", s.integer(16)},
+           {"max_risk", s.integer(17)},
+           {"error", s.is_null(18) ? json(nullptr) : json(s.text(18))}};
+    if (full) {
+        j["options"] = parse_or(s.text(19), json::object());
+        j["summary"] = parse_or(s.text(20), json::object());
+    }
+    return j;
+}
+
+}  // namespace
+
+json Database::list_scans(int limit) {
+    json out = json::array();
+    Stmt s(db_, (std::string("SELECT ") + kScanColumns + " FROM scans ORDER BY started_at DESC, id DESC LIMIT ?").c_str());
+    s.bind(1, static_cast<std::int64_t>(std::max(1, limit)));
+    while (s.step()) out.push_back(scan_row(s, false));
+    return out;
+}
+
+std::optional<json> Database::scan(std::int64_t scan_id) {
+    Stmt s(db_, (std::string("SELECT ") + kScanColumns + " FROM scans WHERE id=?").c_str());
+    s.bind(1, scan_id);
+    if (!s.step()) return std::nullopt;
+    return scan_row(s, true);
+}
+
+json Database::file_results(std::int64_t scan_id, bool findings_only, int limit) {
+    json out = json::array();
+    const std::string where = findings_only
+        ? " AND (risk>=1 OR classification NOT IN ('known_legit','unknown') OR status<>'complete'"
+          " OR crack_status<>'none' OR possible_fp=1)"
+        : "";
+    Stmt s(db_, ("SELECT result_json FROM scan_files WHERE scan_id=?" + where +
+                 " ORDER BY risk DESC, path LIMIT ?").c_str());
+    s.bind(1, scan_id).bind(2, static_cast<std::int64_t>(std::max(1, limit)));
+    while (s.step()) {
+        json r = parse_or(s.text(0), json());
+        if (r.is_object()) out.push_back(std::move(r));
+    }
+    return out;
+}
+
 }  // namespace gk::db

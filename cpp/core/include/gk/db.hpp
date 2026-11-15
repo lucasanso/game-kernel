@@ -48,10 +48,16 @@ struct QuarantineRecord {
     nlohmann::json meta = nlohmann::json::object();
 };
 
+// Quarantine row as JSON (gk-cli and the user interface show the same fields).
+nlohmann::json to_json(const QuarantineRecord& record);
+
 class Database {
 public:
     // Opens (creating if needed), runs quick_check, moves a corrupt file aside and recreates it.
     static std::unique_ptr<Database> open(const std::filesystem::path& file);
+    // Read-only view for the user interface (history, results): never creates, recovers or writes
+    // (SQLITE_OPEN_READONLY + PRAGMA query_only). Throws gk::Error(FileAccess) when the file is missing.
+    static std::unique_ptr<Database> open_readonly(const std::filesystem::path& file);
     ~Database();
     Database(const Database&) = delete;
     Database& operator=(const Database&) = delete;
@@ -74,6 +80,18 @@ public:
     std::optional<Reputation> reputation(const std::string& sha256);
 
     void append_audit(const std::string& action, const std::string& detail, const std::string& actor);
+
+    // ---- reading (history and results pages)
+    // Newest first: {scan_id, started_at, finished_at, mode, origin, label, targets[], status, files_found,
+    // files_analyzed, files_skipped, files_errors, members_analyzed, threats, suspicious, pua, bytes_scanned,
+    // max_risk (RiskLevel integer), error}.
+    nlohmann::json list_scans(int limit);
+    // Same fields plus "options" and "summary" (the ScanSummary written at the end); nullopt when unknown.
+    std::optional<nlohmann::json> scan(std::int64_t scan_id);
+    // FileResult documents of a scan, highest risk first. findings_only keeps what a user must look at:
+    // risk >= INFO, classification other than known_legit/unknown, incomplete analysis, crack status or a
+    // possible false positive (same rule as the report engine).
+    nlohmann::json file_results(std::int64_t scan_id, bool findings_only, int limit);
 
     // Quarantine bookkeeping (the encrypted items themselves live in gk::quarantine::Vault).
     void add_quarantine_item(const QuarantineRecord& record);
